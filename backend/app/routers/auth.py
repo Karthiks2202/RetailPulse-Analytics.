@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -77,12 +77,12 @@ async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depe
 
     access_token = create_access_token(user.id, user.email, user.role.value, user.company_id)
     refresh_token = create_refresh_token(user.id)
-    rt_exp = datetime.now(timezone.utc) + timedelta(days=7)
+    rt_exp = datetime.utcnow() + timedelta(days=7)
 
     rt = RefreshToken(user_id=user.id, token=refresh_token, expires_at=rt_exp)
     db.add(rt)
 
-    user.last_login = datetime.now(timezone.utc)
+    user.last_login = datetime.utcnow()
     db.add(user)
 
     await db.commit()
@@ -120,7 +120,7 @@ async def refresh(payload: RefreshRequest, request: Request, db: AsyncSession = 
 
     result = await db.execute(select(RefreshToken).where(RefreshToken.token == payload.refresh_token))
     stored = result.scalar_one_or_none()
-    if not stored or stored.expires_at < datetime.now(timezone.utc):
+    if not stored or stored.expires_at < datetime.utcnow():
         if stored:
             await db.delete(stored)
             await db.commit()
@@ -132,7 +132,7 @@ async def refresh(payload: RefreshRequest, request: Request, db: AsyncSession = 
 
     new_access = create_access_token(user.id, user.email, user.role.value, user.company_id)
     new_refresh = create_refresh_token(user.id)
-    new_exp = datetime.now(timezone.utc) + timedelta(days=7)
+    new_exp = datetime.utcnow() + timedelta(days=7)
 
     await db.delete(stored)
     new_rt = RefreshToken(user_id=user.id, token=new_refresh, expires_at=new_exp)
@@ -163,7 +163,7 @@ async def refresh(payload: RefreshRequest, request: Request, db: AsyncSession = 
 
 @router.post("/logout", response_model=MessageResponse)
 async def logout(payload: LogoutRequest, request: Request, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(RefreshToken).where(RefreshToken.token == payload.refreshToken))
+    result = await db.execute(select(RefreshToken).where(RefreshToken.token == payload.refresh_token))
     stored = result.scalar_one_or_none()
     if stored:
         user = await db.get(User, stored.user_id)

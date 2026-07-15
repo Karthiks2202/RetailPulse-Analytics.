@@ -32,12 +32,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     <NotificationContext.Provider value={{ notification, showNotification, clearNotification }}>
       {children}
       {notification && (
-        <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-lg shadow-2xl border text-xs font-semibold tracking-wide transition-all select-none ${
+        <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-xl shadow-xl border text-xs font-bold tracking-wide transition-all select-none ${
           notification.type === 'success' 
-            ? 'bg-emerald-900/90 border-emerald-800 text-emerald-250' 
+            ? 'bg-emerald-50 dark:bg-emerald-950/90 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200' 
             : notification.type === 'error'
-            ? 'bg-red-950/90 border-red-900 text-red-200'
-            : 'bg-indigo-950/90 border-indigo-900 text-indigo-200'
+            ? 'bg-red-50 dark:bg-red-950/90 border-red-200 dark:border-red-900 text-red-800 dark:text-red-200'
+            : 'bg-indigo-50 dark:bg-indigo-950/90 border-indigo-200 dark:border-indigo-900 text-indigo-800 dark:text-indigo-200'
         }`}>
           {notification.message.toUpperCase()}
         </div>

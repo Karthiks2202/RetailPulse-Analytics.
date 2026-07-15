@@ -6,6 +6,7 @@ from app.models.user import User
 from app.models.company import Company
 from app.schemas.auth import ChangePasswordRequest, MessageResponse
 from app.utils.dependencies import get_current_active_user
+from app.utils.security import verify_password, hash_password
 from app.services.audit import audit_service
 from app.middleware.error_handler import RetailPulseException
 

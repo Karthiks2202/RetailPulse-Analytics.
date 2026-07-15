@@ -39,8 +39,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         company: data.company.name,
         companyId: data.company.id,
         status: data.status,
-        lastLogin: data.lastLogin,
-        createdAt: data.createdAt,
+        lastLogin: data.last_login,
+        createdAt: data.created_at,
       };
       setUser(userProfile);
     } catch (error) {

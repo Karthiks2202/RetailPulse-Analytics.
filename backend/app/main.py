@@ -16,19 +16,25 @@ from app.models import company, user, refresh_token, audit_log
 def create_app() -> FastAPI:
     application = FastAPI(title=settings.APP_NAME, version="1.0.0")
 
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://localhost:3000"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    application.add_exception_handler(Exception, generic_exception_handler)
-    application.add_exception_handler(RequestValidationError, validation_exception_handler)
-    application.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
+    # Exception handlers must be registered BEFORE middleware so CORS middleware
+    # (added last) can wrap all responses — including error responses — with
+    # the correct CORS headers. This prevents OPTIONS preflight 400 errors.
     from app.middleware.error_handler import RetailPulseException
     application.add_exception_handler(RetailPulseException, retailpulse_exception_handler)
+    application.add_exception_handler(RequestValidationError, validation_exception_handler)
+    application.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
+    application.add_exception_handler(Exception, generic_exception_handler)
+
+    # CORS middleware is added LAST so it is the outermost layer — it processes
+    # every request (including OPTIONS preflight) before any handler.
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:3000"],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
 
     application.include_router(api_router)
 
@@ -45,3 +51,4 @@ def create_app() -> FastAPI:
     return application
 
 app = create_app()
+
