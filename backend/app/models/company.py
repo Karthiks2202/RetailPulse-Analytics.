@@ -18,3 +18,5 @@ class Company(Base):
 
     users = relationship("User", back_populates="company", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="company", cascade="all, delete-orphan")
+    products = relationship("Product", back_populates="company", cascade="all, delete-orphan")
+    transactions = relationship("Transaction", back_populates="company", cascade="all, delete-orphan")

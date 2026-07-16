@@ -9,6 +9,7 @@ from app.schemas.auth import (
     MessageResponse,
 )
 from app.schemas.audit_log import AuditLogResponse
+from app.schemas.dashboard import DashboardOverview, MetricCard, ChannelBreakdown, MonthlyRevenue
 
 __all__ = [
     "CompanyCreate",
@@ -24,4 +25,8 @@ __all__ = [
     "ChangePasswordRequest",
     "MessageResponse",
     "AuditLogResponse",
+    "DashboardOverview",
+    "MetricCard",
+    "ChannelBreakdown",
+    "MonthlyRevenue",
 ]

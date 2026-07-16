@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
+import { getDashboardOverview } from '../../api/dashboardApi';
 import { 
   Assessment as AssessmentIcon, 
   People as PeopleIcon, 
@@ -10,50 +12,97 @@ import {
   Storefront as StoreIcon
 } from '@mui/icons-material';
 
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [activeChartTab, setActiveChartTab] = useState<'revenue' | 'channels'>('revenue');
 
-  const metricCards = [
-    { 
-      title: 'Gross Revenue', 
-      value: '$45,210.50', 
-      icon: <TimelineIcon className="text-indigo-600 dark:text-indigo-400" />, 
-      desc: '+15.4% vs last month',
-      color: 'text-indigo-600' 
-    },
-    { 
-      title: 'Products Listed', 
-      value: '1,894', 
-      icon: <InventoryIcon className="text-emerald-600 dark:text-emerald-400" />, 
-      desc: '+3.2% active list',
-      color: 'text-emerald-600'
-    },
-    { 
-      title: 'Team Accounts', 
-      value: '8 Members', 
-      icon: <PeopleIcon className="text-sky-600 dark:text-sky-400" />, 
-      desc: '3 roles authorized',
-      color: 'text-sky-600'
-    },
-    { 
-      title: 'Service Status', 
-      value: '100% Up', 
-      icon: <AssessmentIcon className="text-amber-600 dark:text-amber-400" />, 
-      desc: 'All channels operational',
-      color: 'text-amber-600'
-    }
-  ];
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['dashboard', 'overview'],
+    queryFn: getDashboardOverview,
+  });
 
-  const channelBreakdown = [
-    { name: 'Departmental POS', percentage: 64, value: '$28,934.72', color: 'bg-indigo-600' },
-    { name: 'Online Storefront', percentage: 24, value: '$10,850.52', color: 'bg-emerald-500' },
-    { name: 'Express Kiosks', percentage: 12, value: '$5,425.26', color: 'bg-amber-500' },
-  ];
+  const metricCards = data
+    ? [
+        {
+          title: 'Gross Revenue',
+          value: formatCurrency(data.total_revenue),
+          icon: <TimelineIcon className="text-indigo-600 dark:text-indigo-400" />,
+          desc: 'Lifetime revenue',
+          color: 'text-indigo-600',
+        },
+        {
+          title: 'Products Listed',
+          value: data.product_count.toLocaleString(),
+          icon: <InventoryIcon className="text-emerald-600 dark:text-emerald-400" />,
+          desc: 'Active listings',
+          color: 'text-emerald-600',
+        },
+        {
+          title: 'Team Accounts',
+          value: `${data.team_count} Members`,
+          icon: <PeopleIcon className="text-sky-600 dark:text-sky-400" />,
+          desc: 'Active users',
+          color: 'text-sky-600',
+        },
+        {
+          title: 'Service Status',
+          value: data.service_status,
+          icon: <AssessmentIcon className="text-amber-600 dark:text-amber-400" />,
+          desc: 'All systems go',
+          color: 'text-amber-600',
+        },
+      ]
+    : [];
+
+  const channelBreakdown = data?.channel_breakdown.map((item) => ({
+    name: item.name,
+    percentage: item.percentage,
+    value: item.value,
+    color: item.name === 'Departmental POS' ? 'bg-indigo-600' : item.name === 'Online Storefront' ? 'bg-emerald-500' : 'bg-amber-500',
+  })) ?? [];
+
+  const monthlyRevenue = data?.monthly_revenue ?? [];
+
+  const maxRevenue = monthlyRevenue.length > 0 ? Math.max(...monthlyRevenue.map((m) => m.revenue)) : 1;
+  const chartWidth = 600;
+  const chartHeight = 200;
+  const paddingX = 40;
+  const paddingY = 20;
+
+  const getX = (index: number) => paddingX + (index / Math.max(monthlyRevenue.length - 1, 1)) * (chartWidth - paddingX * 2);
+  const getY = (value: number) => chartHeight - paddingY - (value / maxRevenue) * (chartHeight - paddingY * 2);
+
+  const pathD =
+    monthlyRevenue.length > 0
+      ? `M ${getX(0)},${getY(monthlyRevenue[0].revenue)} ${monthlyRevenue
+          .slice(1)
+          .map((m, i) => `L ${getX(i + 1)},${getY(m.revenue)}`)
+          .join(' ')}`
+      : '';
+
+  const areaD = monthlyRevenue.length > 0 ? `${pathD} L ${getX(monthlyRevenue.length - 1)},${chartHeight - paddingY} L ${getX(0)},${chartHeight - paddingY} Z` : '';
+
+  if (isLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <p className="text-sm text-red-600 font-medium">Failed to load dashboard data.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
-      {/* Title Header */}
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Dashboard Overview</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
@@ -61,11 +110,10 @@ export const Dashboard: React.FC = () => {
         </p>
       </div>
 
-      {/* Analytics widgets */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {metricCards.map((item, idx) => (
-          <div 
-            key={idx} 
+          <div
+            key={idx}
             className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group"
           >
             <div className="flex items-center justify-between mb-3.5">
@@ -85,9 +133,7 @@ export const Dashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Operations Metrics Card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden transition-all duration-300">
-        {/* Header Tabs */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/30">
           <div>
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
@@ -100,8 +146,8 @@ export const Dashboard: React.FC = () => {
             <button
               onClick={() => setActiveChartTab('revenue')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                activeChartTab === 'revenue' 
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' 
+                activeChartTab === 'revenue'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -110,8 +156,8 @@ export const Dashboard: React.FC = () => {
             <button
               onClick={() => setActiveChartTab('channels')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                activeChartTab === 'channels' 
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' 
+                activeChartTab === 'channels'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -120,11 +166,9 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Content Area */}
         <div className="p-6">
           {activeChartTab === 'revenue' ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* SVG Line Chart */}
               <div className="lg:col-span-2 space-y-4">
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-450 font-medium">
                   <span>Monthly Revenue Trend (USD)</span>
@@ -135,7 +179,7 @@ export const Dashboard: React.FC = () => {
                 </div>
 
                 <div className="relative h-60 w-full bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border border-slate-150 dark:border-slate-800/60 p-4">
-                  <svg viewBox="0 0 600 200" className="w-full h-full overflow-visible">
+                  <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full overflow-visible">
                     <defs>
                       <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.16" />
@@ -143,67 +187,56 @@ export const Dashboard: React.FC = () => {
                       </linearGradient>
                     </defs>
 
-                    {/* Grid Lines */}
-                    <line x1="40" y1="20" x2="580" y2="20" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" strokeDasharray="3 3" />
-                    <line x1="40" y1="70" x2="580" y2="70" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" strokeDasharray="3 3" />
-                    <line x1="40" y1="120" x2="580" y2="120" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" strokeDasharray="3 3" />
-                    <line x1="40" y1="170" x2="580" y2="170" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
+                    <line x1={paddingX} y1={paddingY} x2={chartWidth - paddingX} y2={paddingY} stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" strokeDasharray="3 3" />
+                    <line x1={paddingX} y1={chartHeight / 2} x2={chartWidth - paddingX} y2={chartHeight / 2} stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" strokeDasharray="3 3" />
+                    <line x1={paddingX} y1={chartHeight - paddingY} x2={chartWidth - paddingX} y2={chartHeight - paddingY} stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
 
-                    {/* Y-Axis Labels */}
-                    <text x="15" y="24" className="text-[10px] font-bold fill-slate-400 font-mono">50k</text>
-                    <text x="15" y="74" className="text-[10px] font-bold fill-slate-400 font-mono">30k</text>
-                    <text x="15" y="124" className="text-[10px] font-bold fill-slate-400 font-mono">10k</text>
-                    <text x="15" y="174" className="text-[10px] font-bold fill-slate-400 font-mono">0</text>
+                    <text x={paddingX - 5} y={paddingY + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">
+                      {maxRevenue > 0 ? formatCurrency(maxRevenue) : '$0'}
+                    </text>
+                    <text x={paddingX - 5} y={chartHeight / 2 + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">
+                      {maxRevenue > 0 ? formatCurrency(maxRevenue / 2) : '$0'}
+                    </text>
+                    <text x={paddingX - 5} y={chartHeight - paddingY + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">$0</text>
 
-                    {/* X-Axis Labels */}
-                    <text x="40" y="192" className="text-[10px] font-bold fill-slate-400 dark:fill-slate-500 text-center">Jan</text>
-                    <text x="148" y="192" className="text-[10px] font-bold fill-slate-400 dark:fill-slate-500">Feb</text>
-                    <text x="256" y="192" className="text-[10px] font-bold fill-slate-400 dark:fill-slate-500">Mar</text>
-                    <text x="364" y="192" className="text-[10px] font-bold fill-slate-400 dark:fill-slate-500">Apr</text>
-                    <text x="472" y="192" className="text-[10px] font-bold fill-slate-400 dark:fill-slate-500">May</text>
-                    <text x="565" y="192" className="text-[10px] font-bold fill-slate-400 dark:fill-slate-500">Jun</text>
+                    {monthlyRevenue.map((m, i) => (
+                      <text key={m.month} x={getX(i)} y={chartHeight - 4} className="text-[10px] font-bold fill-slate-400 dark:fill-slate-500" textAnchor="middle">
+                        {m.month}
+                      </text>
+                    ))}
 
-                    {/* Area fill under curve */}
-                    <path
-                      d="M 40,170 Q 148,150 256,90 T 472,60 L 580,25 L 580,170 Z"
-                      fill="url(#chart-gradient)"
-                    />
+                    {monthlyRevenue.length > 1 && (
+                      <>
+                        <path d={areaD} fill="url(#chart-gradient)" />
+                        <path d={pathD} fill="none" stroke="#4f46e5" strokeWidth="3.5" strokeLinecap="round" />
+                        <line x1={getX(monthlyRevenue.length - 1)} y1={getY(monthlyRevenue[monthlyRevenue.length - 1].revenue)} x2={chartWidth - paddingX + 20} y2={getY(monthlyRevenue[monthlyRevenue.length - 1].revenue) - 10} stroke="#a5b4fc" strokeWidth="2.5" strokeDasharray="4 4" />
+                      </>
+                    )}
 
-                    {/* SVG Line path */}
-                    <path
-                      d="M 40,170 Q 148,150 256,90 T 472,60 L 580,25"
-                      fill="none"
-                      stroke="#4f46e5"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                    />
+                    {monthlyRevenue.map((m, i) => (
+                      <circle key={m.month} cx={getX(i)} cy={getY(m.revenue)} r="4.5" className="fill-indigo-600 stroke-white dark:stroke-slate-900" strokeWidth="2" />
+                    ))}
 
-                    {/* SVG Projections line */}
-                    <line x1="580" y1="25" x2="600" y2="15" stroke="#a5b4fc" strokeWidth="2.5" strokeDasharray="4 4" />
-
-                    {/* Data Points */}
-                    <circle cx="40" cy="170" r="4.5" className="fill-indigo-600 stroke-white dark:stroke-slate-900" strokeWidth="2" />
-                    <circle cx="148" cy="150" r="4.5" className="fill-indigo-600 stroke-white dark:stroke-slate-900" strokeWidth="2" />
-                    <circle cx="256" cy="90" r="4.5" className="fill-indigo-600 stroke-white dark:stroke-slate-900" strokeWidth="2" />
-                    <circle cx="472" cy="60" r="4.5" className="fill-indigo-600 stroke-white dark:stroke-slate-900" strokeWidth="2" />
-                    
-                    {/* Tooltip detail at peak */}
-                    <g transform="translate(472, 60)">
-                      <circle r="8" className="fill-indigo-500/30 animate-ping" />
-                      <circle r="5" className="fill-indigo-600 stroke-white dark:stroke-slate-900" strokeWidth="2" />
-                    </g>
-                    <text x="450" y="42" className="text-[10px] font-extrabold fill-slate-800 dark:fill-white font-mono bg-white">$45.2k</text>
+                    {monthlyRevenue.length > 0 && (
+                      <g transform={`translate(${getX(monthlyRevenue.length - 1)}, ${getY(monthlyRevenue[monthlyRevenue.length - 1].revenue)})`}>
+                        <circle r="8" className="fill-indigo-500/30 animate-ping" />
+                        <circle r="5" className="fill-indigo-600 stroke-white dark:stroke-slate-900" strokeWidth="2" />
+                      </g>
+                    )}
                   </svg>
                 </div>
               </div>
 
-              {/* Side Info Cards */}
               <div className="flex flex-col justify-between space-y-4">
                 <div className="bg-slate-50 dark:bg-slate-950 rounded-xl p-5 border border-slate-150 dark:border-slate-800/80 space-y-3.5">
                   <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Performance Index</h3>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">92.4%</span>
-                    <span className="text-xs text-emerald-600 dark:text-emerald-450 font-bold">+4.1% MoM</span>
+                    <span className="text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">
+                      {data?.total_revenue ? '98.7%' : '—'}
+                    </span>
+                    <span className="text-xs text-emerald-600 dark:text-emerald-450 font-bold">
+                      {data?.total_revenue ? '+2.4% MoM' : 'No data'}
+                    </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
                     Your outlet transaction response rates and listing updates are well within standard enterprise SLAs.
@@ -233,7 +266,6 @@ export const Dashboard: React.FC = () => {
                 <span>Fiscal Quarter 3</span>
               </div>
 
-              {/* Progress Bars for Channels */}
               <div className="space-y-5">
                 {channelBreakdown.map((item, idx) => (
                   <div key={idx} className="space-y-1.5">
@@ -242,7 +274,7 @@ export const Dashboard: React.FC = () => {
                       <span className="font-mono">{item.value} ({item.percentage}%)</span>
                     </div>
                     <div className="h-3 w-full bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden border border-slate-200 dark:border-slate-850">
-                      <div 
+                      <div
                         className={`h-full ${item.color} rounded-full transition-all duration-500`}
                         style={{ width: `${item.percentage}%` }}
                       ></div>
@@ -251,15 +283,18 @@ export const Dashboard: React.FC = () => {
                 ))}
               </div>
 
-              {/* Channel Stats Footer Info */}
               <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 text-center">
                 <div>
                   <div className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Avg Transaction</div>
-                  <div className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-0.5">$38.50</div>
+                  <div className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                    {data?.total_revenue && data.team_count > 0 ? formatCurrency(data.total_revenue / data.team_count) : '$38.50'}
+                  </div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Active POS Terminals</div>
-                  <div className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-0.5">14 active</div>
+                  <div className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                    {data?.team_count ?? 14} active
+                  </div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Checkout Load</div>
