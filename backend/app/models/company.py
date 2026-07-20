@@ -20,3 +20,4 @@ class Company(Base):
     audit_logs = relationship("AuditLog", back_populates="company", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="company", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="company", cascade="all, delete-orphan")
+    categories = relationship("Category", back_populates="company", cascade="all, delete-orphan")

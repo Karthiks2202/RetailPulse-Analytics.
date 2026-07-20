@@ -7,8 +7,11 @@ import Register from '../pages/auth/Register';
 import ForgotPassword from '../pages/auth/ForgotPassword';
 import Unauthorized from '../pages/auth/Unauthorized';
 import ProtectedRoute from './ProtectedRoute';
+import RoleRoute from './RoleRoute';
 import Dashboard from '../pages/dashboard/Dashboard';
 import Profile from '../pages/profile/Profile';
+import Products from '../pages/products/Products';
+import Categories from '../pages/categories/Categories';
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -27,6 +30,10 @@ export const AppRoutes: React.FC = () => {
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route element={<RoleRoute allowedRoles={['COMPANY_ADMIN', 'SUPER_ADMIN']} />}>
+            <Route path="/products" element={<Products />} />
+            <Route path="/categories" element={<Categories />} />
+          </Route>
           <Route path="/profile" element={<Profile />} />
         </Route>
       </Route>

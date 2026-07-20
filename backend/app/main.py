@@ -12,7 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import engine
-from app.models import company, user, refresh_token, audit_log, product, transaction
+from app.models import company, user, refresh_token, audit_log, category, product, transaction
 import random
 
 def create_app() -> FastAPI:
@@ -51,7 +51,8 @@ def create_app() -> FastAPI:
             await conn.run_sync(Base.metadata.create_all)
 
         from sqlalchemy.ext.asyncio import async_sessionmaker
-        from app.models.product import Product, ProductStatus
+        from app.models.product import Product, ProductStatus, UnitOfMeasure
+        from app.models.category import Category, CategoryStatus
         from app.models.transaction import Transaction, TransactionType, TransactionChannel
         from datetime import datetime, timedelta
         from decimal import Decimal
@@ -63,16 +64,29 @@ def create_app() -> FastAPI:
             first_company = company_result.scalar_one_or_none()
 
             if first_company:
+                category_result = await session.execute(select(Category).where(Category.company_id == first_company.id))
+                electronics = category_result.scalar_one_or_none()
+                if not electronics:
+                    electronics = Category(
+                        company_id=first_company.id,
+                        name="Electronics",
+                        description="Electronic devices and accessories",
+                        status=CategoryStatus.ACTIVE,
+                    )
+                    session.add(electronics)
+                    await session.commit()
+                    await session.refresh(electronics)
+
                 product_result = await session.execute(select(Product).where(Product.company_id == first_company.id))
                 existing_products = product_result.scalars().all()
 
                 if not existing_products:
                     products = [
-                        Product(company_id=first_company.id, name="Wireless Headphones", sku="WH-001", price=Decimal("79.99"), status=ProductStatus.ACTIVE),
-                        Product(company_id=first_company.id, name="USB-C Charging Cable", sku="UC-042", price=Decimal("19.99"), status=ProductStatus.ACTIVE),
-                        Product(company_id=first_company.id, name="Smart Watch Gen2", sku="SW-200", price=Decimal("199.00"), status=ProductStatus.ACTIVE),
-                        Product(company_id=first_company.id, name="Bluetooth Speaker", sku="BS-110", price=Decimal("49.50"), status=ProductStatus.ACTIVE),
-                        Product(company_id=first_company.id, name="Laptop Stand", sku="LS-305", price=Decimal("39.95"), status=ProductStatus.ACTIVE),
+                        Product(company_id=first_company.id, category_id=electronics.id, name="Wireless Headphones", sku="RTL-10001", brand="Acme", unit_price=Decimal("79.99"), cost_price=Decimal("45.00"), stock_quantity=120, unit_of_measure=UnitOfMeasure.PCS, status=ProductStatus.ACTIVE),
+                        Product(company_id=first_company.id, category_id=electronics.id, name="USB-C Charging Cable", sku="RTL-10002", brand="Acme", unit_price=Decimal("19.99"), cost_price=Decimal("8.50"), stock_quantity=400, unit_of_measure=UnitOfMeasure.PCS, status=ProductStatus.ACTIVE),
+                        Product(company_id=first_company.id, category_id=electronics.id, name="Smart Watch Gen2", sku="RTL-10003", brand="Nova", unit_price=Decimal("199.00"), cost_price=Decimal("120.00"), stock_quantity=60, unit_of_measure=UnitOfMeasure.PCS, status=ProductStatus.ACTIVE),
+                        Product(company_id=first_company.id, category_id=electronics.id, name="Bluetooth Speaker", sku="RTL-10004", brand="Nova", unit_price=Decimal("49.50"), cost_price=Decimal("25.00"), stock_quantity=90, unit_of_measure=UnitOfMeasure.PCS, status=ProductStatus.INACTIVE),
+                        Product(company_id=first_company.id, category_id=electronics.id, name="Laptop Stand", sku="RTL-10005", brand="Acme", unit_price=Decimal("39.95"), cost_price=Decimal("18.00"), stock_quantity=150, unit_of_measure=UnitOfMeasure.PCS, status=ProductStatus.ACTIVE),
                     ]
                     session.add_all(products)
                     await session.commit()

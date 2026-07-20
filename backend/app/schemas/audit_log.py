@@ -8,6 +8,8 @@ class AuditLogResponse(BaseModel):
     company_id: UUID
     user_id: Optional[UUID]
     action: str
+    entity_name: Optional[str] = None
+    details: Optional[str] = None
     ip_address: str
     browser: str
     timestamp: datetime

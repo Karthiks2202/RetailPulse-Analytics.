@@ -21,6 +21,9 @@ class MonthlyRevenue(BaseModel):
 class DashboardOverview(BaseModel):
     team_count: int
     product_count: int
+    active_product_count: int
+    inactive_product_count: int
+    category_count: int
     total_revenue: float
     service_status: str
     monthly_revenue: List[MonthlyRevenue]

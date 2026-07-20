@@ -3,13 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, extract
 from app.database import get_db
 from app.models.user import User
-from app.models.product import Product
+from app.models.product import Product, ProductStatus
 from app.models.transaction import Transaction, TransactionType
-from app.schemas.dashboard import DashboardOverview
+from app.models.category import Category
+from app.schemas.dashboard import DashboardOverview, MonthlyRevenue, ChannelBreakdown
 from app.utils.dependencies import get_current_active_user
 from datetime import datetime, timedelta
 from decimal import Decimal
-import random
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -20,6 +20,14 @@ async def get_dashboard_overview(current_user: User = Depends(get_current_active
 
     product_result = await db.execute(select(func.count(Product.id)).where(Product.company_id == current_user.company_id))
     product_count = product_result.scalar() or 0
+
+    active_product_result = await db.execute(select(func.count(Product.id)).where(Product.company_id == current_user.company_id).where(Product.status == ProductStatus.ACTIVE))
+    active_product_count = active_product_result.scalar() or 0
+
+    inactive_product_count = product_count - active_product_count
+
+    category_result = await db.execute(select(func.count(Category.id)).where(Category.company_id == current_user.company_id))
+    category_count = category_result.scalar() or 0
 
     revenue_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), 0))
@@ -77,5 +85,8 @@ async def get_dashboard_overview(current_user: User = Depends(get_current_active
         total_revenue=total_revenue,
         service_status="Operational",
         monthly_revenue=[MonthlyRevenue(**m) for m in months],
-        channel_breakdown=[ChannelBreakdown(**c) for c in channel_breakdown]
+        channel_breakdown=[ChannelBreakdown(**c) for c in channel_breakdown],
+        active_product_count=active_product_count,
+        inactive_product_count=inactive_product_count,
+        category_count=category_count,
     )

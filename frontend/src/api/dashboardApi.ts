@@ -20,6 +20,9 @@ export interface MonthlyRevenue {
 export interface DashboardOverview {
   team_count: number;
   product_count: number;
+  active_product_count: number;
+  inactive_product_count: number;
+  category_count: number;
   total_revenue: number;
   service_status: string;
   monthly_revenue: MonthlyRevenue[];

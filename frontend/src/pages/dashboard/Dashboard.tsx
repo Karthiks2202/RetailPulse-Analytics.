@@ -3,13 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { getDashboardOverview } from '../../api/dashboardApi';
 import { 
-  Assessment as AssessmentIcon, 
-  People as PeopleIcon, 
   Inventory as InventoryIcon,
-  Timeline as TimelineIcon,
   ArrowUpward as ArrowUpIcon,
   TrendingUp as TrendingIcon,
-  Storefront as StoreIcon
+  Storefront as StoreIcon,
+  Category as CategoryIcon,
+  CheckCircle as CheckCircleIcon,
+  Block as BlockIcon
 } from '@mui/icons-material';
 
 const formatCurrency = (value: number) =>
@@ -27,32 +27,52 @@ export const Dashboard: React.FC = () => {
   const metricCards = data
     ? [
         {
-          title: 'Gross Revenue',
-          value: formatCurrency(data.total_revenue),
-          icon: <TimelineIcon className="text-indigo-600 dark:text-indigo-400" />,
-          desc: 'Lifetime revenue',
-          color: 'text-indigo-600',
-        },
-        {
-          title: 'Products Listed',
+          title: 'Total Products',
           value: data.product_count.toLocaleString(),
-          icon: <InventoryIcon className="text-emerald-600 dark:text-emerald-400" />,
-          desc: 'Active listings',
-          color: 'text-emerald-600',
+          icon: <InventoryIcon className="text-white" />,
+          desc: 'All listings',
+          iconBg: 'bg-indigo-500',
+          cardBg: 'bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-950/20 dark:to-slate-900',
+          border: 'border-indigo-100 dark:border-indigo-900/30',
+          accent: 'bg-indigo-500',
+          valueColor: 'text-indigo-700 dark:text-indigo-300',
+          descColor: 'text-indigo-500 dark:text-indigo-400',
         },
         {
-          title: 'Team Accounts',
-          value: `${data.team_count} Members`,
-          icon: <PeopleIcon className="text-sky-600 dark:text-sky-400" />,
-          desc: 'Active users',
-          color: 'text-sky-600',
+          title: 'Active Products',
+          value: data.active_product_count.toLocaleString(),
+          icon: <CheckCircleIcon className="text-white" />,
+          desc: 'Available for sale',
+          iconBg: 'bg-emerald-500',
+          cardBg: 'bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/20 dark:to-slate-900',
+          border: 'border-emerald-100 dark:border-emerald-900/30',
+          accent: 'bg-emerald-500',
+          valueColor: 'text-emerald-700 dark:text-emerald-300',
+          descColor: 'text-emerald-500 dark:text-emerald-400',
         },
         {
-          title: 'Service Status',
-          value: data.service_status,
-          icon: <AssessmentIcon className="text-amber-600 dark:text-amber-400" />,
-          desc: 'All systems go',
-          color: 'text-amber-600',
+          title: 'Inactive Products',
+          value: data.inactive_product_count.toLocaleString(),
+          icon: <BlockIcon className="text-white" />,
+          desc: 'Hidden from view',
+          iconBg: 'bg-amber-500',
+          cardBg: 'bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/20 dark:to-slate-900',
+          border: 'border-amber-100 dark:border-amber-900/30',
+          accent: 'bg-amber-500',
+          valueColor: 'text-amber-700 dark:text-amber-300',
+          descColor: 'text-amber-500 dark:text-amber-400',
+        },
+        {
+          title: 'Total Categories',
+          value: data.category_count.toLocaleString(),
+          icon: <CategoryIcon className="text-white" />,
+          desc: 'Product groups',
+          iconBg: 'bg-sky-500',
+          cardBg: 'bg-gradient-to-br from-sky-50 to-white dark:from-sky-950/20 dark:to-slate-900',
+          border: 'border-sky-100 dark:border-sky-900/30',
+          accent: 'bg-sky-500',
+          valueColor: 'text-sky-700 dark:text-sky-300',
+          descColor: 'text-sky-500 dark:text-sky-400',
         },
       ]
     : [];
@@ -102,32 +122,34 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Dashboard Overview</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+          Dashboard Overview
+        </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
-          Welcome back to the RetailPulse management desk. Here is your enterprise telemetry.
+          Welcome back, <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{user?.name?.split(' ')[0]}</span>. Here's your RetailPulse snapshot.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
         {metricCards.map((item, idx) => (
           <div
             key={idx}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group"
+            className={`relative overflow-hidden rounded-2xl p-4 md:p-5 border shadow-sm hover:shadow-lg transition-all duration-200 cursor-pointer group ${item.cardBg} ${item.border}`}
           >
-            <div className="flex items-center justify-between mb-3.5">
-              <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{item.title}</span>
-              <div className="h-9 w-9 rounded-lg bg-slate-50 dark:bg-slate-950 flex items-center justify-center border border-slate-100 dark:border-slate-800 group-hover:border-indigo-200 dark:group-hover:border-indigo-900/50 transition-colors duration-150">
+            {/* Coloured top accent line */}
+            <div className={`absolute top-0 left-0 right-0 h-0.5 ${item.accent}`}/>
+            <div className="flex items-start justify-between mb-3">
+              <span className="text-[10px] md:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">{item.title}</span>
+              <div className={`h-8 w-8 md:h-9 md:w-9 rounded-xl flex items-center justify-center shadow-md shrink-0 ${item.iconBg}`}>
                 {item.icon}
               </div>
             </div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white mb-1.5 tracking-tight">{item.value}</div>
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-450 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900/20 flex items-center gap-0.5">
-                <ArrowUpIcon style={{ fontSize: 10 }} />
-                {item.desc}
-              </span>
+            <div className={`text-2xl md:text-3xl font-extrabold tracking-tight mb-1 ${item.valueColor}`}>{item.value}</div>
+            <div className={`text-[10px] md:text-xs font-semibold flex items-center gap-1 ${item.descColor}`}>
+              <ArrowUpIcon style={{ fontSize: 11 }} />
+              {item.desc}
             </div>
           </div>
         ))}

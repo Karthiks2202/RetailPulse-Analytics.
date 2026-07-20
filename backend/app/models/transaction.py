@@ -20,9 +20,11 @@ class Transaction(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
     amount = Column(Numeric(12, 2), nullable=False)
     type = Column(SQLEnum(TransactionType), nullable=False, default=TransactionType.SALE)
     channel = Column(SQLEnum(TransactionChannel), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     company = relationship("Company", back_populates="transactions")
+    product = relationship("Product", back_populates="transactions")

@@ -4,11 +4,13 @@ from app.models.audit_log import AuditLog
 from uuid import UUID
 
 class CRUDAuditLog:
-    async def create(self, db: AsyncSession, company_id: UUID, user_id: UUID | None, action: str, ip_address: str, browser: str) -> AuditLog:
+    async def create(self, db: AsyncSession, company_id: UUID, user_id: UUID | None, action: str, ip_address: str, browser: str, entity_name: str = "", details: str | None = None) -> AuditLog:
         log = AuditLog(
             company_id=company_id,
             user_id=user_id,
             action=action,
+            entity_name=entity_name,
+            details=details,
             ip_address=ip_address,
             browser=browser,
         )
