@@ -12,6 +12,7 @@ export interface Product {
   unit_price: number;
   cost_price: number;
   stock_quantity: number;
+  low_stock_threshold: number;
   unit_of_measure: string;
   status: 'ACTIVE' | 'INACTIVE';
   created_at: string;
@@ -28,6 +29,7 @@ export interface ProductCreate {
   unit_price: number;
   cost_price: number;
   stock_quantity: number;
+  low_stock_threshold?: number;
   unit_of_measure: string;
   status?: 'ACTIVE' | 'INACTIVE';
 }
@@ -41,6 +43,7 @@ export interface ProductUpdate {
   unit_price?: number;
   cost_price?: number;
   stock_quantity?: number;
+  low_stock_threshold?: number;
   unit_of_measure?: string;
   status?: 'ACTIVE' | 'INACTIVE';
 }

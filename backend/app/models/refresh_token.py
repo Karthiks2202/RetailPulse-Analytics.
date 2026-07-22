@@ -14,4 +14,4 @@ class RefreshToken(Base):
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    user = relationship("User", back_populates="tokens")
+    user = relationship("User", back_populates="tokens", lazy="raise_on_sql")

@@ -23,6 +23,10 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     logger.error(f"Database error: {exc}")
     return JSONResponse(status_code=500, content={"error": "Database error occurred"})
 
+async def value_error_handler(request: Request, exc: ValueError):
+    logger.warning(f"Value error: {exc}")
+    return JSONResponse(status_code=400, content={"error": str(exc)})
+
 async def generic_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(status_code=500, content={"error": "Internal server error"})

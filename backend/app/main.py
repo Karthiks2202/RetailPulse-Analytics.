@@ -6,13 +6,14 @@ from app.middleware.error_handler import (
     retailpulse_exception_handler,
     validation_exception_handler,
     sqlalchemy_exception_handler,
+    value_error_handler,
     generic_exception_handler,
 )
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import engine
-from app.models import company, user, refresh_token, audit_log, category, product, transaction
+from app.models import company, user, refresh_token, audit_log, category, product, transaction, sale
 import random
 
 def create_app() -> FastAPI:
@@ -25,6 +26,7 @@ def create_app() -> FastAPI:
     application.add_exception_handler(RetailPulseException, retailpulse_exception_handler)
     application.add_exception_handler(RequestValidationError, validation_exception_handler)
     application.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
+    application.add_exception_handler(ValueError, value_error_handler)
     application.add_exception_handler(Exception, generic_exception_handler)
 
     # CORS middleware is added LAST so it is the outermost layer — it processes

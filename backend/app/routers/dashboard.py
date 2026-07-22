@@ -6,8 +6,10 @@ from app.models.user import User
 from app.models.product import Product, ProductStatus
 from app.models.transaction import Transaction, TransactionType
 from app.models.category import Category
+from app.models.sale import Sale
 from app.schemas.dashboard import DashboardOverview, MonthlyRevenue, ChannelBreakdown
 from app.utils.dependencies import get_current_active_user
+from app.crud.sale import sale as sale_crud
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -79,6 +81,8 @@ async def get_dashboard_overview(current_user: User = Depends(get_current_active
             "value": f"${c['amount']:,.2f}"
         })
 
+    sale_summary = await sale_crud.get_summary(db, current_user.company_id)
+
     return DashboardOverview(
         team_count=team_count,
         product_count=product_count,
@@ -89,4 +93,7 @@ async def get_dashboard_overview(current_user: User = Depends(get_current_active
         active_product_count=active_product_count,
         inactive_product_count=inactive_product_count,
         category_count=category_count,
+        total_sales=sale_summary["total_sales"],
+        total_orders=sale_summary["total_orders"],
+        average_order_value=sale_summary["average_order_value"],
     )

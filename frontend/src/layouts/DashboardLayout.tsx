@@ -11,15 +11,18 @@ import {
   NightsStay as MoonIcon,
   Category as CategoryIcon,
   Inventory as InventoryIcon,
+  Receipt as ReceiptIcon,
   Menu as MenuIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
+import { NotificationBell } from './NotificationBell';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', Icon: DashIcon, adminOnly: false },
   { to: '/profile',   label: 'My Profile', Icon: ProfileIcon, adminOnly: false },
   { to: '/products',  label: 'Products',   Icon: InventoryIcon, adminOnly: true },
   { to: '/categories',label: 'Categories', Icon: CategoryIcon, adminOnly: true },
+  { to: '/sales',     label: 'Sales',      Icon: ReceiptIcon, adminOnly: true },
 ];
 
 export const DashboardLayout: React.FC = () => {
@@ -36,6 +39,7 @@ export const DashboardLayout: React.FC = () => {
 
   const isActive = (path: string) => location.pathname === path;
   const isAdmin = user?.role === 'COMPANY_ADMIN' || user?.role === 'SUPER_ADMIN';
+  const isAnalyst = user?.role === 'ANALYST';
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -59,7 +63,7 @@ export const DashboardLayout: React.FC = () => {
       {/* Nav */}
       <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
         {NAV_ITEMS.map(({ to, label, Icon, adminOnly }) => {
-          if (adminOnly && !isAdmin) return null;
+          if (adminOnly && !isAdmin && !isAnalyst) return null;
           const active = isActive(to);
           return (
             <Link
@@ -179,6 +183,8 @@ export const DashboardLayout: React.FC = () => {
             </span>
 
             <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block"/>
+
+            <NotificationBell />
 
             {/* Theme toggle */}
             <button

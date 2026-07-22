@@ -24,6 +24,9 @@ export interface DashboardOverview {
   inactive_product_count: number;
   category_count: number;
   total_revenue: number;
+  total_sales?: number;
+  total_orders?: number;
+  average_order_value?: number;
   service_status: string;
   monthly_revenue: MonthlyRevenue[];
   channel_breakdown: ChannelBreakdown[];

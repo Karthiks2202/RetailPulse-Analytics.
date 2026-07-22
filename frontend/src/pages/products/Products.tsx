@@ -51,6 +51,7 @@ interface ProductFormValues {
   unit_price: number;
   cost_price: number;
   stock_quantity: number;
+  low_stock_threshold: number;
   unit_of_measure: string;
   status: 'ACTIVE' | 'INACTIVE';
 }
@@ -106,6 +107,7 @@ export const Products: React.FC = () => {
       unit_price: 0,
       cost_price: 0,
       stock_quantity: 0,
+      low_stock_threshold: 5,
       unit_of_measure: 'PCS',
       status: 'ACTIVE',
     },
@@ -123,6 +125,7 @@ export const Products: React.FC = () => {
       unit_price: 0,
       cost_price: 0,
       stock_quantity: 0,
+      low_stock_threshold: 5,
       unit_of_measure: 'PCS',
       status: 'ACTIVE',
     });
@@ -140,6 +143,7 @@ export const Products: React.FC = () => {
     setValue('unit_price', prod.unit_price);
     setValue('cost_price', prod.cost_price);
     setValue('stock_quantity', prod.stock_quantity);
+    setValue('low_stock_threshold', prod.low_stock_threshold || 5);
     setValue('unit_of_measure', prod.unit_of_measure);
     setValue('status', prod.status);
     setModalOpen(true);
@@ -156,6 +160,7 @@ export const Products: React.FC = () => {
         unit_price: Number(values.unit_price),
         cost_price: Number(values.cost_price),
         stock_quantity: Number(values.stock_quantity),
+        low_stock_threshold: Number(values.low_stock_threshold),
         unit_of_measure: values.unit_of_measure,
         status: values.status,
       };
@@ -236,7 +241,7 @@ export const Products: React.FC = () => {
             style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
           >
             <AddIcon style={{ fontSize: 17 }} />
-            + New Product
+            New Product
           </button>
         )}
       </div>
@@ -370,8 +375,8 @@ export const Products: React.FC = () => {
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto animate-modal-enter">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900">
               <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
                 {editing ? 'Edit Product' : 'New Product'}
@@ -441,7 +446,11 @@ export const Products: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Low Stock Alert *</label>
+                  <input type="number" min="0" {...register('low_stock_threshold', { required: true, valueAsNumber: true, min: 0 })} className={inputClass} title="Alert when stock falls to this amount" />
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Unit of Measure</label>
                   <select {...register('unit_of_measure')} className={inputClass}>

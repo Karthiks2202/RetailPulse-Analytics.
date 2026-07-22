@@ -30,6 +30,7 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    company = relationship("Company", back_populates="users")
-    tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
-    audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan")
+    company = relationship("Company", back_populates="users", lazy="raise_on_sql")
+    tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan", lazy="raise_on_sql")
+    audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan", lazy="raise_on_sql")
+    sales = relationship("Sale", back_populates="created_by_user", lazy="raise_on_sql")

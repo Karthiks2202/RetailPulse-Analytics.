@@ -28,5 +28,8 @@ class DashboardOverview(BaseModel):
     service_status: str
     monthly_revenue: List[MonthlyRevenue]
     channel_breakdown: List[ChannelBreakdown]
+    total_sales: int = 0
+    total_orders: int = 0
+    average_order_value: float = 0.0
 
     model_config = {"from_attributes": True}

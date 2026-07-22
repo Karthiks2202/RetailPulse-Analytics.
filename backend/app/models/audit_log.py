@@ -18,5 +18,5 @@ class AuditLog(Base):
     browser = Column(String, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
-    company = relationship("Company", back_populates="audit_logs")
-    user = relationship("User", back_populates="audit_logs")
+    company = relationship("Company", back_populates="audit_logs", lazy="raise_on_sql")
+    user = relationship("User", back_populates="audit_logs", lazy="raise_on_sql")

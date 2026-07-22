@@ -21,5 +21,6 @@ class Category(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    company = relationship("Company", back_populates="categories")
-    products = relationship("Product", back_populates="category")
+    company = relationship("Company", back_populates="categories", lazy="raise_on_sql")
+    products = relationship("Product", back_populates="category", lazy="raise_on_sql")
+    sale_items = relationship("SaleItem", back_populates="category", lazy="raise_on_sql")

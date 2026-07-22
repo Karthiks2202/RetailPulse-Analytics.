@@ -26,5 +26,5 @@ class Transaction(Base):
     channel = Column(SQLEnum(TransactionChannel), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    company = relationship("Company", back_populates="transactions")
-    product = relationship("Product", back_populates="transactions")
+    company = relationship("Company", back_populates="transactions", lazy="raise_on_sql")
+    product = relationship("Product", back_populates="transactions", lazy="raise_on_sql")

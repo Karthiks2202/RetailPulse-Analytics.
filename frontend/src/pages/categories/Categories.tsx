@@ -127,7 +127,7 @@ export const Categories: React.FC = () => {
             style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
           >
             <AddIcon style={{ fontSize: 17 }} />
-            + New Category
+            New Category
           </button>
         )}
       </div>
@@ -212,8 +212,8 @@ export const Categories: React.FC = () => {
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl animate-modal-enter">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
               <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
                 {editing ? 'Edit Category' : 'New Category'}

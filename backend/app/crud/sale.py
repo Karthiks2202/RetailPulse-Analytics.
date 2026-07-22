@@ -1,0 +1,385 @@
+from __future__ import annotations
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
+from app.models.sale import Sale, SaleItem, SaleStatus
+from app.models.product import Product, ProductStatus
+from app.models.category import Category
+from app.models.audit_log import AuditLog
+from app.models.notification import NotificationType
+from app.crud.audit_log import audit_log as audit_log_crud
+from app.crud.notification import notification as notification_crud
+from fastapi import Request
+from uuid import UUID
+from datetime import datetime
+from decimal import Decimal
+from typing import Optional
+
+
+class CRUDSale:
+    async def _log_audit(self, db, company_id, user_id, action, request, entity_name="", details=None):
+        from app.services.audit import audit_service
+        ip_address = request.headers.get("x-forwarded-for", request.client.host if request.client else "Unknown")
+        browser = request.headers.get("user-agent", "Unknown")
+        await audit_log_crud.create(db, company_id=company_id, user_id=user_id, action=action, entity_name=entity_name, details=details, ip_address=ip_address, browser=browser)
+
+    async def get_invoice_number(self, db: AsyncSession, company_id: UUID) -> str:
+        year = datetime.utcnow().year
+        prefix = f"INV-{year}-"
+        result = await db.execute(
+            select(func.max(Sale.invoice_number))
+            .where(Sale.company_id == company_id)
+            .where(Sale.invoice_number.like(f"{prefix}%"))
+        )
+        last_number = result.scalar_one_or_none()
+        if last_number:
+            last_seq = int(last_number.split("-")[-1])
+            next_seq = last_seq + 1
+        else:
+            next_seq = 1
+        return f"{prefix}{next_seq:06d}"
+
+    async def get(self, db: AsyncSession, sale_id: UUID) -> Sale | None:
+        result = await db.execute(select(Sale).where(Sale.id == sale_id).options(selectinload(Sale.items)))
+        return result.scalar_one_or_none()
+
+    async def get_by_invoice(self, db: AsyncSession, company_id: UUID, invoice_number: str) -> Sale | None:
+        result = await db.execute(
+            select(Sale).where(Sale.company_id == company_id).where(Sale.invoice_number == invoice_number)
+        )
+        return result.scalar_one_or_none()
+
+    async def list(
+        self,
+        db: AsyncSession,
+        company_id: UUID,
+        skip: int = 0,
+        limit: int = 100,
+        search: str | None = None,
+        customer_name: str | None = None,
+        product_name: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        sales_channel: str | None = None,
+        payment_method: str | None = None,
+        category_id: UUID | None = None,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
+    ) -> tuple[list[Sale], int]:
+        query = select(Sale).where(Sale.company_id == company_id).options(selectinload(Sale.items))
+
+        if search:
+            query = query.where(Sale.invoice_number.ilike(f"%{search}%"))
+
+        if customer_name:
+            query = query.where(Sale.customer_name.ilike(f"%{customer_name}%"))
+
+        if date_from:
+            query = query.where(Sale.sale_date >= date_from)
+
+        if date_to:
+            query = query.where(Sale.sale_date <= date_to)
+
+        if sales_channel:
+            query = query.where(Sale.sales_channel == sales_channel)
+
+        if payment_method:
+            query = query.where(Sale.payment_method == payment_method)
+
+        if category_id:
+            query = query.join(SaleItem).where(SaleItem.category_id == category_id).distinct()
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        sort_column = getattr(Sale, sort_by, Sale.created_at)
+        if sort_dir == "asc":
+            query = query.order_by(sort_column.asc())
+        else:
+            query = query.order_by(sort_column.desc())
+
+        query = query.offset(skip).limit(limit)
+        result = await db.execute(query)
+        return list(result.scalars().all()), total
+
+    async def list_with_items(
+        self,
+        db: AsyncSession,
+        company_id: UUID,
+        skip: int = 0,
+        limit: int = 100,
+        search: str | None = None,
+        customer_name: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        sales_channel: str | None = None,
+        payment_method: str | None = None,
+        category_id: UUID | None = None,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
+    ) -> tuple[list[Sale], int]:
+        query = select(Sale).where(Sale.company_id == company_id).options(selectinload(Sale.items))
+
+        if search:
+            query = query.where(Sale.invoice_number.ilike(f"%{search}%"))
+
+        if customer_name:
+            query = query.where(Sale.customer_name.ilike(f"%{customer_name}%"))
+
+        if date_from:
+            query = query.where(Sale.sale_date >= date_from)
+
+        if date_to:
+            query = query.where(Sale.sale_date <= date_to)
+
+        if sales_channel:
+            query = query.where(Sale.sales_channel == sales_channel)
+
+        if payment_method:
+            query = query.where(Sale.payment_method == payment_method)
+
+        if category_id:
+            query = query.join(SaleItem).where(SaleItem.category_id == category_id).distinct()
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        sort_column = getattr(Sale, sort_by, Sale.created_at)
+        if sort_dir == "asc":
+            query = query.order_by(sort_column.asc())
+        else:
+            query = query.order_by(sort_column.desc())
+
+        query = query.offset(skip).limit(limit)
+        result = await db.execute(query)
+        sales = list(result.scalars().all())
+        return sales, total
+
+    async def create(self, db: AsyncSession, company_id: UUID, user_id: UUID, customer_name: Optional[str], sale_date: datetime, sales_channel: str, payment_method: str, items: list, request: Request) -> Sale:
+        invoice_number = await self.get_invoice_number(db, company_id)
+
+        total_amount = Decimal("0")
+        sale_items = []
+        product_updates = []
+
+        for item_data in items:
+            product_id = item_data.get("product_id")
+            quantity = item_data.get("quantity")
+            unit_price = Decimal(str(item_data.get("unit_price", 0)))
+            discount = Decimal(str(item_data.get("discount", 0)))
+            tax = Decimal(str(item_data.get("tax", 0)))
+
+            product = None
+            category_id = None
+            if product_id:
+                product = await db.get(Product, product_id)
+                if not product or product.company_id != company_id:
+                    raise ValueError("Invalid product selected")
+                if product.status == ProductStatus.INACTIVE:
+                    raise ValueError(f"Product {product.name} is inactive")
+                if quantity > product.stock_quantity:
+                    raise ValueError(f"Insufficient stock for {product.name}. Available: {product.stock_quantity}, Requested: {quantity}")
+                if unit_price < 0:
+                    raise ValueError("Unit price cannot be negative")
+                if discount < 0:
+                    raise ValueError("Discount cannot be negative")
+                item_subtotal = (unit_price * quantity) - discount
+                if discount > item_subtotal:
+                    raise ValueError("Discount cannot exceed total product value")
+                if tax < 0:
+                    raise ValueError("Tax cannot be negative")
+
+                category_id = product.category_id
+                product.stock_quantity -= quantity
+
+                if product.stock_quantity == 0:
+                    product.status = ProductStatus.INACTIVE
+                    await self._log_audit(db, company_id, user_id, "Product Marked Out of Stock", request, entity_name=product.name, details=f"Product '{product.name}' stock reached 0")
+                    await notification_crud.create(db, company_id, title="Out of Stock", message=f"Product '{product.name}' is out of stock.", type=NotificationType.OUT_OF_STOCK)
+                elif product.stock_quantity <= product.low_stock_threshold:
+                    await self._log_audit(db, company_id, user_id, "Low Stock Alert", request, entity_name=product.name, details=f"Product '{product.name}' stock is low: {product.stock_quantity}")
+                    await notification_crud.create(db, company_id, title="Low Stock", message=f"Product '{product.name}' stock is low: {product.stock_quantity}.", type=NotificationType.LOW_STOCK)
+
+                product_updates.append(product)
+
+            item_total = (unit_price * quantity) - discount + tax
+            total_amount += item_total
+
+            sale_item = SaleItem(
+                product_id=product_id,
+                category_id=category_id,
+                quantity=quantity,
+                unit_price=float(unit_price),
+                discount=float(discount),
+                tax=float(tax),
+                total=float(item_total),
+            )
+            sale_items.append(sale_item)
+
+        sale = Sale(
+            company_id=company_id,
+            invoice_number=invoice_number,
+            customer_name=customer_name,
+            sale_date=sale_date,
+            sales_channel=sales_channel,
+            payment_method=payment_method,
+            total_amount=float(total_amount),
+            created_by=user_id,
+            items=sale_items,
+        )
+
+        db.add(sale)
+        await db.commit()
+        await db.refresh(sale, attribute_names=["items"])
+
+        for item in sale.items:
+            await db.refresh(item)
+
+        await self._log_audit(db, company_id, user_id, "Sale Created", request, entity_name=invoice_number, details=f"Sale {invoice_number} created with {len(sale.items)} items, total ${float(total_amount):.2f}")
+
+        return sale
+
+    async def update(self, db: AsyncSession, sale_id: UUID, company_id: UUID, user_id: UUID, payload: dict, request: Request) -> Sale:
+        sale = await self.get(db, sale_id)
+        if not sale or sale.company_id != company_id:
+            raise ValueError("Sale not found")
+
+        if sale.status == SaleStatus.CANCELLED:
+            raise ValueError("Cannot update a cancelled sale")
+
+        items = payload.get("items")
+        if items is not None:
+            product_updates = []
+            for old_item in sale.items:
+                if old_item.product_id:
+                    product = await db.get(Product, old_item.product_id)
+                    if product:
+                        product.stock_quantity += old_item.quantity
+                        if product.status == ProductStatus.INACTIVE and product.stock_quantity > 0:
+                            product.status = ProductStatus.ACTIVE
+                        product_updates.append(product)
+
+            total_amount = Decimal("0")
+            new_items = []
+            for item_data in items:
+                product_id = item_data.get("product_id")
+                quantity = item_data.get("quantity")
+                unit_price = Decimal(str(item_data.get("unit_price", 0)))
+                discount = Decimal(str(item_data.get("discount", 0)))
+                tax = Decimal(str(item_data.get("tax", 0)))
+
+                product = None
+                category_id = None
+                if product_id:
+                    product = await db.get(Product, product_id)
+                    if not product or product.company_id != company_id:
+                        raise ValueError("Invalid product selected")
+                    if product.status == ProductStatus.INACTIVE:
+                        raise ValueError(f"Product {product.name} is inactive")
+                    if quantity > product.stock_quantity:
+                        raise ValueError(f"Insufficient stock for {product.name}. Available: {product.stock_quantity}, Requested: {quantity}")
+                    if unit_price < 0:
+                        raise ValueError("Unit price cannot be negative")
+                    if discount < 0:
+                        raise ValueError("Discount cannot be negative")
+                    item_subtotal = (unit_price * quantity) - discount
+                    if discount > item_subtotal:
+                        raise ValueError("Discount cannot exceed total product value")
+                    if tax < 0:
+                        raise ValueError("Tax cannot be negative")
+
+                    category_id = product.category_id
+                    product.stock_quantity -= quantity
+
+                    if product.stock_quantity == 0:
+                        product.status = ProductStatus.INACTIVE
+                        await self._log_audit(db, company_id, user_id, "Product Marked Out of Stock", request, entity_name=product.name, details=f"Product '{product.name}' stock reached 0")
+                        await notification_crud.create(db, company_id, title="Out of Stock", message=f"Product '{product.name}' is out of stock.", type=NotificationType.OUT_OF_STOCK)
+                    elif product.stock_quantity <= product.low_stock_threshold:
+                        await self._log_audit(db, company_id, user_id, "Low Stock Alert", request, entity_name=product.name, details=f"Product '{product.name}' stock is low: {product.stock_quantity}")
+                        await notification_crud.create(db, company_id, title="Low Stock", message=f"Product '{product.name}' stock is low: {product.stock_quantity}.", type=NotificationType.LOW_STOCK)
+
+                item_total = (unit_price * quantity) - discount + tax
+                total_amount += item_total
+
+                new_items.append(SaleItem(
+                    product_id=product_id,
+                    category_id=category_id,
+                    quantity=quantity,
+                    unit_price=float(unit_price),
+                    discount=float(discount),
+                    tax=float(tax),
+                    total=float(item_total),
+                ))
+
+            for old_item in sale.items:
+                await db.delete(old_item)
+
+            for new_item in new_items:
+                sale.items.append(new_item)
+
+            sale.total_amount = float(total_amount)
+
+        update_fields = ["customer_name", "sale_date", "sales_channel", "payment_method", "status"]
+        for field in update_fields:
+            if field in payload:
+                setattr(sale, field, payload[field])
+
+        sale.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(sale, attribute_names=["items"])
+
+        for item in sale.items:
+            await db.refresh(item)
+
+        await self._log_audit(db, company_id, user_id, "Sale Updated", request, entity_name=sale.invoice_number, details=f"Sale {sale.invoice_number} updated")
+
+        return sale
+
+    async def delete(self, db: AsyncSession, sale_id: UUID, company_id: UUID, user_id: UUID, request: Request) -> None:
+        sale = await self.get(db, sale_id)
+        if not sale or sale.company_id != company_id:
+            raise ValueError("Sale not found")
+
+        await db.refresh(sale, attribute_names=["items"])
+        for item in sale.items:
+            if item.product_id:
+                product = await db.get(Product, item.product_id)
+                if product:
+                    product.stock_quantity += item.quantity
+                    if product.status == ProductStatus.INACTIVE and product.stock_quantity > 0:
+                        product.status = ProductStatus.ACTIVE
+
+        invoice_number = sale.invoice_number
+        await db.delete(sale)
+        await db.commit()
+
+        await self._log_audit(db, company_id, user_id, "Sale Deleted", request, entity_name=invoice_number, details=f"Sale {invoice_number} deleted and inventory restored")
+
+    async def get_summary(self, db: AsyncSession, company_id: UUID) -> dict:
+        total_sales_result = await db.execute(
+            select(func.count(Sale.id)).where(Sale.company_id == company_id)
+        )
+        total_sales = total_sales_result.scalar() or 0
+
+        total_revenue_result = await db.execute(
+            select(func.coalesce(func.sum(Sale.total_amount), 0)).where(Sale.company_id == company_id)
+        )
+        total_revenue = float(total_revenue_result.scalar() or 0)
+
+        total_orders = total_sales
+
+        avg_order_value = total_revenue / total_orders if total_orders > 0 else 0.0
+
+        return {
+            "total_sales": total_sales,
+            "total_revenue": total_revenue,
+            "total_orders": total_orders,
+            "average_order_value": avg_order_value,
+        }
+
+
+sale = CRUDSale()
