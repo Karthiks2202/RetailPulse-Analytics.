@@ -1,0 +1,15 @@
+# Backend Gitignore
+.env
+.env.*
+!.env.example
+
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+logs/
+*.log

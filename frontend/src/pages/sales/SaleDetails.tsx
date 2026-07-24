@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatCurrency } from '../../utils/currency';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getSale } from '../../api/saleApi';
@@ -7,8 +8,7 @@ import {
   Print as PrintIcon,
 } from '@mui/icons-material';
 
-const currency = (v: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v);
+const currency = formatCurrency;
 
 export const SaleDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();

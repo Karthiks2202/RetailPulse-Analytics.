@@ -6,6 +6,7 @@ from typing import Optional
 from app.database import get_db
 from app.models.product import Product, ProductStatus
 from app.models.category import Category
+from app.models.sale import SaleItem
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from app.schemas.category import CategoryResponse
 from app.utils.dependencies import get_current_active_user
@@ -39,6 +40,7 @@ def serialize_product(prod: Product, category: Category | None = None) -> Produc
         unit_price=float(prod.unit_price),
         cost_price=float(prod.cost_price),
         stock_quantity=prod.stock_quantity,
+        low_stock_threshold=prod.low_stock_threshold,
         unit_of_measure=prod.unit_of_measure,
         status=prod.status,
         created_at=prod.created_at,
@@ -155,8 +157,9 @@ async def create_product(
         float(payload.unit_price),
         float(payload.cost_price),
         payload.stock_quantity,
-        payload.unit_of_measure.value,
-        payload.status.value,
+        payload.low_stock_threshold,
+        payload.unit_of_measure.value if hasattr(payload.unit_of_measure, 'value') else payload.unit_of_measure,
+        payload.status.value if hasattr(payload.status, 'value') else payload.status,
     )
     await audit_service.log(db, current_user.company_id, current_user.id, "Product Created", request, entity_name=prod.name, details=f"Created product '{prod.name}' with SKU {prod.sku}")
     cat = await category_crud.get(db, prod.category_id) if prod.category_id else None
@@ -216,7 +219,10 @@ async def delete_product(
     if not prod or prod.company_id != current_user.company_id:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    await product_crud.delete(db, prod)
+    try:
+        await product_crud.delete(db, prod)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     await audit_service.log(db, current_user.company_id, current_user.id, "Product Deleted", request, entity_name=prod.name, details=f"Deleted product '{prod.name}'")
 
 @router.patch("/{product_id}/activate", response_model=ProductResponse)

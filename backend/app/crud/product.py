@@ -96,6 +96,28 @@ class CRUDProduct:
         return product
 
     async def delete(self, db: AsyncSession, product: Product) -> None:
+        from app.models.sale import SaleItem
+        from app.models.transaction import Transaction
+        from app.models.inventory import StockMovement
+
+        sale_item_check = await db.execute(
+            select(SaleItem).where(SaleItem.product_id == product.id).limit(1)
+        )
+        if sale_item_check.scalar_one_or_none():
+            raise ValueError("Cannot delete product that has been sold in sales history. Deactivate it instead.")
+
+        tx_check = await db.execute(
+            select(Transaction).where(Transaction.product_id == product.id).limit(1)
+        )
+        if tx_check.scalar_one_or_none():
+            raise ValueError("Cannot delete product that has transaction history. Deactivate it instead.")
+
+        sm_check = await db.execute(
+            select(StockMovement).where(StockMovement.product_id == product.id).limit(1)
+        )
+        if sm_check.scalar_one_or_none():
+            raise ValueError("Cannot delete product that has stock movement history. Deactivate it instead.")
+
         await db.delete(product)
         await db.commit()
 

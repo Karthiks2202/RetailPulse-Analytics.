@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from app.models.sale import Sale, SaleItem, SaleStatus
 from app.models.product import Product, ProductStatus
 from app.models.category import Category
 from app.models.audit_log import AuditLog
 from app.models.notification import NotificationType
+from app.models.inventory import StockMovement, MovementType
 from app.crud.audit_log import audit_log as audit_log_crud
 from app.crud.notification import notification as notification_crud
+from app.crud.inventory import inventory as inventory_crud
 from fastapi import Request
 from uuid import UUID
 from datetime import datetime
@@ -27,17 +30,8 @@ class CRUDSale:
     async def get_invoice_number(self, db: AsyncSession, company_id: UUID) -> str:
         year = datetime.utcnow().year
         prefix = f"INV-{year}-"
-        result = await db.execute(
-            select(func.max(Sale.invoice_number))
-            .where(Sale.company_id == company_id)
-            .where(Sale.invoice_number.like(f"{prefix}%"))
-        )
-        last_number = result.scalar_one_or_none()
-        if last_number:
-            last_seq = int(last_number.split("-")[-1])
-            next_seq = last_seq + 1
-        else:
-            next_seq = 1
+        result = await db.execute(select(func.nextval('invoice_seq')))
+        next_seq = result.scalar_one()
         return f"{prefix}{next_seq:06d}"
 
     async def get(self, db: AsyncSession, sale_id: UUID) -> Sale | None:
@@ -70,7 +64,16 @@ class CRUDSale:
         query = select(Sale).where(Sale.company_id == company_id).options(selectinload(Sale.items))
 
         if search:
-            query = query.where(Sale.invoice_number.ilike(f"%{search}%"))
+            query = (
+                query.outerjoin(SaleItem, Sale.id == SaleItem.sale_id)
+                .outerjoin(Product, SaleItem.product_id == Product.id)
+                .where(
+                    Sale.invoice_number.ilike(f"%{search}%")
+                    | Sale.customer_name.ilike(f"%{search}%")
+                    | Product.name.ilike(f"%{search}%")
+                )
+                .distinct()
+            )
 
         if customer_name:
             query = query.where(Sale.customer_name.ilike(f"%{customer_name}%"))
@@ -89,6 +92,9 @@ class CRUDSale:
 
         if category_id:
             query = query.join(SaleItem).where(SaleItem.category_id == category_id).distinct()
+
+        if product_name:
+            query = query.join(SaleItem).join(Product).where(Product.name.ilike(f"%{product_name}%")).distinct()
 
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await db.execute(count_query)
@@ -112,6 +118,7 @@ class CRUDSale:
         limit: int = 100,
         search: str | None = None,
         customer_name: str | None = None,
+        product_name: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         sales_channel: str | None = None,
@@ -123,7 +130,16 @@ class CRUDSale:
         query = select(Sale).where(Sale.company_id == company_id).options(selectinload(Sale.items))
 
         if search:
-            query = query.where(Sale.invoice_number.ilike(f"%{search}%"))
+            query = (
+                query.outerjoin(SaleItem, Sale.id == SaleItem.sale_id)
+                .outerjoin(Product, SaleItem.product_id == Product.id)
+                .where(
+                    Sale.invoice_number.ilike(f"%{search}%")
+                    | Sale.customer_name.ilike(f"%{search}%")
+                    | Product.name.ilike(f"%{search}%")
+                )
+                .distinct()
+            )
 
         if customer_name:
             query = query.where(Sale.customer_name.ilike(f"%{customer_name}%"))
@@ -142,6 +158,9 @@ class CRUDSale:
 
         if category_id:
             query = query.join(SaleItem).where(SaleItem.category_id == category_id).distinct()
+
+        if product_name:
+            query = query.join(SaleItem).join(Product).where(Product.name.ilike(f"%{product_name}%")).distinct()
 
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await db.execute(count_query)
@@ -164,6 +183,7 @@ class CRUDSale:
         total_amount = Decimal("0")
         sale_items = []
         product_updates = []
+        initial_quantities: dict[UUID, int] = {}
 
         for item_data in items:
             product_id = item_data.get("product_id")
@@ -180,8 +200,9 @@ class CRUDSale:
                     raise ValueError("Invalid product selected")
                 if product.status == ProductStatus.INACTIVE:
                     raise ValueError(f"Product {product.name} is inactive")
-                if quantity > product.stock_quantity:
-                    raise ValueError(f"Insufficient stock for {product.name}. Available: {product.stock_quantity}, Requested: {quantity}")
+                available = product.stock_quantity - product.reserved_stock
+                if quantity > available:
+                    raise ValueError(f"Insufficient available stock for {product.name}. Available: {available}, Requested: {quantity}")
                 if unit_price < 0:
                     raise ValueError("Unit price cannot be negative")
                 if discount < 0:
@@ -192,6 +213,7 @@ class CRUDSale:
                 if tax < 0:
                     raise ValueError("Tax cannot be negative")
 
+                initial_quantities[product.id] = product.stock_quantity
                 category_id = product.category_id
                 product.stock_quantity -= quantity
 
@@ -219,26 +241,49 @@ class CRUDSale:
             )
             sale_items.append(sale_item)
 
-        sale = Sale(
-            company_id=company_id,
-            invoice_number=invoice_number,
-            customer_name=customer_name,
-            sale_date=sale_date,
-            sales_channel=sales_channel,
-            payment_method=payment_method,
-            total_amount=float(total_amount),
-            created_by=user_id,
-            items=sale_items,
-        )
+        for attempt in range(3):
+            invoice_number = await self.get_invoice_number(db, company_id)
+            sale = Sale(
+                company_id=company_id,
+                invoice_number=invoice_number,
+                customer_name=customer_name,
+                sale_date=sale_date,
+                sales_channel=sales_channel,
+                payment_method=payment_method,
+                total_amount=float(total_amount),
+                created_by=user_id,
+                items=sale_items,
+            )
 
-        db.add(sale)
-        await db.commit()
+            try:
+                db.add(sale)
+                await db.commit()
+                break
+            except IntegrityError:
+                await db.rollback()
+                if attempt == 2:
+                    raise
+
         await db.refresh(sale, attribute_names=["items"])
 
         for item in sale.items:
             await db.refresh(item)
 
         await self._log_audit(db, company_id, user_id, "Sale Created", request, entity_name=invoice_number, details=f"Sale {invoice_number} created with {len(sale.items)} items, total ${float(total_amount):.2f}")
+
+        for product_id, initial_qty in initial_quantities.items():
+            qty = next((item.get("quantity") for item in items if item.get("product_id") == product_id), 0)
+            if qty > 0:
+                await inventory_crud.record_sale_movement(
+                    db=db,
+                    company_id=company_id,
+                    product_id=product_id,
+                    previous_quantity=initial_qty,
+                    updated_quantity=initial_qty - qty,
+                    quantity_changed=-qty,
+                    user_id=user_id,
+                    reason=f"Sale {invoice_number}",
+                )
 
         return sale
 
@@ -253,10 +298,13 @@ class CRUDSale:
         items = payload.get("items")
         if items is not None:
             product_updates = []
+            initial_quantities: dict[UUID, int] = {}
+
             for old_item in sale.items:
                 if old_item.product_id:
                     product = await db.get(Product, old_item.product_id)
                     if product:
+                        initial_quantities[product.id] = product.stock_quantity
                         product.stock_quantity += old_item.quantity
                         if product.status == ProductStatus.INACTIVE and product.stock_quantity > 0:
                             product.status = ProductStatus.ACTIVE
@@ -279,8 +327,9 @@ class CRUDSale:
                         raise ValueError("Invalid product selected")
                     if product.status == ProductStatus.INACTIVE:
                         raise ValueError(f"Product {product.name} is inactive")
-                    if quantity > product.stock_quantity:
-                        raise ValueError(f"Insufficient stock for {product.name}. Available: {product.stock_quantity}, Requested: {quantity}")
+                    available = product.stock_quantity - product.reserved_stock
+                    if quantity > available:
+                        raise ValueError(f"Insufficient available stock for {product.name}. Available: {available}, Requested: {quantity}")
                     if unit_price < 0:
                         raise ValueError("Unit price cannot be negative")
                     if discount < 0:
@@ -291,6 +340,8 @@ class CRUDSale:
                     if tax < 0:
                         raise ValueError("Tax cannot be negative")
 
+                    if product.id not in initial_quantities:
+                        initial_quantities[product.id] = product.stock_quantity
                     category_id = product.category_id
                     product.stock_quantity -= quantity
 
@@ -301,6 +352,8 @@ class CRUDSale:
                     elif product.stock_quantity <= product.low_stock_threshold:
                         await self._log_audit(db, company_id, user_id, "Low Stock Alert", request, entity_name=product.name, details=f"Product '{product.name}' stock is low: {product.stock_quantity}")
                         await notification_crud.create(db, company_id, title="Low Stock", message=f"Product '{product.name}' stock is low: {product.stock_quantity}.", type=NotificationType.LOW_STOCK)
+
+                    product_updates.append(product)
 
                 item_total = (unit_price * quantity) - discount + tax
                 total_amount += item_total
@@ -337,6 +390,23 @@ class CRUDSale:
 
         await self._log_audit(db, company_id, user_id, "Sale Updated", request, entity_name=sale.invoice_number, details=f"Sale {sale.invoice_number} updated")
 
+        for pid, initial_qty in initial_quantities.items():
+            product = await db.get(Product, pid)
+            if product:
+                final_qty = product.stock_quantity
+                change = final_qty - initial_qty
+                if change != 0:
+                    await inventory_crud.record_sale_movement(
+                        db=db,
+                        company_id=company_id,
+                        product_id=pid,
+                        previous_quantity=initial_qty,
+                        updated_quantity=final_qty,
+                        quantity_changed=change,
+                        user_id=user_id,
+                        reason=f"Sale update - {sale.invoice_number}",
+                    )
+
         return sale
 
     async def delete(self, db: AsyncSession, sale_id: UUID, company_id: UUID, user_id: UUID, request: Request) -> None:
@@ -345,10 +415,13 @@ class CRUDSale:
             raise ValueError("Sale not found")
 
         await db.refresh(sale, attribute_names=["items"])
+        initial_quantities = {}
+
         for item in sale.items:
             if item.product_id:
                 product = await db.get(Product, item.product_id)
                 if product:
+                    initial_quantities[product.id] = product.stock_quantity
                     product.stock_quantity += item.quantity
                     if product.status == ProductStatus.INACTIVE and product.stock_quantity > 0:
                         product.status = ProductStatus.ACTIVE
@@ -358,6 +431,23 @@ class CRUDSale:
         await db.commit()
 
         await self._log_audit(db, company_id, user_id, "Sale Deleted", request, entity_name=invoice_number, details=f"Sale {invoice_number} deleted and inventory restored")
+
+        for pid, initial_qty in initial_quantities.items():
+            product = await db.get(Product, pid)
+            if product:
+                final_qty = product.stock_quantity
+                change = final_qty - initial_qty
+                if change != 0:
+                    await inventory_crud.record_sale_movement(
+                        db=db,
+                        company_id=company_id,
+                        product_id=pid,
+                        previous_quantity=initial_qty,
+                        updated_quantity=final_qty,
+                        quantity_changed=change,
+                        user_id=user_id,
+                        reason=f"Sale {invoice_number} deleted",
+                    )
 
     async def get_summary(self, db: AsyncSession, company_id: UUID) -> dict:
         total_sales_result = await db.execute(

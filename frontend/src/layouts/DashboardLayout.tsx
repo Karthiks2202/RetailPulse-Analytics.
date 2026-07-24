@@ -10,6 +10,7 @@ import {
   WbSunny as SunIcon,
   NightsStay as MoonIcon,
   Category as CategoryIcon,
+  ShowChart as ShowChartIcon,
   Inventory as InventoryIcon,
   Receipt as ReceiptIcon,
   Menu as MenuIcon,
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', Icon: DashIcon, adminOnly: false },
   { to: '/profile',   label: 'My Profile', Icon: ProfileIcon, adminOnly: false },
   { to: '/products',  label: 'Products',   Icon: InventoryIcon, adminOnly: true },
+  { to: '/inventory', label: 'Inventory',  Icon: ShowChartIcon, adminOnly: true },
   { to: '/categories',label: 'Categories', Icon: CategoryIcon, adminOnly: true },
   { to: '/sales',     label: 'Sales',      Icon: ReceiptIcon, adminOnly: true },
 ];

@@ -10,8 +10,11 @@ class CRUDCategory:
         return result.scalar_one_or_none()
 
     async def get_by_name(self, db: AsyncSession, company_id: UUID, name: str) -> Category | None:
+        clean_name = name.strip()
         result = await db.execute(
-            select(Category).where(Category.company_id == company_id).where(Category.name == name)
+            select(Category)
+            .where(Category.company_id == company_id)
+            .where(func.lower(Category.name) == func.lower(clean_name))
         )
         return result.scalar_one_or_none()
 

@@ -6,5 +6,6 @@ from app.crud.category import category as category_crud
 from app.crud.product import product as product_crud
 from app.crud.sale import sale as sale_crud
 from app.crud.notification import notification as notification_crud
+from app.crud.inventory import inventory as inventory_crud
 
-__all__ = ["company_crud", "user_crud", "refresh_token_crud", "audit_log_crud", "category_crud", "product_crud", "sale_crud", "notification_crud"]
+__all__ = ["company_crud", "user_crud", "refresh_token_crud", "audit_log_crud", "category_crud", "product_crud", "sale_crud", "notification_crud", "inventory_crud"]

@@ -7,6 +7,7 @@ from app.models.product import Product, ProductStatus, UnitOfMeasure
 from app.models.transaction import Transaction, TransactionChannel, TransactionType
 from app.models.sale import Sale, SaleItem, SalesChannel, PaymentMethod, SaleStatus
 from app.models.notification import Notification, NotificationType
+from app.models.inventory import StockMovement, MovementType, InventoryAdjustment, AdjustmentType
 
 __all__ = [
     "Company",
@@ -27,4 +28,8 @@ __all__ = [
     "SaleStatus",
     "Notification",
     "NotificationType",
+    "StockMovement",
+    "MovementType",
+    "InventoryAdjustment",
+    "AdjustmentType",
 ]

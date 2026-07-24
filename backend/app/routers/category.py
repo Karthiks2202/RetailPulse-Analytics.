@@ -81,9 +81,9 @@ async def update_category(
     if not cat or cat.company_id != current_user.company_id:
         raise HTTPException(status_code=404, detail="Category not found")
 
-    if payload.name and payload.name != cat.name:
+    if payload.name:
         existing = await category_crud.get_by_name(db, current_user.company_id, payload.name)
-        if existing:
+        if existing and existing.id != category_id:
             raise HTTPException(status_code=400, detail="Category with this name already exists")
 
     updated = await category_crud.update(db, cat, payload.name, payload.description, payload.status.value if payload.status else None)

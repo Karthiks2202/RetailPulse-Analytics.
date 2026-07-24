@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { getDashboardOverview } from '../../api/dashboardApi';
+import { formatCurrency } from '../../utils/currency';
 import { 
   Inventory as InventoryIcon,
   ArrowUpward as ArrowUpIcon,
@@ -15,8 +16,7 @@ import {
   AttachMoney as MoneyIcon,
 } from '@mui/icons-material';
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();

@@ -34,3 +34,5 @@ class User(Base):
     tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan", lazy="raise_on_sql")
     audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan", lazy="raise_on_sql")
     sales = relationship("Sale", back_populates="created_by_user", lazy="raise_on_sql")
+    stock_movements = relationship("StockMovement", back_populates="user", lazy="raise_on_sql")
+    inventory_adjustments = relationship("InventoryAdjustment", back_populates="adjusted_by_user", lazy="raise_on_sql")

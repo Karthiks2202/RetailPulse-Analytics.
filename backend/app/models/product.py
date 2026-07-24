@@ -34,6 +34,7 @@ class Product(Base):
     unit_price = Column(Numeric(12, 2), nullable=False)
     cost_price = Column(Numeric(12, 2), nullable=False)
     stock_quantity = Column(Integer, nullable=False, default=0)
+    reserved_stock = Column(Integer, nullable=False, default=0)
     low_stock_threshold = Column(Integer, nullable=False, default=5)
     unit_of_measure = Column(SQLEnum(UnitOfMeasure), nullable=False, default=UnitOfMeasure.PCS)
     status = Column(SQLEnum(ProductStatus), nullable=False, default=ProductStatus.ACTIVE)
@@ -44,3 +45,5 @@ class Product(Base):
     category = relationship("Category", back_populates="products", lazy="raise_on_sql")
     transactions = relationship("Transaction", back_populates="product", lazy="raise_on_sql")
     sale_items = relationship("SaleItem", back_populates="product", lazy="raise_on_sql")
+    stock_movements = relationship("StockMovement", back_populates="product", lazy="raise_on_sql")
+    inventory_adjustments = relationship("InventoryAdjustment", back_populates="product", lazy="raise_on_sql")
