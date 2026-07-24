@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
-import { getDashboardOverview } from '../../api/dashboardApi';
+import { getDashboardOverview, getCategoryBreakdown, getStatusBreakdown } from '../../api/dashboardApi';
 import { formatCurrency } from '../../utils/currency';
-import { 
+import {
   Inventory as InventoryIcon,
   ArrowUpward as ArrowUpIcon,
   TrendingUp as TrendingIcon,
@@ -22,7 +22,7 @@ export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [activeChartTab, setActiveChartTab] = useState<'revenue' | 'channels'>('revenue');
 
-  const { data, isLoading, isError } = useQuery({
+  const { data } = useQuery({
     queryKey: ['dashboard', 'overview'],
     queryFn: getDashboardOverview,
   });
@@ -136,12 +136,12 @@ export const Dashboard: React.FC = () => {
   })) ?? [];
 
   const monthlyRevenue = data?.monthly_revenue ?? [];
-
   const maxRevenue = monthlyRevenue.length > 0 ? Math.max(...monthlyRevenue.map((m) => m.revenue)) : 1;
+
   const chartWidth = 600;
   const chartHeight = 200;
-  const paddingX = 40;
-  const paddingY = 20;
+  const paddingX = 65;
+  const paddingY = 25;
 
   const getX = (index: number) => paddingX + (index / Math.max(monthlyRevenue.length - 1, 1)) * (chartWidth - paddingX * 2);
   const getY = (value: number) => chartHeight - paddingY - (value / maxRevenue) * (chartHeight - paddingY * 2);
@@ -156,21 +156,15 @@ export const Dashboard: React.FC = () => {
 
   const areaD = monthlyRevenue.length > 0 ? `${pathD} L ${getX(monthlyRevenue.length - 1)},${chartHeight - paddingY} L ${getX(0)},${chartHeight - paddingY} Z` : '';
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent"></div>
-      </div>
-    );
-  }
+  const { data: catBreakdown = [] } = useQuery({
+    queryKey: ['dashboard', 'category-breakdown'],
+    queryFn: getCategoryBreakdown,
+  });
 
-  if (isError) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <p className="text-sm text-red-600 font-medium">Failed to load dashboard data.</p>
-      </div>
-    );
-  }
+  const { data: statusBreakdown = [] } = useQuery({
+    queryKey: ['dashboard', 'status-breakdown'],
+    queryFn: getStatusBreakdown,
+  });
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -189,7 +183,6 @@ export const Dashboard: React.FC = () => {
             key={idx}
             className={`relative overflow-hidden rounded-2xl p-4 md:p-5 border shadow-sm hover:shadow-lg transition-all duration-200 cursor-pointer group ${item.cardBg} ${item.border}`}
           >
-            {/* Coloured top accent line */}
             <div className={`absolute top-0 left-0 right-0 h-0.5 ${item.accent}`}/>
             <div className="flex items-start justify-between mb-3">
               <span className="text-[10px] md:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">{item.title}</span>
@@ -264,13 +257,13 @@ export const Dashboard: React.FC = () => {
                     <line x1={paddingX} y1={chartHeight / 2} x2={chartWidth - paddingX} y2={chartHeight / 2} stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" strokeDasharray="3 3" />
                     <line x1={paddingX} y1={chartHeight - paddingY} x2={chartWidth - paddingX} y2={chartHeight - paddingY} stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
 
-                    <text x={paddingX - 5} y={paddingY + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">
+                    <text x={paddingX - 10} y={paddingY + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">
                       {maxRevenue > 0 ? formatCurrency(maxRevenue) : '$0'}
                     </text>
-                    <text x={paddingX - 5} y={chartHeight / 2 + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">
+                    <text x={paddingX - 10} y={chartHeight / 2 + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">
                       {maxRevenue > 0 ? formatCurrency(maxRevenue / 2) : '$0'}
                     </text>
-                    <text x={paddingX - 5} y={chartHeight - paddingY + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">$0</text>
+                    <text x={paddingX - 10} y={chartHeight - paddingY + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">$0</text>
 
                     {monthlyRevenue.map((m, i) => (
                       <text key={m.month} x={getX(i)} y={chartHeight - 4} className="text-[10px] font-bold fill-slate-400 dark:fill-slate-500" textAnchor="middle">
@@ -376,6 +369,85 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden transition-all duration-300">
+          <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/30">
+            <CategoryIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Inventory by Category</h2>
+          </div>
+          <div className="p-4">
+            {catBreakdown.length > 0 ? (
+              <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-auto overflow-visible">
+                {catBreakdown.map((item, i) => {
+                  const max = Math.max(...catBreakdown.map((c) => c.product_count), 1);
+                  const barHeight = Math.max(8, Math.min(24, (chartHeight - paddingY * 2) / Math.max(catBreakdown.length, 1) - 6));
+                  const totalHeight = catBreakdown.length * (barHeight + 6);
+                  const startY = paddingY + ((chartHeight - paddingY * 2) - totalHeight) / 2;
+                  const padLeft = 100;
+                  const padRight = 40;
+                  const width = (item.product_count / max) * (chartWidth - padLeft - padRight);
+                  const y = startY + i * (barHeight + 6);
+                  return (
+                    <g key={i}>
+                      <text x={padLeft - 10} y={y + barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-500 dark:fill-slate-400" textAnchor="end">
+                        {item.category_name.length > 15 ? item.category_name.slice(0, 15) + '…' : item.category_name}
+                      </text>
+                      <rect x={padLeft} y={y} width={width} height={barHeight} rx={4} fill="#6366f1" opacity={0.85} />
+                      <text x={padLeft + width + 8} y={y + barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-600 dark:fill-slate-300" textAnchor="start">
+                        {item.product_count}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            ) : (
+              <div className="flex h-48 items-center justify-center text-sm text-slate-400 dark:text-slate-500">No category data available</div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden transition-all duration-300">
+          <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/30">
+            <TrendingIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Stock Status Distribution</h2>
+          </div>
+          <div className="p-4">
+            {statusBreakdown.length > 0 ? (
+              <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-auto overflow-visible">
+                {statusBreakdown.map((item, i) => {
+                  const max = Math.max(...statusBreakdown.map((s) => s.product_count), 1);
+                  const barHeight = 20;
+                  const totalHeight = statusBreakdown.length * (barHeight + 6);
+                  const startY = paddingY + ((chartHeight - paddingY * 2) - totalHeight) / 2;
+                  const padLeft = 100;
+                  const padRight = 40;
+                  const width = (item.product_count / max) * (chartWidth - padLeft - padRight);
+                  const y = startY + i * (barHeight + 6);
+                  const colors: Record<string, string> = {
+                    IN_STOCK: '#10b981',
+                    LOW_STOCK: '#f59e0b',
+                    OUT_OF_STOCK: '#ef4444',
+                  };
+                  return (
+                    <g key={i}>
+                      <text x={padLeft - 10} y={y + barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-500 dark:fill-slate-400" textAnchor="end">
+                        {item.stock_status.replace(/_/g, ' ')}
+                      </text>
+                      <rect x={padLeft} y={y} width={width} height={barHeight} rx={4} fill={colors[item.stock_status] || '#6366f1'} opacity={0.85} />
+                      <text x={padLeft + width + 8} y={y + barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-600 dark:fill-slate-300" textAnchor="start">
+                        {item.product_count}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            ) : (
+              <div className="flex h-48 items-center justify-center text-sm text-slate-400 dark:text-slate-500">No status data available</div>
+            )}
+          </div>
         </div>
       </div>
     </div>

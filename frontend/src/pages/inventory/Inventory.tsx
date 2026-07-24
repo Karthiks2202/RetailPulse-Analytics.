@@ -219,7 +219,7 @@ export const Inventory: React.FC = () => {
 
   const chartWidth = 400;
   const chartHeight = 180;
-  const padding = { top: 20, right: 20, bottom: 30, left: 40 };
+  const padding = { top: 20, right: 25, bottom: 30, left: 90 };
   const innerW = chartWidth - padding.left - padding.right;
   const innerH = chartHeight - padding.top - padding.bottom;
 
@@ -321,7 +321,7 @@ export const Inventory: React.FC = () => {
               {catBars.map((bar, i) => (
                 <g key={i}>
                   <text x={padding.left - 8} y={bar.y + bar.barHeight / 2 + 3} className="text-[9px] font-bold fill-slate-500 dark:fill-slate-400" textAnchor="end">
-                    {bar.label.length > 12 ? bar.label.slice(0, 12) + '…' : bar.label}
+                    {bar.label.length > 15 ? bar.label.slice(0, 15) + '…' : bar.label}
                   </text>
                   <rect x={padding.left} y={bar.y} width={bar.width} height={bar.barHeight} rx={4} fill="#6366f1" opacity={0.85} />
                   <text x={padding.left + bar.width + 6} y={bar.y + bar.barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-600 dark:fill-slate-300" textAnchor="start">
@@ -343,7 +343,7 @@ export const Inventory: React.FC = () => {
               {statusBars.map((bar, i) => (
                 <g key={i}>
                   <text x={padding.left - 8} y={bar.y + bar.barHeight / 2 + 3} className="text-[9px] font-bold fill-slate-500 dark:fill-slate-400" textAnchor="end">
-                    {bar.label.replace('_', ' ')}
+                    {bar.label.replace(/_/g, ' ')}
                   </text>
                   <rect x={padding.left} y={bar.y} width={bar.width} height={bar.barHeight} rx={4} fill={bar.color} opacity={0.85} />
                   <text x={padding.left + bar.width + 6} y={bar.y + bar.barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-600 dark:fill-slate-300" textAnchor="start">
@@ -417,82 +417,84 @@ export const Inventory: React.FC = () => {
         </div>
 
         {activeTab === 'inventory' && (
-          itemsLoading ? (
-            <div className="flex h-64 items-center justify-center">
-              <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent"></div>
-            </div>
-          ) : inventoryItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-center px-6">
-              <InventoryIcon className="text-slate-300 dark:text-slate-700" style={{ fontSize: 48 }} />
-              <p className="mt-4 text-sm font-semibold text-slate-600 dark:text-slate-400">No inventory items found</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Try adjusting your filters.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
-                    <th className="px-6 py-3 font-bold">Product</th>
-                    <th className="px-6 py-3 font-bold">SKU</th>
-                    <th className="px-6 py-3 font-bold">Category</th>
-                    <th className="px-6 py-3 font-bold">Brand</th>
-                    <th className="px-6 py-3 font-bold text-right">Current</th>
-                    <th className="px-6 py-3 font-bold text-right">Reserved</th>
-                    <th className="px-6 py-3 font-bold text-right">Available</th>
-                    <th className="px-6 py-3 font-bold text-right">Reorder Level</th>
-                    <th className="px-6 py-3 font-bold">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inventoryItems.map((item) => (
-                    <tr key={item.id} className="group border-b border-slate-100 dark:border-slate-800/60 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
-                      <td className="px-6 py-3.5">
-                        <div className="font-bold text-slate-800 dark:text-slate-100">{item.name}</div>
-                        {item.description && (
-                          <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[220px]">{item.description}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">{item.sku}</td>
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{item.category_name || '—'}</td>
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{item.brand || '—'}</td>
-                      <td className="px-6 py-4 text-right font-semibold text-slate-800 dark:text-slate-100">{item.stock_quantity}</td>
-                      <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">{item.reserved_stock}</td>
-                      <td className="px-6 py-4 text-right font-semibold text-slate-800 dark:text-slate-100">{item.available_stock}</td>
-                       <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">
-                         {isAdmin && editingReorderId === item.id ? (
-                           <input
-                             type="number"
-                             className="w-16 text-right border border-indigo-500 rounded px-1 py-0.5 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                             value={editingReorderValue}
-                             onChange={(e) => setEditingReorderValue(Number(e.target.value))}
-                             onBlur={() => saveReorder(item.id)}
-                             onKeyDown={(e) => {
-                               if (e.key === 'Enter') saveReorder(item.id);
-                               if (e.key === 'Escape') setEditingReorderId(null);
-                             }}
-                             autoFocus
-                           />
-                         ) : (
-                           <span
-                             className={`${isAdmin ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''}`}
-                             onClick={() => isAdmin && startEditReorder(item)}
-                             title={isAdmin ? 'Click to edit reorder level' : ''}
-                           >
-                             {item.low_stock_threshold}
-                           </span>
-                         )}
-                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold capitalize tracking-wide ${STATUS_STYLES[item.stock_status] || 'bg-slate-100 text-slate-600'}`}>
-                          {item.stock_status.replace('_', ' ').toLowerCase()}
-                        </span>
-                      </td>
+          <>
+            {itemsLoading ? (
+              <div className="flex h-64 items-center justify-center">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent"></div>
+              </div>
+            ) : inventoryItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-center px-6">
+                <InventoryIcon className="text-slate-300 dark:text-slate-700" style={{ fontSize: 48 }} />
+                <p className="mt-4 text-sm font-semibold text-slate-600 dark:text-slate-400">No inventory items found</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Try adjusting your filters.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                      <th className="px-6 py-3 font-bold">Product</th>
+                      <th className="px-6 py-3 font-bold">SKU</th>
+                      <th className="px-6 py-3 font-bold">Category</th>
+                      <th className="px-6 py-3 font-bold">Brand</th>
+                      <th className="px-6 py-3 font-bold text-right">Current</th>
+                      <th className="px-6 py-3 font-bold text-right">Reserved</th>
+                      <th className="px-6 py-3 font-bold text-right">Available</th>
+                      <th className="px-6 py-3 font-bold text-right">Reorder Level</th>
+                      <th className="px-6 py-3 font-bold">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
+                  </thead>
+                  <tbody>
+                    {inventoryItems.map((item) => (
+                      <tr key={item.id} className="group border-b border-slate-100 dark:border-slate-800/60 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
+                        <td className="px-6 py-3.5">
+                          <div className="font-bold text-slate-800 dark:text-slate-100">{item.name}</div>
+                          {item.description && (
+                            <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[220px]">{item.description}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">{item.sku}</td>
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{item.category_name || '—'}</td>
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{item.brand || '—'}</td>
+                        <td className="px-6 py-4 text-right font-semibold text-slate-800 dark:text-slate-100">{item.stock_quantity}</td>
+                        <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">{item.reserved_stock}</td>
+                        <td className="px-6 py-4 text-right font-semibold text-slate-800 dark:text-slate-100">{item.available_stock}</td>
+                         <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">
+                          {isAdmin && editingReorderId === item.id ? (
+                            <input
+                              type="number"
+                              className="w-16 text-right border border-indigo-500 rounded px-1 py-0.5 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                              value={editingReorderValue}
+                              onChange={(e) => setEditingReorderValue(Number(e.target.value))}
+                              onBlur={() => saveReorder(item.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveReorder(item.id);
+                                if (e.key === 'Escape') setEditingReorderId(null);
+                              }}
+                              autoFocus
+                            />
+                          ) : (
+                            <span
+                              className={`${isAdmin ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''}`}
+                              onClick={() => isAdmin && startEditReorder(item)}
+                              title={isAdmin ? 'Click to edit reorder level' : ''}
+                            >
+                              {item.low_stock_threshold}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold capitalize tracking-wide ${STATUS_STYLES[item.stock_status] || 'bg-slate-100 text-slate-600'}`}>
+                            {item.stock_status.replace('_', ' ').toLowerCase()}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
 
         {activeTab === 'movements' && (

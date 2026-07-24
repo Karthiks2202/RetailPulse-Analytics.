@@ -27,11 +27,9 @@ class CRUDInventory:
         category_id: UUID | None = None,
         stock_status: str | None = None,
         brand: str | None = None,
-        skip: int = 0,
-        limit: int = 100,
         sort_by: str = "name",
         sort_dir: str = "asc",
-    ) -> tuple[list[dict], int]:
+    ) -> list[dict]:
         query = select(Product).where(Product.company_id == company_id)
 
         if search:
@@ -58,10 +56,6 @@ class CRUDInventory:
             elif stock_status == "IN_STOCK":
                 query = query.where(available_expr > Product.low_stock_threshold)
 
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await db.execute(count_query)
-        total = total_result.scalar() or 0
-
         sort_map = {
             "name": Product.name,
             "current_stock": Product.stock_quantity,
@@ -73,7 +67,6 @@ class CRUDInventory:
         else:
             query = query.order_by(sort_column.asc())
 
-        query = query.offset(skip).limit(limit)
         result = await db.execute(query)
         products = list(result.scalars().all())
 
@@ -106,7 +99,7 @@ class CRUDInventory:
                 "category_name": cat_name,
             })
 
-        return items, total
+        return items
 
     async def get_inventory_summary(self, db: AsyncSession, company_id: UUID) -> dict:
         products_query = select(Product).where(Product.company_id == company_id)

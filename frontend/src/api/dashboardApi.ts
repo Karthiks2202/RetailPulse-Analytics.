@@ -17,6 +17,16 @@ export interface MonthlyRevenue {
   revenue: number;
 }
 
+export interface InventoryCategoryBreakdown {
+  category_name: string;
+  product_count: number;
+}
+
+export interface InventoryStockStatusBreakdown {
+  stock_status: string;
+  product_count: number;
+}
+
 export interface DashboardOverview {
   team_count: number;
   product_count: number;
@@ -34,5 +44,15 @@ export interface DashboardOverview {
 
 export const getDashboardOverview = async (): Promise<DashboardOverview> => {
   const { data } = await axiosInstance.get('/dashboard/overview');
+  return data;
+};
+
+export const getCategoryBreakdown = async (): Promise<InventoryCategoryBreakdown[]> => {
+  const { data } = await axiosInstance.get('/inventory/category-breakdown');
+  return data;
+};
+
+export const getStatusBreakdown = async (): Promise<InventoryStockStatusBreakdown[]> => {
+  const { data } = await axiosInstance.get('/inventory/status-breakdown');
   return data;
 };

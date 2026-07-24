@@ -67,9 +67,8 @@ axiosInstance.interceptors.response.use(
       }
 
       try {
-        // Run refresh call directly using complete URL path
-        const { data } = await axios.post(`${API_URL}/auth/refresh`, {
-          refreshToken: storedRefreshToken,
+        const { data } = await axiosInstance.post('/auth/refresh', {
+          refresh_token: storedRefreshToken,
         });
 
         const { accessToken, refreshToken: newRefreshToken } = data;

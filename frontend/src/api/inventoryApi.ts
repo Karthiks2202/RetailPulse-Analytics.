@@ -71,8 +71,6 @@ export const getInventoryItems = async (params?: {
   category_id?: string;
   stock_status?: string;
   brand?: string;
-  skip?: number;
-  limit?: number;
   sort_by?: string;
   sort_dir?: string;
 }): Promise<InventoryItem[]> => {

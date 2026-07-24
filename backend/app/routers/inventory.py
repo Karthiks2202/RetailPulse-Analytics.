@@ -53,23 +53,19 @@ async def list_inventory(
     category_id: UUID | None = Query(None),
     stock_status: str | None = Query(None),
     brand: str | None = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100),
     sort_by: str = Query("name", pattern="^(name|current_stock|recently_updated)$"),
     sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
 ):
     if not is_admin_or_analyst(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
-    items, total = await inventory_crud.get_inventory_items(
+    items = await inventory_crud.get_inventory_items(
         db,
         current_user.company_id,
         search=search,
         category_id=category_id,
         stock_status=stock_status,
         brand=brand,
-        skip=skip,
-        limit=limit,
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
