@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.models.inventory import MovementType, AdjustmentType
 from app.models.user import UserRole
 from app.models.notification import NotificationType
 from app.schemas.inventory import (
@@ -19,7 +18,6 @@ from app.crud.inventory import inventory as inventory_crud
 from app.crud.notification import notification as notification_crud
 from app.services.audit import audit_service
 from uuid import UUID
-from decimal import Decimal
 
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -38,7 +36,7 @@ def get_status(available: int, threshold: int) -> str:
 
 
 async def _create_notification(db: AsyncSession, company_id: UUID, title: str, message: str, notif_type: NotificationType = NotificationType.LOW_STOCK):
-    notification_crud.create(
+    await notification_crud.create(
         db=db,
         company_id=company_id,
         title=title,
@@ -228,9 +226,9 @@ async def add_stock(
     )
 
     available = product.stock_quantity - product.reserved_stock
-    status = get_status(available, product.low_stock_threshold)
+    stock_status = get_status(available, product.low_stock_threshold)
 
-    if status == "LOW_STOCK":
+    if stock_status == "LOW_STOCK":
         await _create_notification(
             db,
             current_user.company_id,
@@ -247,7 +245,7 @@ async def add_stock(
             entity_name=product.name,
             details=f"Product '{product.name}' reached low stock after stock addition. Available: {available}",
         )
-    elif status == "OUT_OF_STOCK":
+    elif stock_status == "OUT_OF_STOCK":
         await _create_notification(
             db,
             current_user.company_id,
@@ -281,7 +279,7 @@ async def add_stock(
         reserved_stock=product.reserved_stock,
         available_stock=available,
         low_stock_threshold=product.low_stock_threshold,
-        stock_status=status,
+        stock_status=stock_status,
         unit_of_measure=product.unit_of_measure.value,
     )
 
@@ -323,9 +321,9 @@ async def remove_stock(
     )
 
     available = product.stock_quantity - product.reserved_stock
-    status = get_status(available, product.low_stock_threshold)
+    stock_status = get_status(available, product.low_stock_threshold)
 
-    if status == "LOW_STOCK":
+    if stock_status == "LOW_STOCK":
         await _create_notification(
             db,
             current_user.company_id,
@@ -342,7 +340,7 @@ async def remove_stock(
             entity_name=product.name,
             details=f"Product '{product.name}' reached low stock after stock removal. Available: {available}",
         )
-    elif status == "OUT_OF_STOCK":
+    elif stock_status == "OUT_OF_STOCK":
         await _create_notification(
             db,
             current_user.company_id,
@@ -376,7 +374,7 @@ async def remove_stock(
         reserved_stock=product.reserved_stock,
         available_stock=available,
         low_stock_threshold=product.low_stock_threshold,
-        stock_status=status,
+        stock_status=stock_status,
         unit_of_measure=product.unit_of_measure.value,
     )
 
@@ -418,9 +416,9 @@ async def adjust_stock(
     )
 
     available = product.stock_quantity - product.reserved_stock
-    status = get_status(available, product.low_stock_threshold)
+    stock_status = get_status(available, product.low_stock_threshold)
 
-    if status == "LOW_STOCK":
+    if stock_status == "LOW_STOCK":
         await _create_notification(
             db,
             current_user.company_id,
@@ -437,7 +435,7 @@ async def adjust_stock(
             entity_name=product.name,
             details=f"Product '{product.name}' reached low stock after manual adjustment. Available: {available}",
         )
-    elif status == "OUT_OF_STOCK":
+    elif stock_status == "OUT_OF_STOCK":
         await _create_notification(
             db,
             current_user.company_id,
@@ -479,7 +477,7 @@ async def adjust_stock(
         reserved_stock=product.reserved_stock,
         available_stock=available,
         low_stock_threshold=product.low_stock_threshold,
-        stock_status=status,
+        stock_status=stock_status,
         unit_of_measure=product.unit_of_measure.value,
     )
 
@@ -516,9 +514,9 @@ async def update_reorder_level(
     )
 
     available = product.stock_quantity - product.reserved_stock
-    status = get_status(available, product.low_stock_threshold)
+    stock_status = get_status(available, product.low_stock_threshold)
 
-    if status == "LOW_STOCK":
+    if stock_status == "LOW_STOCK":
         await _create_notification(
             db,
             current_user.company_id,
@@ -535,7 +533,7 @@ async def update_reorder_level(
             entity_name=product.name,
             details=f"Product '{product.name}' reached low stock after reorder level update. Available: {available}",
         )
-    elif status == "OUT_OF_STOCK":
+    elif stock_status == "OUT_OF_STOCK":
         await _create_notification(
             db,
             current_user.company_id,
@@ -569,6 +567,6 @@ async def update_reorder_level(
         reserved_stock=product.reserved_stock,
         available_stock=available,
         low_stock_threshold=product.low_stock_threshold,
-        stock_status=status,
+        stock_status=stock_status,
         unit_of_measure=product.unit_of_measure.value,
     )
