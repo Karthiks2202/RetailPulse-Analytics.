@@ -47,7 +47,7 @@ class InventoryAdjustment(Base):
     product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     adjustment_type = Column(SQLEnum(AdjustmentType), nullable=False)
     quantity = Column(Integer, nullable=False)
-    reason = Column(String, nullable=True)
+    reason = Column(String, nullable=False)
     remarks = Column(String, nullable=True)
     adjusted_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     adjusted_at = Column(DateTime, default=datetime.utcnow, index=True)

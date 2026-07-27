@@ -355,7 +355,7 @@ class CRUDInventory:
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[InventoryAdjustment], int]:
-        query = select(InventoryAdjustment).options(selectinload(InventoryAdjustment.product)).where(InventoryAdjustment.company_id == company_id)
+        query = select(InventoryAdjustment).options(selectinload(InventoryAdjustment.product), selectinload(InventoryAdjustment.adjusted_by_user)).where(InventoryAdjustment.company_id == company_id)
 
         if product_id:
             query = query.where(InventoryAdjustment.product_id == product_id)
