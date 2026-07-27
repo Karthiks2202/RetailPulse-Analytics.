@@ -29,7 +29,9 @@ class CRUDInventory:
         brand: str | None = None,
         sort_by: str = "name",
         sort_dir: str = "asc",
-    ) -> list[dict]:
+        skip: int = 0,
+        limit: int = 100,
+    ) -> tuple[list[dict], int]:
         query = select(Product).where(Product.company_id == company_id)
 
         if search:
@@ -56,6 +58,10 @@ class CRUDInventory:
             elif stock_status == "IN_STOCK":
                 query = query.where(available_expr > Product.low_stock_threshold)
 
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+
         sort_map = {
             "name": Product.name,
             "current_stock": Product.stock_quantity,
@@ -67,6 +73,7 @@ class CRUDInventory:
         else:
             query = query.order_by(sort_column.asc())
 
+        query = query.offset(skip).limit(limit)
         result = await db.execute(query)
         products = list(result.scalars().all())
 
@@ -99,7 +106,7 @@ class CRUDInventory:
                 "category_name": cat_name,
             })
 
-        return items
+        return items, total
 
     async def get_inventory_summary(self, db: AsyncSession, company_id: UUID) -> dict:
         products_query = select(Product).where(Product.company_id == company_id)
@@ -319,7 +326,7 @@ class CRUDInventory:
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[StockMovement], int]:
-        query = select(StockMovement).options(selectinload(StockMovement.product)).where(StockMovement.company_id == company_id)
+        query = select(StockMovement).options(selectinload(StockMovement.product), selectinload(StockMovement.user)).where(StockMovement.company_id == company_id)
 
         if product_id:
             query = query.where(StockMovement.product_id == product_id)
@@ -380,7 +387,7 @@ class CRUDInventory:
             previous_quantity=previous_quantity,
             updated_quantity=updated_quantity,
             quantity_changed=quantity_changed,
-            reason=reason,
+            reason=reason or "Sale",
             user_id=user_id,
         )
         db.add(movement)

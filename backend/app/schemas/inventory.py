@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from app.models.inventory import MovementType, AdjustmentType
 
@@ -11,7 +11,7 @@ class StockMovementBase(BaseModel):
     previous_quantity: int
     updated_quantity: int
     quantity_changed: int
-    reason: Optional[str] = None
+    reason: str
 
 
 class StockMovementCreate(StockMovementBase):
@@ -24,6 +24,7 @@ class StockMovementResponse(StockMovementBase):
     product_name: Optional[str] = None
     product_sku: Optional[str] = None
     user_id: Optional[UUID]
+    user_name: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -51,6 +52,7 @@ class InventoryAdjustmentResponse(InventoryAdjustmentBase):
     product_name: Optional[str] = None
     product_sku: Optional[str] = None
     adjusted_by: Optional[UUID]
+    adjusted_by_name: Optional[str] = None
     adjusted_at: datetime
 
     model_config = {"from_attributes": True}
@@ -73,6 +75,27 @@ class InventoryItemResponse(BaseModel):
     stock_status: str
     unit_of_measure: str
     category_name: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class PaginatedInventoryResponse(BaseModel):
+    data: List[InventoryItemResponse]
+    total: int
+
+    model_config = {"from_attributes": True}
+
+
+class PaginatedStockMovementResponse(BaseModel):
+    data: List[StockMovementResponse]
+    total: int
+
+    model_config = {"from_attributes": True}
+
+
+class PaginatedInventoryAdjustmentResponse(BaseModel):
+    data: List[InventoryAdjustmentResponse]
+    total: int
 
     model_config = {"from_attributes": True}
 

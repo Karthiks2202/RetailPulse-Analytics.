@@ -41,8 +41,10 @@ axiosInstance.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Guard against recursion and only act on 401 errors
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Guard against recursion and only act on 401 errors for non-refresh endpoints
+    const isRefreshEndpoint = originalRequest.url?.includes('/auth/refresh');
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isRefreshEndpoint) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({
@@ -71,7 +73,7 @@ axiosInstance.interceptors.response.use(
           refresh_token: storedRefreshToken,
         });
 
-        const { accessToken, refreshToken: newRefreshToken } = data;
+        const { access_token: accessToken, refresh_token: newRefreshToken } = data;
 
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', newRefreshToken);
@@ -90,6 +92,11 @@ axiosInstance.interceptors.response.use(
         window.dispatchEvent(new Event('auth_session_expired'));
         return Promise.reject(refreshErr);
       }
+    }
+
+    if (isRefreshEndpoint) {
+      localStorage.clear();
+      window.dispatchEvent(new Event('auth_session_expired'));
     }
 
     return Promise.reject(error);

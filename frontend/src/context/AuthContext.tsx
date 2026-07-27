@@ -60,6 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const handleSessionExpired = () => {
       setUser(null);
+      setLoading(false);
     };
 
     window.addEventListener('auth_session_expired', handleSessionExpired);

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../../context/AuthContext';
@@ -10,6 +10,7 @@ import {
   getStatusBreakdown,
   getStockMovements,
   getAdjustments,
+  getBrands,
   addStock,
   removeStock,
   adjustStock,
@@ -34,7 +35,18 @@ import {
   Remove as RemoveIcon,
   SwapHoriz as SwapIcon,
   ArrowUpward as ArrowUpIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
 
 interface StockFormValues {
   product_id: string;
@@ -77,6 +89,9 @@ export const Inventory: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'inventory' | 'movements' | 'adjustments'>('inventory');
   const [movementTypeFilter, setMovementTypeFilter] = useState('');
 
+  const [itemPage, setItemPage] = useState(0);
+  const [movementPage, setMovementPage] = useState(0);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'remove' | 'adjust'>('add');
   const [modalError, setModalError] = useState<string | null>(null);
@@ -93,6 +108,11 @@ export const Inventory: React.FC = () => {
     queryFn: () => getCategories(),
   });
 
+  const { data: brands = [] } = useQuery<string[]>({
+    queryKey: ['inventory', 'brands'],
+    queryFn: getBrands,
+  });
+
   const { data: catBreakdown = [] } = useQuery({
     queryKey: ['inventory', 'category-breakdown'],
     queryFn: getCategoryBreakdown,
@@ -103,8 +123,8 @@ export const Inventory: React.FC = () => {
     queryFn: getStatusBreakdown,
   });
 
-  const { data: inventoryItems = [], isLoading: itemsLoading } = useQuery({
-    queryKey: ['inventory', 'items', { search, categoryFilter, statusFilter, brandFilter, sortBy, sortDir }],
+  const { data: inventoryResponse, isLoading: itemsLoading } = useQuery({
+    queryKey: ['inventory', 'items', { search, categoryFilter, statusFilter, brandFilter, sortBy, sortDir, itemPage }],
     queryFn: () =>
       getInventoryItems({
         search: search || undefined,
@@ -113,34 +133,43 @@ export const Inventory: React.FC = () => {
         brand: brandFilter || undefined,
         sort_by: sortBy,
         sort_dir: sortDir,
+        skip: itemPage * 10,
+        limit: 10,
       }),
   });
+  const inventoryItems = inventoryResponse?.data ?? [];
+  const inventoryTotal = inventoryResponse?.total ?? 0;
 
-  const { data: movements = [], isLoading: movementsLoading } = useQuery({
-    queryKey: ['inventory', 'movements', { movementTypeFilter }],
+  const { data: movementsResponse, isLoading: movementsLoading } = useQuery({
+    queryKey: ['inventory', 'movements', { movementTypeFilter, movementPage }],
     queryFn: () =>
       getStockMovements({
         movement_type: movementTypeFilter || undefined,
+        skip: movementPage * 10,
+        limit: 10,
       }),
   });
+  const movements = movementsResponse?.data ?? [];
+  const movementsTotal = movementsResponse?.total ?? 0;
 
   const { data: allProducts = [] } = useQuery({
     queryKey: ['products', 'all'],
     queryFn: () => getProducts({ status: 'ACTIVE' }),
   });
 
-  const { data: adjustments = [], isLoading: adjustmentsLoading } = useQuery<InventoryAdjustment[]>({
+  const { data: adjustmentsResponse, isLoading: adjustmentsLoading } = useQuery<{ data: InventoryAdjustment[]; total: number }>({
     queryKey: ['inventory', 'adjustments'],
     queryFn: () => getAdjustments(),
     enabled: isAdmin,
   });
+  const adjustments = adjustmentsResponse?.data ?? [];
 
   const stockMutation = useMutation({
     mutationFn: async (values: StockFormValues) => {
       const payload = {
         product_id: values.product_id,
         quantity: Number(values.quantity),
-        reason: values.reason || undefined,
+        reason: values.reason,
         remarks: values.remarks || undefined,
       };
       if (modalMode === 'add') return addStock(payload);
@@ -207,6 +236,37 @@ export const Inventory: React.FC = () => {
     setEditingReorderValue(item.low_stock_threshold);
   };
 
+  const totalItemPages = Math.max(1, Math.ceil(inventoryTotal / 10));
+  const totalMovementPages = Math.max(1, Math.ceil(movementsTotal / 10));
+
+  const PaginationControls: React.FC<{
+    page: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+  }> = ({ page, totalPages, onPageChange }) => (
+    <div className="flex items-center justify-between px-6 py-3 border-t border-slate-200 dark:border-slate-800">
+      <span className="text-xs text-slate-500 dark:text-slate-400">
+        Page {page + 1} of {totalPages}
+      </span>
+      <div className="flex gap-1">
+        <button
+          onClick={() => onPageChange(Math.max(0, page - 1))}
+          disabled={page === 0}
+          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        >
+          <ChevronLeftIcon style={{ fontSize: 16 }} />
+        </button>
+        <button
+          onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
+          disabled={page >= totalPages - 1}
+          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        >
+          <ChevronRightIcon style={{ fontSize: 16 }} />
+        </button>
+      </div>
+    </div>
+  );
+
   const saveReorder = (itemId: string) => {
     if (editingReorderValue < 0) {
       showNotification('Reorder level cannot be negative', 'error');
@@ -217,47 +277,24 @@ export const Inventory: React.FC = () => {
     setEditingReorderId(null);
   };
 
-  const chartWidth = 400;
-  const chartHeight = 180;
-  const padding = { top: 20, right: 25, bottom: 30, left: 90 };
-  const innerW = chartWidth - padding.left - padding.right;
-  const innerH = chartHeight - padding.top - padding.bottom;
-
-  const catBars = useMemo(() => {
-    const labels = catBreakdown.map((c) => c.category_name);
-    const values = catBreakdown.map((c) => c.product_count);
-    const max = Math.max(...values, 1);
-    const barHeight = Math.max(8, Math.min(24, innerH / Math.max(labels.length, 1) - 6));
-    const totalHeight = labels.length * (barHeight + 6);
-    const startY = padding.top + (innerH - totalHeight) / 2;
-    return labels.map((label, i) => {
-      const width = (values[i] / max) * innerW;
-      const y = startY + i * (barHeight + 6);
-      return { label, value: values[i], width, y, barHeight };
-    });
-  }, [catBreakdown, innerW, innerH, padding.top]);
-
-  const statusBars = useMemo(() => {
-    const labels = statusBreakdown.map((s) => s.stock_status);
-    const values = statusBreakdown.map((s) => s.product_count);
-    const max = Math.max(...values, 1);
-    const barHeight = 20;
-    const totalHeight = labels.length * (barHeight + 6);
-    const startY = padding.top + (innerH - totalHeight) / 2;
-    const colors: Record<string, string> = {
-      IN_STOCK: '#10b981',
-      LOW_STOCK: '#f59e0b',
-      OUT_OF_STOCK: '#ef4444',
-    };
-    return labels.map((label, i) => {
-      const width = (values[i] / max) * innerW;
-      const y = startY + i * (barHeight + 6);
-      return { label, value: values[i], width, y, barHeight, color: colors[label] || '#6366f1' };
-    });
-  }, [statusBreakdown, innerW, innerH, padding.top]);
-
   const inputClass =
     'bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none transition-all';
+
+  const catChartData = catBreakdown.map((c) => ({
+    name: c.category_name.length > 15 ? c.category_name.slice(0, 15) + '…' : c.category_name,
+    count: c.product_count,
+  }));
+
+  const statusChartData = statusBreakdown.map((s) => ({
+    name: s.stock_status.replace(/_/g, ' '),
+    count: s.product_count,
+  }));
+
+  const statusColors: Record<string, string> = {
+    IN_STOCK: '#10b981',
+    LOW_STOCK: '#f59e0b',
+    OUT_OF_STOCK: '#ef4444',
+  };
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -316,20 +353,23 @@ export const Inventory: React.FC = () => {
             <CategoryIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Inventory by Category</h2>
           </div>
-          <div className="p-4">
-            <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-auto overflow-visible">
-              {catBars.map((bar, i) => (
-                <g key={i}>
-                  <text x={padding.left - 8} y={bar.y + bar.barHeight / 2 + 3} className="text-[9px] font-bold fill-slate-500 dark:fill-slate-400" textAnchor="end">
-                    {bar.label.length > 15 ? bar.label.slice(0, 15) + '…' : bar.label}
-                  </text>
-                  <rect x={padding.left} y={bar.y} width={bar.width} height={bar.barHeight} rx={4} fill="#6366f1" opacity={0.85} />
-                  <text x={padding.left + bar.width + 6} y={bar.y + bar.barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-600 dark:fill-slate-300" textAnchor="start">
-                    {bar.value}
-                  </text>
-                </g>
-              ))}
-            </svg>
+          <div className="p-4 h-64">
+            {catChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={catChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: 'rgba(99,102,241,0.08)' }} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Bar dataKey="count" radius={[4, 4, 4, 4]} barSize={18}>
+                    {catChartData.map((_entry, index) => (
+                      <Cell key={`cell-${index}`} fill="#6366f1" fillOpacity={0.85} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-slate-400 dark:text-slate-500">No category data available</div>
+            )}
           </div>
         </div>
 
@@ -338,20 +378,23 @@ export const Inventory: React.FC = () => {
             <TrendingIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Stock Status Distribution</h2>
           </div>
-          <div className="p-4">
-            <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-auto overflow-visible">
-              {statusBars.map((bar, i) => (
-                <g key={i}>
-                  <text x={padding.left - 8} y={bar.y + bar.barHeight / 2 + 3} className="text-[9px] font-bold fill-slate-500 dark:fill-slate-400" textAnchor="end">
-                    {bar.label.replace(/_/g, ' ')}
-                  </text>
-                  <rect x={padding.left} y={bar.y} width={bar.width} height={bar.barHeight} rx={4} fill={bar.color} opacity={0.85} />
-                  <text x={padding.left + bar.width + 6} y={bar.y + bar.barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-600 dark:fill-slate-300" textAnchor="start">
-                    {bar.value}
-                  </text>
-                </g>
-              ))}
-            </svg>
+          <div className="p-4 h-64">
+            {statusChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={statusChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: 'rgba(99,102,241,0.08)' }} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Bar dataKey="count" radius={[4, 4, 4, 4]} barSize={18}>
+                    {statusChartData.map((_entry, index) => (
+                      <Cell key={`cell-${index}`} fill={statusColors[statusBreakdown[index]?.stock_status] || '#6366f1'} fillOpacity={0.85} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-slate-400 dark:text-slate-500">No status data available</div>
+            )}
           </div>
         </div>
       </div>
@@ -379,10 +422,10 @@ export const Inventory: React.FC = () => {
             <option value="LOW_STOCK">Low Stock</option>
             <option value="OUT_OF_STOCK">Out of Stock</option>
           </select>
-          <select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)} className={`${inputClass} lg:w-40`}>
+          <select value={brandFilter} onChange={(e) => { setBrandFilter(e.target.value); setItemPage(0); }} className={`${inputClass} lg:w-40`}>
             <option value="">All Brands</option>
-            {Array.from(new Set(inventoryItems.map((p) => p.brand).filter(Boolean))).map((b) => (
-              <option key={b as string} value={b as string}>{b as string}</option>
+            {brands.map((b) => (
+              <option key={b} value={b}>{b}</option>
             ))}
           </select>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={`${inputClass} lg:w-44`}>
@@ -429,77 +472,80 @@ export const Inventory: React.FC = () => {
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Try adjusting your filters.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
-                      <th className="px-6 py-3 font-bold">Product</th>
-                      <th className="px-6 py-3 font-bold">SKU</th>
-                      <th className="px-6 py-3 font-bold">Category</th>
-                      <th className="px-6 py-3 font-bold">Brand</th>
-                      <th className="px-6 py-3 font-bold text-right">Current</th>
-                      <th className="px-6 py-3 font-bold text-right">Reserved</th>
-                      <th className="px-6 py-3 font-bold text-right">Available</th>
-                      <th className="px-6 py-3 font-bold text-right">Reorder Level</th>
-                      <th className="px-6 py-3 font-bold">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {inventoryItems.map((item) => (
-                      <tr key={item.id} className="group border-b border-slate-100 dark:border-slate-800/60 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
-                        <td className="px-6 py-3.5">
-                          <div className="font-bold text-slate-800 dark:text-slate-100">{item.name}</div>
-                          {item.description && (
-                            <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[220px]">{item.description}</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">{item.sku}</td>
-                        <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{item.category_name || '—'}</td>
-                        <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{item.brand || '—'}</td>
-                        <td className="px-6 py-4 text-right font-semibold text-slate-800 dark:text-slate-100">{item.stock_quantity}</td>
-                        <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">{item.reserved_stock}</td>
-                        <td className="px-6 py-4 text-right font-semibold text-slate-800 dark:text-slate-100">{item.available_stock}</td>
-                         <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">
-                          {isAdmin && editingReorderId === item.id ? (
-                            <input
-                              type="number"
-                              className="w-16 text-right border border-indigo-500 rounded px-1 py-0.5 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                              value={editingReorderValue}
-                              onChange={(e) => setEditingReorderValue(Number(e.target.value))}
-                              onBlur={() => saveReorder(item.id)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') saveReorder(item.id);
-                                if (e.key === 'Escape') setEditingReorderId(null);
-                              }}
-                              autoFocus
-                            />
-                          ) : (
-                            <span
-                              className={`${isAdmin ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''}`}
-                              onClick={() => isAdmin && startEditReorder(item)}
-                              title={isAdmin ? 'Click to edit reorder level' : ''}
-                            >
-                              {item.low_stock_threshold}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold capitalize tracking-wide ${STATUS_STYLES[item.stock_status] || 'bg-slate-100 text-slate-600'}`}>
-                            {item.stock_status.replace('_', ' ').toLowerCase()}
-                          </span>
-                        </td>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                        <th className="px-6 py-3 font-bold">Product</th>
+                        <th className="px-6 py-3 font-bold">SKU</th>
+                        <th className="px-6 py-3 font-bold">Category</th>
+                        <th className="px-6 py-3 font-bold">Brand</th>
+                        <th className="px-6 py-3 font-bold text-right">Current</th>
+                        <th className="px-6 py-3 font-bold text-right">Reserved</th>
+                        <th className="px-6 py-3 font-bold text-right">Available</th>
+                        <th className="px-6 py-3 font-bold text-right">Reorder Level</th>
+                        <th className="px-6 py-3 font-bold">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {inventoryItems.map((item) => (
+                        <tr key={item.id} className="group border-b border-slate-100 dark:border-slate-800/60 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
+                          <td className="px-6 py-3.5">
+                            <div className="font-bold text-slate-800 dark:text-slate-100">{item.name}</div>
+                            {item.description && (
+                              <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[220px]">{item.description}</div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">{item.sku}</td>
+                          <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{item.category_name || '—'}</td>
+                          <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{item.brand || '—'}</td>
+                          <td className="px-6 py-4 text-right font-semibold text-slate-800 dark:text-slate-100">{item.stock_quantity}</td>
+                          <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">{item.reserved_stock}</td>
+                          <td className="px-6 py-4 text-right font-semibold text-slate-800 dark:text-slate-100">{item.available_stock}</td>
+                           <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">
+                            {isAdmin && editingReorderId === item.id ? (
+                              <input
+                                type="number"
+                                className="w-16 text-right border border-indigo-500 rounded px-1 py-0.5 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                                value={editingReorderValue}
+                                onChange={(e) => setEditingReorderValue(Number(e.target.value))}
+                                onBlur={() => saveReorder(item.id)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveReorder(item.id);
+                                  if (e.key === 'Escape') setEditingReorderId(null);
+                                }}
+                                autoFocus
+                              />
+                            ) : (
+                              <span
+                                className={`${isAdmin ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''}`}
+                                onClick={() => isAdmin && startEditReorder(item)}
+                                title={isAdmin ? 'Click to edit reorder level' : ''}
+                              >
+                                {item.low_stock_threshold}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold capitalize tracking-wide ${STATUS_STYLES[item.stock_status] || 'bg-slate-100 text-slate-600'}`}>
+                              {item.stock_status.replace('_', ' ').toLowerCase()}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <PaginationControls page={itemPage} totalPages={totalItemPages} onPageChange={setItemPage} />
+              </>
             )}
           </>
         )}
 
         {activeTab === 'movements' && (
           <div className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-3 bg-slate-50/50 dark:bg-slate-900/30">
-            <select value={movementTypeFilter} onChange={(e) => setMovementTypeFilter(e.target.value)} className={`${inputClass} lg:w-44`}>
+            <select value={movementTypeFilter} onChange={(e) => { setMovementTypeFilter(e.target.value); setMovementPage(0); }} className={`${inputClass} lg:w-44`}>
               <option value="">All Movement Types</option>
               <option value="SALE">Sale</option>
               <option value="MANUAL_ADJUSTMENT">Manual Adjustment</option>
@@ -519,43 +565,48 @@ export const Inventory: React.FC = () => {
               <p className="mt-4 text-sm font-semibold text-slate-600 dark:text-slate-400">No stock movements yet</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
-                    <th className="px-6 py-3 font-bold">Product</th>
-                    <th className="px-6 py-3 font-bold">Type</th>
-                    <th className="px-6 py-3 font-bold text-right">Previous</th>
-                    <th className="px-6 py-3 font-bold text-right">Updated</th>
-                    <th className="px-6 py-3 font-bold text-right">Changed</th>
-                    <th className="px-6 py-3 font-bold">Reason</th>
-                    <th className="px-6 py-3 font-bold">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {movements.map((m: StockMovement) => (
-                    <tr key={m.id} className="border-b border-slate-100 dark:border-slate-800/60 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
-                      <td className="px-6 py-3.5">
-                        <div className="font-semibold text-slate-800 dark:text-slate-100">{m.product_name || '—'}</div>
-                        <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">{m.product_sku || '—'}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${MOVEMENT_TYPE_STYLES[m.movement_type] || 'bg-slate-100 text-slate-600'}`}>
-                          {m.movement_type.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">{m.previous_quantity}</td>
-                      <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">{m.updated_quantity}</td>
-                      <td className={`px-6 py-4 text-right font-bold ${m.quantity_changed > 0 ? 'text-emerald-600 dark:text-emerald-400' : m.quantity_changed < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}`}>
-                        {m.quantity_changed > 0 ? '+' : ''}{m.quantity_changed}
-                      </td>
-                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{m.reason || '—'}</td>
-                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{new Date(m.created_at).toLocaleString()}</td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                      <th className="px-6 py-3 font-bold">Product</th>
+                      <th className="px-6 py-3 font-bold">Type</th>
+                      <th className="px-6 py-3 font-bold text-right">Previous</th>
+                      <th className="px-6 py-3 font-bold text-right">Updated</th>
+                      <th className="px-6 py-3 font-bold text-right">Changed</th>
+                      <th className="px-6 py-3 font-bold">Reason</th>
+                      <th className="px-6 py-3 font-bold">User</th>
+                      <th className="px-6 py-3 font-bold">Date</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {movements.map((m: StockMovement) => (
+                      <tr key={m.id} className="border-b border-slate-100 dark:border-slate-800/60 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
+                        <td className="px-6 py-3.5">
+                          <div className="font-semibold text-slate-800 dark:text-slate-100">{m.product_name || '—'}</div>
+                          <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">{m.product_sku || '—'}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${MOVEMENT_TYPE_STYLES[m.movement_type] || 'bg-slate-100 text-slate-600'}`}>
+                            {m.movement_type.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">{m.previous_quantity}</td>
+                        <td className="px-6 py-4 text-right text-slate-600 dark:text-slate-300">{m.updated_quantity}</td>
+                        <td className={`px-6 py-4 text-right font-bold ${m.quantity_changed > 0 ? 'text-emerald-600 dark:text-emerald-400' : m.quantity_changed < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                          {m.quantity_changed > 0 ? '+' : ''}{m.quantity_changed}
+                        </td>
+                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{m.reason || '—'}</td>
+                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400 truncate">{m.user_name || '—'}</td>
+                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{new Date(m.created_at).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationControls page={movementPage} totalPages={totalMovementPages} onPageChange={setMovementPage} />
+            </>
           )
         )}
 
@@ -570,43 +621,45 @@ export const Inventory: React.FC = () => {
               <p className="mt-4 text-sm font-semibold text-slate-600 dark:text-slate-400">No adjustments yet</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
-                    <th className="px-6 py-3 font-bold">Product</th>
-                    <th className="px-6 py-3 font-bold">Type</th>
-                    <th className="px-6 py-3 font-bold text-right">Quantity</th>
-                    <th className="px-6 py-3 font-bold">Reason</th>
-                    <th className="px-6 py-3 font-bold">Remarks</th>
-                    <th className="px-6 py-3 font-bold">Adjusted By</th>
-                    <th className="px-6 py-3 font-bold">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {adjustments.map((a: InventoryAdjustment) => (
-                    <tr key={a.id} className="border-b border-slate-100 dark:border-slate-800/60 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
-                      <td className="px-6 py-3.5">
-                        <div className="font-semibold text-slate-800 dark:text-slate-100">{a.product_name || '—'}</div>
-                        <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">{a.product_sku || '—'}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${ADJ_TYPE_STYLES[a.adjustment_type] || 'bg-slate-100 text-slate-600'}`}>
-                          {a.adjustment_type.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className={`px-6 py-4 text-right font-bold ${Number(a.quantity) > 0 ? 'text-emerald-600 dark:text-emerald-400' : Number(a.quantity) < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}`}>
-                        {Number(a.quantity) > 0 ? '+' : ''}{a.quantity}
-                      </td>
-                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400 max-w-[180px] truncate">{a.reason || '—'}</td>
-                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400 max-w-[180px] truncate">{a.remarks || '—'}</td>
-                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400 truncate">{a.adjusted_by || '—'}</td>
-                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{new Date(a.adjusted_at).toLocaleString()}</td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                      <th className="px-6 py-3 font-bold">Product</th>
+                      <th className="px-6 py-3 font-bold">Type</th>
+                      <th className="px-6 py-3 font-bold text-right">Quantity</th>
+                      <th className="px-6 py-3 font-bold">Reason</th>
+                      <th className="px-6 py-3 font-bold">Remarks</th>
+                      <th className="px-6 py-3 font-bold">Adjusted By</th>
+                      <th className="px-6 py-3 font-bold">Date</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {adjustments.map((a: InventoryAdjustment) => (
+                      <tr key={a.id} className="border-b border-slate-100 dark:border-slate-800/60 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
+                        <td className="px-6 py-3.5">
+                          <div className="font-semibold text-slate-800 dark:text-slate-100">{a.product_name || '—'}</div>
+                          <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">{a.product_sku || '—'}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${ADJ_TYPE_STYLES[a.adjustment_type] || 'bg-slate-100 text-slate-600'}`}>
+                            {a.adjustment_type.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className={`px-6 py-4 text-right font-bold ${Number(a.quantity) > 0 ? 'text-emerald-600 dark:text-emerald-400' : Number(a.quantity) < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                          {Number(a.quantity) > 0 ? '+' : ''}{a.quantity}
+                        </td>
+                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400 max-w-[180px] truncate">{a.reason || '—'}</td>
+                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400 max-w-[180px] truncate">{a.remarks || '—'}</td>
+                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400 truncate">{a.adjusted_by_name || a.adjusted_by || '—'}</td>
+                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{new Date(a.adjusted_at).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )
         )}
       </div>
@@ -653,8 +706,9 @@ export const Inventory: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Reason</label>
-                <input {...register('reason')} className={inputClass} placeholder="e.g. Purchase order #1234" />
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Reason *</label>
+                <input {...register('reason', { required: 'Reason is required' })} className={inputClass} placeholder="e.g. Purchase order #1234" />
+                {errors.reason && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.reason.message}</p>}
               </div>
 
               <div>

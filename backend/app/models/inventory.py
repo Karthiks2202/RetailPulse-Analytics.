@@ -30,7 +30,7 @@ class StockMovement(Base):
     previous_quantity = Column(Integer, nullable=False)
     updated_quantity = Column(Integer, nullable=False)
     quantity_changed = Column(Integer, nullable=False)
-    reason = Column(String, nullable=True)
+    reason = Column(String, nullable=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 

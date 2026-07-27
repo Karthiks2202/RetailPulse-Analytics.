@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.database import get_db
 from app.models.user import UserRole
 from app.models.notification import NotificationType
 from app.schemas.inventory import (
     InventoryItemResponse,
+    PaginatedInventoryResponse,
+    PaginatedStockMovementResponse,
+    PaginatedInventoryAdjustmentResponse,
     InventorySummary,
     InventoryCategoryBreakdown,
     InventoryStockStatusBreakdown,
@@ -17,7 +21,9 @@ from app.utils.dependencies import get_current_active_user
 from app.crud.inventory import inventory as inventory_crud
 from app.crud.notification import notification as notification_crud
 from app.services.audit import audit_service
+from app.models.product import Product
 from uuid import UUID
+from typing import List
 
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -45,7 +51,7 @@ async def _create_notification(db: AsyncSession, company_id: UUID, title: str, m
     )
 
 
-@router.get("", response_model=list[InventoryItemResponse])
+@router.get("", response_model=PaginatedInventoryResponse)
 async def list_inventory(
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
@@ -55,11 +61,13 @@ async def list_inventory(
     brand: str | None = Query(None),
     sort_by: str = Query("name", pattern="^(name|current_stock|recently_updated)$"),
     sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
 ):
     if not is_admin_or_analyst(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
-    items = await inventory_crud.get_inventory_items(
+    items, total = await inventory_crud.get_inventory_items(
         db,
         current_user.company_id,
         search=search,
@@ -68,8 +76,10 @@ async def list_inventory(
         brand=brand,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        skip=skip,
+        limit=limit,
     )
-    return [InventoryItemResponse(**item) for item in items]
+    return PaginatedInventoryResponse(data=[InventoryItemResponse(**item) for item in items], total=total)
 
 
 @router.get("/summary", response_model=InventorySummary)
@@ -108,7 +118,25 @@ async def get_status_breakdown(
     return [InventoryStockStatusBreakdown(**item) for item in data]
 
 
-@router.get("/movements", response_model=list[StockMovementResponse])
+@router.get("/brands", response_model=List[str])
+async def get_brands(
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not is_admin_or_analyst(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+    result = await db.execute(
+        select(Product.brand)
+        .where(Product.company_id == current_user.company_id, Product.brand.isnot(None))
+        .distinct()
+        .order_by(Product.brand.asc())
+    )
+    brands = [row[0] for row in result.all() if row[0]]
+    return brands
+
+
+@router.get("/movements", response_model=PaginatedStockMovementResponse)
 async def get_stock_movements(
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
@@ -140,15 +168,16 @@ async def get_stock_movements(
             "quantity_changed": m.quantity_changed,
             "reason": m.reason,
             "user_id": m.user_id,
+            "user_name": m.user.name if m.user else None,
             "created_at": m.created_at,
             "product_name": m.product.name if m.product else None,
             "product_sku": m.product.sku if m.product else None,
         }
         result.append(StockMovementResponse(**data))
-    return result
+    return PaginatedStockMovementResponse(data=result, total=total)
 
 
-@router.get("/adjustments", response_model=list[InventoryAdjustmentResponse])
+@router.get("/adjustments", response_model=PaginatedInventoryAdjustmentResponse)
 async def get_adjustments(
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
@@ -177,12 +206,13 @@ async def get_adjustments(
             "reason": a.reason,
             "remarks": a.remarks,
             "adjusted_by": a.adjusted_by,
+            "adjusted_by_name": a.adjusted_by_user.name if a.adjusted_by_user else None,
             "adjusted_at": a.adjusted_at,
             "product_name": a.product.name if a.product else None,
             "product_sku": a.product.sku if a.product else None,
         }
         result.append(InventoryAdjustmentResponse(**data))
-    return result
+    return PaginatedInventoryAdjustmentResponse(data=result, total=total)
 
 
 @router.post("/add-stock", response_model=InventoryItemResponse)

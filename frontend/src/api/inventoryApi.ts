@@ -47,8 +47,9 @@ export interface StockMovement {
   previous_quantity: number;
   updated_quantity: number;
   quantity_changed: number;
-  reason: string | null;
+  reason: string;
   user_id: string | null;
+  user_name: string | null;
   created_at: string;
 }
 
@@ -63,6 +64,7 @@ export interface InventoryAdjustment {
   reason: string | null;
   remarks: string | null;
   adjusted_by: string | null;
+  adjusted_by_name: string | null;
   adjusted_at: string;
 }
 
@@ -73,7 +75,9 @@ export const getInventoryItems = async (params?: {
   brand?: string;
   sort_by?: string;
   sort_dir?: string;
-}): Promise<InventoryItem[]> => {
+  skip?: number;
+  limit?: number;
+}): Promise<{ data: InventoryItem[]; total: number }> => {
   const { data } = await axiosInstance.get('/inventory', { params });
   return data;
 };
@@ -93,12 +97,17 @@ export const getStatusBreakdown = async (): Promise<InventoryStockStatusBreakdow
   return data;
 };
 
+export const getBrands = async (): Promise<string[]> => {
+  const { data } = await axiosInstance.get('/inventory/brands');
+  return data;
+};
+
 export const getStockMovements = async (params?: {
   product_id?: string;
   movement_type?: string;
   skip?: number;
   limit?: number;
-}): Promise<StockMovement[]> => {
+}): Promise<{ data: StockMovement[]; total: number }> => {
   const { data } = await axiosInstance.get('/inventory/movements', { params });
   return data;
 };
@@ -107,7 +116,7 @@ export const getAdjustments = async (params?: {
   product_id?: string;
   skip?: number;
   limit?: number;
-}): Promise<InventoryAdjustment[]> => {
+}): Promise<{ data: InventoryAdjustment[]; total: number }> => {
   const { data } = await axiosInstance.get('/inventory/adjustments', { params });
   return data;
 };

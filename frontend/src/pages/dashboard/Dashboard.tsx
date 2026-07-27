@@ -15,6 +15,18 @@ import {
   ShoppingCart as CartIcon,
   AttachMoney as MoneyIcon,
 } from '@mui/icons-material';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  AreaChart,
+  Area,
+  CartesianGrid,
+} from 'recharts';
 
 
 
@@ -136,25 +148,6 @@ export const Dashboard: React.FC = () => {
   })) ?? [];
 
   const monthlyRevenue = data?.monthly_revenue ?? [];
-  const maxRevenue = monthlyRevenue.length > 0 ? Math.max(...monthlyRevenue.map((m) => m.revenue)) : 1;
-
-  const chartWidth = 600;
-  const chartHeight = 200;
-  const paddingX = 65;
-  const paddingY = 25;
-
-  const getX = (index: number) => paddingX + (index / Math.max(monthlyRevenue.length - 1, 1)) * (chartWidth - paddingX * 2);
-  const getY = (value: number) => chartHeight - paddingY - (value / maxRevenue) * (chartHeight - paddingY * 2);
-
-  const pathD =
-    monthlyRevenue.length > 0
-      ? `M ${getX(0)},${getY(monthlyRevenue[0].revenue)} ${monthlyRevenue
-          .slice(1)
-          .map((m, i) => `L ${getX(i + 1)},${getY(m.revenue)}`)
-          .join(' ')}`
-      : '';
-
-  const areaD = monthlyRevenue.length > 0 ? `${pathD} L ${getX(monthlyRevenue.length - 1)},${chartHeight - paddingY} L ${getX(0)},${chartHeight - paddingY} Z` : '';
 
   const { data: catBreakdown = [] } = useQuery({
     queryKey: ['dashboard', 'category-breakdown'],
@@ -165,6 +158,22 @@ export const Dashboard: React.FC = () => {
     queryKey: ['dashboard', 'status-breakdown'],
     queryFn: getStatusBreakdown,
   });
+
+  const catChartData = catBreakdown.map((c) => ({
+    name: c.category_name.length > 15 ? c.category_name.slice(0, 15) + '…' : c.category_name,
+    count: c.product_count,
+  }));
+
+  const statusChartData = statusBreakdown.map((s) => ({
+    name: s.stock_status.replace(/_/g, ' '),
+    count: s.product_count,
+  }));
+
+  const statusColors: Record<string, string> = {
+    IN_STOCK: '#10b981',
+    LOW_STOCK: '#f59e0b',
+    OUT_OF_STOCK: '#ef4444',
+  };
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -245,51 +254,25 @@ export const Dashboard: React.FC = () => {
                 </div>
 
                 <div className="relative h-60 w-full bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border border-slate-150 dark:border-slate-800/60 p-4">
-                  <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full overflow-visible">
-                    <defs>
-                      <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.16" />
-                        <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" />
-                      </linearGradient>
-                    </defs>
-
-                    <line x1={paddingX} y1={paddingY} x2={chartWidth - paddingX} y2={paddingY} stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" strokeDasharray="3 3" />
-                    <line x1={paddingX} y1={chartHeight / 2} x2={chartWidth - paddingX} y2={chartHeight / 2} stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" strokeDasharray="3 3" />
-                    <line x1={paddingX} y1={chartHeight - paddingY} x2={chartWidth - paddingX} y2={chartHeight - paddingY} stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
-
-                    <text x={paddingX - 10} y={paddingY + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">
-                      {maxRevenue > 0 ? formatCurrency(maxRevenue) : '$0'}
-                    </text>
-                    <text x={paddingX - 10} y={chartHeight / 2 + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">
-                      {maxRevenue > 0 ? formatCurrency(maxRevenue / 2) : '$0'}
-                    </text>
-                    <text x={paddingX - 10} y={chartHeight - paddingY + 4} className="text-[10px] font-bold fill-slate-400 font-mono" textAnchor="end">$0</text>
-
-                    {monthlyRevenue.map((m, i) => (
-                      <text key={m.month} x={getX(i)} y={chartHeight - 4} className="text-[10px] font-bold fill-slate-400 dark:fill-slate-500" textAnchor="middle">
-                        {m.month}
-                      </text>
-                    ))}
-
-                    {monthlyRevenue.length > 1 && (
-                      <>
-                        <path d={areaD} fill="url(#chart-gradient)" />
-                        <path d={pathD} fill="none" stroke="#4f46e5" strokeWidth="3.5" strokeLinecap="round" />
-                        <line x1={getX(monthlyRevenue.length - 1)} y1={getY(monthlyRevenue[monthlyRevenue.length - 1].revenue)} x2={chartWidth - paddingX + 20} y2={getY(monthlyRevenue[monthlyRevenue.length - 1].revenue) - 10} stroke="#a5b4fc" strokeWidth="2.5" strokeDasharray="4 4" />
-                      </>
-                    )}
-
-                    {monthlyRevenue.map((m, i) => (
-                      <circle key={m.month} cx={getX(i)} cy={getY(m.revenue)} r="4.5" className="fill-indigo-600 stroke-white dark:stroke-slate-900" strokeWidth="2" />
-                    ))}
-
-                    {monthlyRevenue.length > 0 && (
-                      <g transform={`translate(${getX(monthlyRevenue.length - 1)}, ${getY(monthlyRevenue[monthlyRevenue.length - 1].revenue)})`}>
-                        <circle r="8" className="fill-indigo-500/30 animate-ping" />
-                        <circle r="5" className="fill-indigo-600 stroke-white dark:stroke-slate-900" strokeWidth="2" />
-                      </g>
-                    )}
-                  </svg>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={monthlyRevenue} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                      <defs>
+                        <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.16} />
+                          <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => formatCurrency(v)} width={70} />
+                      <Tooltip
+                        formatter={(value: any) => [formatCurrency(value), 'Revenue']}
+                        contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
+                        cursor={{ stroke: '#6366f1', strokeWidth: 1.5 }}
+                      />
+                      <Area type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={3.5} fillOpacity={1} fill="url(#chartGradient)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
 
@@ -378,31 +361,20 @@ export const Dashboard: React.FC = () => {
             <CategoryIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Inventory by Category</h2>
           </div>
-          <div className="p-4">
-            {catBreakdown.length > 0 ? (
-              <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-auto overflow-visible">
-                {catBreakdown.map((item, i) => {
-                  const max = Math.max(...catBreakdown.map((c) => c.product_count), 1);
-                  const barHeight = Math.max(8, Math.min(24, (chartHeight - paddingY * 2) / Math.max(catBreakdown.length, 1) - 6));
-                  const totalHeight = catBreakdown.length * (barHeight + 6);
-                  const startY = paddingY + ((chartHeight - paddingY * 2) - totalHeight) / 2;
-                  const padLeft = 100;
-                  const padRight = 40;
-                  const width = (item.product_count / max) * (chartWidth - padLeft - padRight);
-                  const y = startY + i * (barHeight + 6);
-                  return (
-                    <g key={i}>
-                      <text x={padLeft - 10} y={y + barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-500 dark:fill-slate-400" textAnchor="end">
-                        {item.category_name.length > 15 ? item.category_name.slice(0, 15) + '…' : item.category_name}
-                      </text>
-                      <rect x={padLeft} y={y} width={width} height={barHeight} rx={4} fill="#6366f1" opacity={0.85} />
-                      <text x={padLeft + width + 8} y={y + barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-600 dark:fill-slate-300" textAnchor="start">
-                        {item.product_count}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
+          <div className="p-4 h-64">
+            {catChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={catChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: 'rgba(99,102,241,0.08)' }} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Bar dataKey="count" radius={[4, 4, 4, 4]} barSize={18}>
+                    {catChartData.map((_entry, index) => (
+                      <Cell key={`cell-${index}`} fill="#6366f1" fillOpacity={0.85} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
               <div className="flex h-48 items-center justify-center text-sm text-slate-400 dark:text-slate-500">No category data available</div>
             )}
@@ -414,36 +386,20 @@ export const Dashboard: React.FC = () => {
             <TrendingIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Stock Status Distribution</h2>
           </div>
-          <div className="p-4">
-            {statusBreakdown.length > 0 ? (
-              <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-auto overflow-visible">
-                {statusBreakdown.map((item, i) => {
-                  const max = Math.max(...statusBreakdown.map((s) => s.product_count), 1);
-                  const barHeight = 20;
-                  const totalHeight = statusBreakdown.length * (barHeight + 6);
-                  const startY = paddingY + ((chartHeight - paddingY * 2) - totalHeight) / 2;
-                  const padLeft = 100;
-                  const padRight = 40;
-                  const width = (item.product_count / max) * (chartWidth - padLeft - padRight);
-                  const y = startY + i * (barHeight + 6);
-                  const colors: Record<string, string> = {
-                    IN_STOCK: '#10b981',
-                    LOW_STOCK: '#f59e0b',
-                    OUT_OF_STOCK: '#ef4444',
-                  };
-                  return (
-                    <g key={i}>
-                      <text x={padLeft - 10} y={y + barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-500 dark:fill-slate-400" textAnchor="end">
-                        {item.stock_status.replace(/_/g, ' ')}
-                      </text>
-                      <rect x={padLeft} y={y} width={width} height={barHeight} rx={4} fill={colors[item.stock_status] || '#6366f1'} opacity={0.85} />
-                      <text x={padLeft + width + 8} y={y + barHeight / 2 + 3} className="text-[10px] font-bold fill-slate-600 dark:fill-slate-300" textAnchor="start">
-                        {item.product_count}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
+          <div className="p-4 h-64">
+            {statusChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={statusChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: 'rgba(99,102,241,0.08)' }} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Bar dataKey="count" radius={[4, 4, 4, 4]} barSize={18}>
+                    {statusChartData.map((_entry, index) => (
+                      <Cell key={`cell-${index}`} fill={statusColors[statusBreakdown[index]?.stock_status] || '#6366f1'} fillOpacity={0.85} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
               <div className="flex h-48 items-center justify-center text-sm text-slate-400 dark:text-slate-500">No status data available</div>
             )}
