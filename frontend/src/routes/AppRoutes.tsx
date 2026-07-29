@@ -22,6 +22,7 @@ export const AppRoutes: React.FC = () => {
     <Routes>
       {/* Auth routes layout wrapper */}
       <Route element={<AuthLayout />}>
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -49,7 +50,7 @@ export const AppRoutes: React.FC = () => {
       </Route>
 
       {/* Redirect wildcards */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 };

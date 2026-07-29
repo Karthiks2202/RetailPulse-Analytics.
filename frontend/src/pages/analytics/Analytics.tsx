@@ -679,7 +679,12 @@ const queryOptions: { refetchInterval: number | false } = {
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
                   <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => formatCurrency(v)} width={70} />
-                  <Tooltip formatter={(value: any) => [formatCurrency(value), 'Revenue']} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(value: any) => [formatCurrency(value), 'Revenue']}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }}
+                    itemStyle={{ color: '#818cf8' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                  />
                   <Area type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={3.5} fillOpacity={1} fill="url(#revGradient)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -709,7 +714,12 @@ const queryOptions: { refetchInterval: number | false } = {
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
                   <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }}
+                    itemStyle={{ color: '#818cf8' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                  />
                   <Bar dataKey="sales" radius={[4, 4, 0, 0]} barSize={24}>
                     {salesTrend.map((_entry, index) => (
                       <Cell key={`cell-${index}`} fill="#6366f1" fillOpacity={0.85} />
@@ -760,7 +770,12 @@ const queryOptions: { refetchInterval: number | false } = {
                 >
                   <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="product_name" width={120} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }}
+                    itemStyle={{ color: '#818cf8' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                  />
                   <Bar dataKey="total_quantity" radius={[4, 4, 4, 4]} barSize={16} className="cursor-pointer">
                     {topProducts.map((_entry, index) => (
                       <Cell key={`cell-${index}`} fill={paymentColors[index % paymentColors.length]} fillOpacity={0.85} />
@@ -808,7 +823,12 @@ const queryOptions: { refetchInterval: number | false } = {
                 >
                   <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="category_name" width={120} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }}
+                    itemStyle={{ color: '#818cf8' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                  />
                   <Bar dataKey="total_quantity" radius={[4, 4, 4, 4]} barSize={16} className="cursor-pointer">
                     {topCategories.map((_entry, index) => (
                       <Cell key={`cell-${index}`} fill={channelColors[index % channelColors.length]} fillOpacity={0.85} />
@@ -922,14 +942,19 @@ const queryOptions: { refetchInterval: number | false } = {
                     nameKey="status"
                     cx="50%"
                     cy="50%"
-                    outerRadius={80}
+                    innerRadius={35}
+                    outerRadius={65}
+                    paddingAngle={3}
                     label={({ name, percent }) => `${(name || '').replace(/_/g, ' ')}: ${((percent || 0) * 100).toFixed(0)}%`}
                   >
                     {stockStatus.map((entry) => (
                       <Cell key={entry.status} fill={stockColors[entry.status] || '#6366f1'} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }}
+                    itemStyle={{ color: '#818cf8' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -968,7 +993,12 @@ const queryOptions: { refetchInterval: number | false } = {
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
                   <XAxis dataKey="category_name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }}
+                    itemStyle={{ color: '#818cf8' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                  />
                   <Bar dataKey="total_stock" radius={[4, 4, 0, 0]} barSize={32} className="cursor-pointer">
                     {inventoryDist.map((_entry, index) => (
                       <Cell key={`cell-${index}`} fill={paymentColors[index % paymentColors.length]} fillOpacity={0.85} />
@@ -1021,7 +1051,12 @@ const queryOptions: { refetchInterval: number | false } = {
                 >
                   <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="product_name" width={140} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }}
+                    itemStyle={{ color: '#818cf8' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                  />
                   <Bar dataKey="available_stock" radius={[4, 4, 4, 4]} barSize={14} className="cursor-pointer">
                     {lowStockProducts.map((_entry, index) => (
                       <Cell key={`cell-${index}`} fill="#f59e0b" fillOpacity={0.85} />
@@ -1118,7 +1153,13 @@ const queryOptions: { refetchInterval: number | false } = {
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
                 <XAxis dataKey="category_name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => formatCurrency(v)} width={80} />
-                <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} formatter={(value: any) => [formatCurrency(value), 'Cost Value']} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }}
+                  itemStyle={{ color: '#818cf8' }}
+                  labelStyle={{ color: '#94a3b8' }}
+                  formatter={(value: any) => [formatCurrency(value), 'Cost Value']}
+                />
                 <Bar dataKey="total_cost_value" radius={[4, 4, 0, 0]} barSize={28} className="cursor-pointer">
                   {inventoryValue.map((_entry, index) => (
                     <Cell key={`cell-${index}`} fill="#6366f1" fillOpacity={0.85} />

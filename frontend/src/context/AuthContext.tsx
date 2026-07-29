@@ -44,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setUser(userProfile);
     } catch (error) {
+      localStorage.clear();
       setUser(null);
     } finally {
       setLoading(false);
