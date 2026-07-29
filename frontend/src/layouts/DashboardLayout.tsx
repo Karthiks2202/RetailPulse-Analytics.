@@ -15,12 +15,17 @@ import {
   Receipt as ReceiptIcon,
   Menu as MenuIcon,
   Close as CloseIcon,
+  Analytics as AnalyticsIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { NotificationBell } from './NotificationBell';
+import { useQueryClient } from '@tanstack/react-query';
+import { refreshAnalytics } from '../api/analyticsApi';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', Icon: DashIcon, adminOnly: false },
   { to: '/profile',   label: 'My Profile', Icon: ProfileIcon, adminOnly: false },
+  { to: '/analytics', label: 'Analytics', Icon: AnalyticsIcon, adminOnly: true },
   { to: '/products',  label: 'Products',   Icon: InventoryIcon, adminOnly: true },
   { to: '/inventory', label: 'Inventory',  Icon: ShowChartIcon, adminOnly: true },
   { to: '/categories',label: 'Categories', Icon: CategoryIcon, adminOnly: true },
@@ -32,11 +37,24 @@ export const DashboardLayout: React.FC = () => {
   const { darkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshAnalytics();
+      await queryClient.invalidateQueries();
+    } catch {
+      queryClient.invalidateQueries();
+    }
+    setRefreshing(false);
   };
 
   const isActive = (path: string) => location.pathname === path;
@@ -185,6 +203,15 @@ export const DashboardLayout: React.FC = () => {
             </span>
 
             <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block"/>
+
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-100 transition-all bg-white dark:bg-slate-900 shadow-sm disabled:opacity-60"
+              title="Refresh dashboard"
+            >
+              <RefreshIcon style={{ fontSize: 17 }} className={refreshing ? 'animate-spin' : ''} />
+            </button>
 
             <NotificationBell />
 
