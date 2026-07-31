@@ -59,21 +59,21 @@ class AnalyticsService:
     async def get_kpi_dashboard(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None) -> dict:
         base_query = select(Sale).where(Sale.company_id == company_id)
         base_query = self._apply_sale_filters(base_query, company_id, filters)
+        sub = base_query.subquery()
 
         total_revenue_result = await db.execute(
-            select(func.coalesce(func.sum(Sale.total_amount), 0)).select_from(base_query.subquery())
+            select(func.coalesce(func.sum(sub.c.total_amount), 0))
         )
         total_revenue = float(total_revenue_result.scalar() or 0)
 
         total_orders_result = await db.execute(
-            select(func.count(Sale.id)).select_from(base_query.subquery())
+            select(func.count(sub.c.id))
         )
         total_orders = total_orders_result.scalar() or 0
 
         total_products_sold_result = await db.execute(
             select(func.coalesce(func.sum(SaleItem.quantity), 0))
-            .join(Sale, SaleItem.sale_id == Sale.id)
-            .select_from(base_query.subquery())
+            .join(sub, SaleItem.sale_id == sub.c.id)
         )
         total_products_sold = total_products_sold_result.scalar() or 0
 

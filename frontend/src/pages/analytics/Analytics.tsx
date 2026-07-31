@@ -43,6 +43,26 @@ import {
   type DrillDownCategoryProductResponse,
   type DrillDownProductTransactionResponse,
 } from '../../api/analyticsApi';
+import {
+  getCustomerGrowth,
+  getRevenueByCustomerType,
+  getLocationDistribution,
+  getSpendingDistribution,
+  getPurchaseFrequencyDistribution,
+  getCustomerSegmentation,
+  getMonthlyCustomerAcquisition,
+  getNewVsReturning,
+  getTopCustomers,
+  getRecentCustomers,
+  getCustomerRevenueContribution,
+  type CustomerGrowthPoint,
+  type RevenueByTypePoint,
+  type LocationDistributionPoint,
+  type SpendingDistributionResponse,
+  type PurchaseFrequencyPoint,
+  type CustomerSegmentResponse,
+  type MonthlyAcquisitionPoint,
+} from '../../api/customerApi';
 import { formatCurrency } from '../../utils/currency';
 import {
   AttachMoney as MoneyIcon,
@@ -67,6 +87,8 @@ import {
   Autorenew as AutoRefreshIcon,
   PictureAsPdf as PdfIcon,
   TableChart as CsvIcon,
+  People as PeopleIcon,
+  BarChart as MuiBarChartIcon,
 } from '@mui/icons-material';
 import {
   AreaChart,
@@ -252,6 +274,76 @@ const queryOptions: { refetchInterval: number | false } = {
     ...queryOptions,
   });
   const inventoryValue = (inventoryValueData || []) as InventoryValueByCategory[];
+
+  const { data: customerGrowthData, isLoading: customerGrowthLoading } = useQuery({
+    queryKey: ['analytics', 'customer-growth'],
+    queryFn: () => getCustomerGrowth(12),
+    ...queryOptions,
+  });
+  const customerGrowth = (customerGrowthData || []) as CustomerGrowthPoint[];
+
+  const { data: revenueByTypeData, isLoading: revenueByTypeLoading } = useQuery({
+    queryKey: ['analytics', 'revenue-by-type'],
+    queryFn: getRevenueByCustomerType,
+    ...queryOptions,
+  });
+  const revenueByType = (revenueByTypeData || []) as RevenueByTypePoint[];
+
+  const { data: locationDistData, isLoading: locationDistLoading } = useQuery({
+    queryKey: ['analytics', 'location-distribution'],
+    queryFn: getLocationDistribution,
+    ...queryOptions,
+  });
+  const locationDist = (locationDistData || []) as LocationDistributionPoint[];
+
+  const { data: spendingDistData, isLoading: spendingDistLoading } = useQuery({
+    queryKey: ['analytics', 'spending-distribution'],
+    queryFn: getSpendingDistribution,
+    ...queryOptions,
+  });
+  const spendingDist = (spendingDistData || null) as SpendingDistributionResponse | null;
+
+  const { data: purchaseFreqData, isLoading: purchaseFreqLoading } = useQuery({
+    queryKey: ['analytics', 'purchase-frequency'],
+    queryFn: getPurchaseFrequencyDistribution,
+    ...queryOptions,
+  });
+  const purchaseFreq = (purchaseFreqData || []) as PurchaseFrequencyPoint[];
+
+  const { data: segmentationData, isLoading: segmentationLoading } = useQuery({
+    queryKey: ['analytics', 'segmentation'],
+    queryFn: getCustomerSegmentation,
+    ...queryOptions,
+  });
+  const segmentation = (segmentationData || null) as CustomerSegmentResponse | null;
+
+  const { data: monthlyAcquisitionData, isLoading: monthlyAcquisitionLoading } = useQuery({
+    queryKey: ['analytics', 'monthly-acquisition'],
+    queryFn: () => getMonthlyCustomerAcquisition(12),
+    ...queryOptions,
+  });
+  const monthlyAcquisition = (monthlyAcquisitionData || []) as MonthlyAcquisitionPoint[];
+
+  const { data: topCustomersData, isLoading: topCustomersLoading } = useQuery({
+    queryKey: ['analytics', 'top-customers'],
+    queryFn: () => getTopCustomers(10),
+    ...queryOptions,
+  });
+  const topCustomers = (topCustomersData || []) as Array<{ id: string; first_name: string; last_name: string; email: string | null; total_purchases: number; total_spent: number; last_purchase_date: string | null; }>;
+
+  const { data: recentCustomersData, isLoading: recentCustomersLoading } = useQuery({
+    queryKey: ['analytics', 'recent-customers'],
+    queryFn: () => getRecentCustomers(10),
+    ...queryOptions,
+  });
+  const recentCustomers = (recentCustomersData || []) as Array<{ id: string; first_name: string; last_name: string; email: string | null; phone: string | null; customer_type: string; status: string; total_purchases: number; total_spent: number; last_purchase_date: string | null; customer_since: string; created_at: string; }>;
+
+  const { data: revenueContributionData, isLoading: revenueContributionLoading } = useQuery({
+    queryKey: ['analytics', 'revenue-contribution'],
+    queryFn: () => getCustomerRevenueContribution(10),
+    ...queryOptions,
+  });
+  const revenueContribution = (revenueContributionData || []) as Array<{ id: string; first_name: string; last_name: string; email: string | null; revenue: number; }>;
 
   // Queries for drill-down details
   const { data: drillTransactionsData, isLoading: drillTransactionsLoading } = useQuery({
@@ -1114,8 +1206,311 @@ const queryOptions: { refetchInterval: number | false } = {
                       <div className="text-xs font-bold text-red-600 dark:text-red-400">Out of Stock</div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">
                         {item.last_sale_date ? new Date(item.last_sale_date).toLocaleDateString() : 'Never sold'}
+        </div>
+      </div>
+
+      {/* Customer Analytics Section */}
+      <div className="space-y-6 md:space-y-8">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">Customer Analytics</h2>
+        </div>
+
+        {/* Top KPIs Row */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
+          <KPISkeleton loading={kpisLoading} title="Total Customers" />
+          <KPISkeleton loading={kpisLoading} title="Active Customers" />
+          <KPISkeleton loading={kpisLoading} title="New Customers" />
+          <KPISkeleton loading={kpisLoading} title="Returning Customers" />
+        </div>
+
+        {/* Row: Customer Growth + Monthly Acquisition */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
+          <ChartCard title="Customer Growth Trend" icon={<TrendingIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={customerGrowthLoading} isEmpty={!customerGrowth || customerGrowth.length === 0} emptyText="No customer growth data available">
+            <div className="p-4 h-72">
+              {customerGrowth && customerGrowth.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={customerGrowth} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="cgGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }} itemStyle={{ color: '#818cf8' }} labelStyle={{ color: '#94a3b8' }} />
+                    <Area type="monotone" dataKey="new_customers" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#cgGradient)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                  <PeopleIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+                  <span className="text-xs font-semibold">No data available</span>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+          <ChartCard title="Monthly Customer Acquisition" icon={<PeopleIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={monthlyAcquisitionLoading} isEmpty={!monthlyAcquisition || monthlyAcquisition.length === 0} emptyText="No acquisition data available">
+            <div className="p-4 h-72">
+              {monthlyAcquisition && monthlyAcquisition.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyAcquisition} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }} itemStyle={{ color: '#818cf8' }} labelStyle={{ color: '#94a3b8' }} />
+                    <Bar dataKey="new_customers" radius={[4, 4, 0, 0]} barSize={20}>
+                      {monthlyAcquisition.map((_entry, index) => (
+                        <Cell key={`cell-${index}`} fill="#10b981" fillOpacity={0.85} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                  <PeopleIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+                  <span className="text-xs font-semibold">No data available</span>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+        </div>
+
+        {/* Row: New vs Returning + Revenue by Type */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
+          <ChartCard title="New vs Returning Customers" icon={<TrendingIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={false} isEmpty={false} emptyText="">
+            <div className="p-4 h-72">
+              <NewVsReturningView />
+            </div>
+          </ChartCard>
+          <ChartCard title="Revenue by Customer Type" icon={<MuiBarChartIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={revenueByTypeLoading} isEmpty={!revenueByType || revenueByType.length === 0} emptyText="No revenue breakdown available">
+            <div className="p-4 h-72">
+              {revenueByType && revenueByType.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={revenueByType} dataKey="revenue" nameKey="customer_type" cx="50%" cy="50%" outerRadius={90} paddingAngle={4} label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}>
+                      {revenueByType.map((_entry, index) => (
+                        <Cell key={`cell-${index}`} fill={paymentColors[index % paymentColors.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }} itemStyle={{ color: '#818cf8' }} formatter={(value: any) => [formatCurrency(value), 'Revenue']} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                  <MuiBarChartIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+                  <span className="text-xs font-semibold">No revenue data available</span>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+        </div>
+
+        {/* Row: Segmentation + Purchase Frequency */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
+          <ChartCard title="Customer Segmentation" icon={<PeopleIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={segmentationLoading} isEmpty={!segmentation || segmentation.total_segmented === 0} emptyText="No segmentation data yet. Link sales to customers.">
+            <div className="p-4 h-72">
+              {segmentation && segmentation.total_segmented > 0 ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    {Object.entries(segmentation.segments).map(([segment, count]) => (
+                      <div key={segment} className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{segment}</p>
+                        <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">{count}</p>
+                        <p className="text-xs text-slate-500">{((count / segmentation.total_segmented) * 100).toFixed(1)}% of customers</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-300">
+                    <span className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 font-semibold">New: 1 order</span>
+                    <span className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 font-semibold">Regular: 2+ orders</span>
+                    <span className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 font-semibold">Loyal: 5+ orders & ₹1,000+ spend</span>
+                    <span className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 font-semibold">VIP: 10+ orders & ₹5,000+ spend</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                  <PeopleIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+                  <span className="text-xs font-semibold">No segmentation data yet. Link sales to customers.</span>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+          <ChartCard title="Purchase Frequency Distribution" icon={<ReceiptIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={purchaseFreqLoading} isEmpty={!purchaseFreq || purchaseFreq.length === 0} emptyText="No purchase frequency data available">
+            <div className="p-4 h-72">
+              {purchaseFreq && purchaseFreq.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={purchaseFreq} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
+                    <XAxis dataKey="range" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }} itemStyle={{ color: '#818cf8' }} labelStyle={{ color: '#94a3b8' }} />
+                    <Bar dataKey="customers" radius={[4, 4, 0, 0]} barSize={28}>
+                      {purchaseFreq.map((_entry, index) => (
+                        <Cell key={`cell-${index}`} fill={channelColors[index % channelColors.length]} fillOpacity={0.85} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                  <ReceiptIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+                  <span className="text-xs font-semibold">No data available</span>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+        </div>
+
+        {/* Row: Location Distribution + Spending Distribution */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
+          <ChartCard title="Customer Location Distribution" icon={<StoreIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={locationDistLoading} isEmpty={!locationDist || locationDist.length === 0} emptyText="No location data available">
+            <div className="p-4 h-72">
+              {locationDist && locationDist.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={locationDist} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="state" width={80} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }} itemStyle={{ color: '#818cf8' }} labelStyle={{ color: '#94a3b8' }} formatter={(value: any, name: any) => [value, name === 'count' ? 'Customers' : '']} />
+                    <Bar dataKey="count" radius={[4, 4, 4, 4]} barSize={14}>
+                      {locationDist.map((_entry, index) => (
+                        <Cell key={`cell-${index}`} fill={channelColors[index % channelColors.length]} fillOpacity={0.85} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                  <StoreIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+                  <span className="text-xs font-semibold">No location data available</span>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+          <ChartCard title="Customer Spending Distribution" icon={<MoneyIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={spendingDistLoading} isEmpty={!spendingDist || spendingDist.total_customers === 0} emptyText="No spending data available">
+            <div className="p-4 h-72">
+              {spendingDist && spendingDist.total_customers > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={Object.entries(spendingDist.buckets).map(([range, count]) => ({ range, count }))} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
+                    <XAxis dataKey="range" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }} itemStyle={{ color: '#818cf8' }} labelStyle={{ color: '#94a3b8' }} />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]} barSize={28}>
+                      {Object.keys(spendingDist.buckets).map((_entry, index) => (
+                        <Cell key={`cell-${index}`} fill={paymentColors[index % paymentColors.length]} fillOpacity={0.85} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                  <MoneyIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+                  <span className="text-xs font-semibold">No data available</span>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+        </div>
+
+        {/* Row: Top Customers + Recent Customers + Revenue Contribution */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
+          <ChartCard title="Top Customers" icon={<PeopleIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={topCustomersLoading} isEmpty={!topCustomers || topCustomers.length === 0} emptyText="No customer data available">
+            <div className="p-4 h-72 overflow-y-auto">
+              {topCustomers && topCustomers.length > 0 ? (
+                <div className="space-y-3">
+                  {topCustomers.map((c, idx) => (
+                    <div key={c.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-xs font-bold">
+                          #{idx + 1}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-slate-100">{c.first_name} {c.last_name}</div>
+                          <div className="text-[10px] text-slate-400">{c.email || '—'}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100">{formatCurrency(c.total_spent)}</div>
+                        <div className="text-[10px] text-slate-400">{c.total_purchases} orders</div>
                       </div>
                     </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                  <PeopleIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+                  <span className="text-xs font-semibold">No customer data available</span>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+
+          <ChartCard title="Recent Customers" icon={<StoreIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={recentCustomersLoading} isEmpty={!recentCustomers || recentCustomers.length === 0} emptyText="No recent customers">
+            <div className="p-4 h-72 overflow-y-auto">
+              {recentCustomers && recentCustomers.length > 0 ? (
+                <div className="space-y-3">
+                  {recentCustomers.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 flex items-center justify-center text-xs font-bold">
+                          {c.first_name.charAt(0)}{c.last_name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-slate-100">{c.first_name} {c.last_name}</div>
+                          <div className="text-[10px] text-slate-400">{c.customer_type} • {c.status}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100">{formatCurrency(c.total_spent)}</div>
+                        <div className="text-[10px] text-slate-400">{c.total_purchases} orders</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                  <StoreIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+                  <span className="text-xs font-semibold">No recent customers</span>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+
+          <ChartCard title="Revenue Contribution" icon={<MoneyIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={revenueContributionLoading} isEmpty={!revenueContribution || revenueContribution.length === 0} emptyText="No revenue data available">
+            <div className="p-4 h-72 overflow-y-auto">
+              {revenueContribution && revenueContribution.length > 0 ? (
+                <div className="space-y-3">
+                  {revenueContribution.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 flex items-center justify-center text-xs font-bold">
+                          {c.first_name.charAt(0)}{c.last_name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-slate-100">{c.first_name} {c.last_name}</div>
+                          <div className="text-[10px] text-slate-400">{c.email || '—'}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100">{formatCurrency(c.revenue)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                  <MoneyIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+                  <span className="text-xs font-semibold">No revenue data available</span>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+        </div>
+      </div>
+
                   </div>
                 ))}
               </div>
@@ -1551,6 +1946,109 @@ const queryOptions: { refetchInterval: number | false } = {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+const ChartCard: React.FC<{ title: string; icon: React.ReactNode; loading: boolean; isEmpty: boolean; emptyText: string; children: React.ReactNode }> = ({ title, icon, loading, isEmpty, emptyText, children }) => (
+  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/30">
+      {icon}
+      <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">{title}</h2>
+    </div>
+    {loading ? (
+      <div className="p-4 h-72 flex items-center justify-center">
+        <div className="h-full w-full animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800" />
+      </div>
+    ) : isEmpty ? (
+      <div className="flex flex-col items-center justify-center h-72 text-slate-400 space-y-2">
+        <ReceiptIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+        <span className="text-xs font-semibold">{emptyText}</span>
+      </div>
+    ) : (
+      children
+    )}
+  </div>
+);
+
+const KPISkeleton: React.FC<{ loading: boolean; title: string }> = ({ loading, title }) => (
+  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 md:p-5 shadow-sm">
+    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{title}</p>
+    {loading ? (
+      <div className="mt-3 h-7 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
+    ) : (
+      <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">-</p>
+    )}
+  </div>
+);
+
+const NewVsReturningView: React.FC = () => {
+  const { data: nvr, isLoading } = useQuery({
+    queryKey: ['customers', 'new-vs-returning-analytics'],
+    queryFn: () => getNewVsReturning(),
+  });
+  const data = nvr || { new_customers: 0, returning_customers: 0, new_customer_revenue: 0, returning_customer_revenue: 0 };
+  const total = data.new_customers + data.returning_customers;
+
+  if (isLoading) return <div className="flex items-center justify-center h-full"><div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" /></div>;
+
+  if (total === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+        <PeopleIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
+        <span className="text-xs font-semibold">No customer data yet.</span>
+      </div>
+    );
+  }
+
+  const newPct = total > 0 ? (data.new_customers / total) * 100 : 0;
+  const returnPct = total > 0 ? (data.returning_customers / total) * 100 : 0;
+  const totalRevenue = data.new_customer_revenue + data.returning_customer_revenue;
+  const newRevPct = totalRevenue > 0 ? (data.new_customer_revenue / totalRevenue) * 100 : 0;
+  const returnRevPct = totalRevenue > 0 ? (data.returning_customer_revenue / totalRevenue) * 100 : 0;
+
+  return (
+    <div className="space-y-5 h-full overflow-y-auto">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">New Customers</p>
+          <p className="text-2xl font-extrabold text-slate-900 dark:text-white">{data.new_customers}</p>
+          <p className="text-xs text-slate-500">{newPct.toFixed(1)}% of total</p>
+        </div>
+        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Returning Customers</p>
+          <p className="text-2xl font-extrabold text-slate-900 dark:text-white">{data.returning_customers}</p>
+          <p className="text-xs text-slate-500">{returnPct.toFixed(1)}% of total</p>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {[
+          { label: 'New Customers', value: data.new_customers, pct: newPct, color: '#6366f1' },
+          { label: 'Returning Customers', value: data.returning_customers, pct: returnPct, color: '#10b981' },
+        ].map((item) => (
+          <div key={item.label} className="space-y-1.5">
+            <div className="flex justify-between text-sm font-semibold text-slate-700 dark:text-slate-300">
+              <span>{item.label}</span>
+              <span className="font-mono">{item.value} ({item.pct.toFixed(1)}%)</span>
+            </div>
+            <div className="h-3 w-full bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800">
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(item.pct, 100)}%`, backgroundColor: item.color }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">New Customer Revenue</p>
+          <p className="text-sm font-extrabold text-slate-900 dark:text-white">{formatCurrency(data.new_customer_revenue)}</p>
+          <p className="text-xs text-slate-500">{newRevPct.toFixed(1)}% of total revenue</p>
+        </div>
+        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Returning Customer Revenue</p>
+          <p className="text-sm font-extrabold text-slate-900 dark:text-white">{formatCurrency(data.returning_customer_revenue)}</p>
+          <p className="text-xs text-slate-500">{returnRevPct.toFixed(1)}% of total revenue</p>
+        </div>
+      </div>
     </div>
   );
 };

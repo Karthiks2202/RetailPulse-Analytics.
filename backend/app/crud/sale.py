@@ -177,8 +177,32 @@ class CRUDSale:
         sales = list(result.scalars().all())
         return sales, total
 
-    async def create(self, db: AsyncSession, company_id: UUID, user_id: UUID, customer_name: Optional[str], sale_date: datetime, sales_channel: str, payment_method: str, items: list, request: Request) -> Sale:
+    async def create(self, db: AsyncSession, company_id: UUID, user_id: UUID, customer_name: Optional[str], sale_date: datetime, sales_channel: str, payment_method: str, items: list, request: Request, customer_id: Optional[UUID] = None) -> Sale:
         invoice_number = await self.get_invoice_number(db, company_id)
+
+        # Auto-link customer by name if customer_id not provided
+        if not customer_id and customer_name:
+            from app.models.customer import Customer
+            from sqlalchemy import func as sa_func
+            name_parts = customer_name.strip().split()
+            if len(name_parts) >= 2:
+                first_name = name_parts[0]
+                last_name = " ".join(name_parts[1:])
+                res = await db.execute(
+                    select(Customer)
+                    .where(Customer.company_id == company_id)
+                    .where(sa_func.lower(Customer.first_name) == first_name.lower())
+                    .where(sa_func.lower(Customer.last_name) == last_name.lower())
+                )
+            else:
+                res = await db.execute(
+                    select(Customer)
+                    .where(Customer.company_id == company_id)
+                    .where(sa_func.lower(Customer.first_name) == customer_name.strip().lower())
+                )
+            matched = res.scalar_one_or_none()
+            if matched:
+                customer_id = matched.id
 
         total_amount = Decimal("0")
         sale_items = []
@@ -246,6 +270,7 @@ class CRUDSale:
             sale = Sale(
                 company_id=company_id,
                 invoice_number=invoice_number,
+                customer_id=customer_id,
                 customer_name=customer_name,
                 sale_date=sale_date,
                 sales_channel=sales_channel,
@@ -270,6 +295,22 @@ class CRUDSale:
             await db.refresh(item)
 
         await self._log_audit(db, company_id, user_id, "Sale Created", request, entity_name=invoice_number, details=f"Sale {invoice_number} created with {len(sale.items)} items, total ${float(total_amount):.2f}")
+
+        if customer_id:
+            is_first = False
+            first_sale_result = await db.execute(
+                select(Sale.id).where(Sale.company_id == company_id).where(Sale.customer_id == customer_id).where(Sale.status == SaleStatus.COMPLETED).order_by(Sale.sale_date.asc()).limit(1)
+            )
+            first_sale_id = first_sale_result.scalar_one_or_none()
+            if first_sale_id == sale.id:
+                is_first = True
+            from app.crud.customer import customer as customer_crud
+            action = "First Purchase" if is_first else "New Purchase"
+            customer = await customer_crud.get(db, customer_id)
+            customer_details = f"{customer.first_name} {customer.last_name}" if customer else customer_name or "Unknown"
+            await customer_crud.log_timeline(db, company_id, customer_id, user_id, action, f"{action} by {customer_details} - ${float(total_amount):.2f}")
+            if is_first:
+                await notification_crud.create(db, company_id, title="First Purchase", message=f"Customer '{customer_details}' made their first purchase of ${float(total_amount):.2f}.", type=NotificationType.FIRST_PURCHASE)
 
         for product_id, initial_qty in initial_quantities.items():
             qty = next((item.get("quantity") for item in items if item.get("product_id") == product_id), 0)

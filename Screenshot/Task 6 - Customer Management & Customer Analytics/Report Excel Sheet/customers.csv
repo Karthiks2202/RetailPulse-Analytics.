@@ -1,0 +1,7 @@
+id,first_name,last_name,email,phone,address,city,state,country,customer_type,status,customer_since,total_purchases,total_spent,last_purchase_date
+8c1c272f-61ed-40e8-872d-e9653e89e44a,Sundar,.,,,,,,,RETAIL,ACTIVE,2026-07-30T12:31:56.043354,1,500.0,2026-07-24T05:12:00
+3c876789-5c8e-4c95-b679-0b6e39aae723,Suriya,.,,,,,,,RETAIL,ACTIVE,2026-07-30T12:31:56.039227,1,5250.0,2026-07-29T00:45:00
+924a72b5-c3a7-40b0-87ef-6b5a341b45b3,suresh,.,,,,,,,RETAIL,ACTIVE,2026-07-30T12:31:56.034519,1,3000.0,2026-07-21T18:20:00
+47412b0a-f752-46b0-abc0-ce65c1872817,Ravi,.,,,,,,,RETAIL,ACTIVE,2026-07-30T12:31:56.031204,1,500.0,2026-07-21T05:30:00
+3e63d47f-15df-4448-8d6f-b95f5f6bb809,Vicky,S,vicky@example.com,1234567890,25 gandhi nagar,Chennai,Tamilnadu,India,RETAIL,ACTIVE,2026-07-30T12:15:03.493015,1,6055.0,2026-07-25T11:50:00
+0f9cb251-291a-46a1-b649-5246daa42e54,Dhanush,S,karthik@example.com,8610457646,123 Golden City yethapur,Salem,Tamilnadu,India,RETAIL,ACTIVE,2026-07-30T11:08:16.875634,1,16077.0,2026-07-29T14:17:00

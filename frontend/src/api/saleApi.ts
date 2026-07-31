@@ -59,6 +59,7 @@ export interface SaleSummary {
 }
 
 export interface SaleCreate {
+  customer_id?: string;
   customer_name?: string;
   sale_date?: string;
   sales_channel: SalesChannel;
@@ -75,6 +76,7 @@ export interface SaleItemCreate {
 }
 
 export interface SaleUpdate {
+  customer_id?: string;
   customer_name?: string;
   sale_date?: string;
   sales_channel?: SalesChannel;

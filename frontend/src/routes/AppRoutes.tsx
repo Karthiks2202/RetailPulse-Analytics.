@@ -16,6 +16,7 @@ import Sales from '../pages/sales/Sales';
 import SaleDetails from '../pages/sales/SaleDetails';
 import Inventory from '../pages/inventory/Inventory';
 import Analytics from '../pages/analytics/Analytics';
+import Customers from '../pages/customers/Customers';
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -38,6 +39,7 @@ export const AppRoutes: React.FC = () => {
           <Route element={<RoleRoute allowedRoles={['COMPANY_ADMIN', 'SUPER_ADMIN']} />}>
             <Route path="/products" element={<Products />} />
             <Route path="/categories" element={<Categories />} />
+            <Route path="/customers" element={<Customers />} />
           </Route>
           <Route element={<RoleRoute allowedRoles={['COMPANY_ADMIN', 'ANALYST', 'SUPER_ADMIN']} />}>
             <Route path="/analytics" element={<Analytics />} />

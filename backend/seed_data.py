@@ -23,7 +23,12 @@ from app.models.product import Product, ProductStatus, UnitOfMeasure
 from app.models.category import Category, CategoryStatus
 from app.models.transaction import Transaction, TransactionType, TransactionChannel
 from app.models.company import Company
+from app.models.customer import Customer, CustomerStatus, CustomerType
 from sqlalchemy import text
+
+
+def _dob(years_ago: int) -> datetime:
+    return datetime.utcnow() - timedelta(days=365 * years_ago + random.randint(0, 364))
 
 
 async def seed_data():
@@ -145,6 +150,106 @@ async def seed_data():
             print(f"  Seeded {len(txs)} transactions.")
         else:
             print(f"  {len(existing_txs)} transactions already exist — skipping.")
+
+        # --- Customers ---
+        customer_result = await session.execute(
+            select(Customer).where(Customer.company_id == first_company.id)
+        )
+        existing_customers = customer_result.scalars().all()
+
+        if not existing_customers:
+            seed_customers = [
+                Customer(
+                    company_id=first_company.id,
+                    first_name="Alice",
+                    last_name="Johnson",
+                    email="alice@example.com",
+                    phone="555-0101",
+                    date_of_birth=_dob(28),
+                    gender="Female",
+                    address="123 Main St",
+                    city="New York",
+                    state="NY",
+                    postal_code="10001",
+                    country="USA",
+                    customer_type=CustomerType.RETAIL,
+                    preferred_sales_channel="Online Store",
+                    status=CustomerStatus.ACTIVE,
+                ),
+                Customer(
+                    company_id=first_company.id,
+                    first_name="Bob",
+                    last_name="Smith",
+                    email="bob@example.com",
+                    phone="555-0102",
+                    date_of_birth=_dob(45),
+                    gender="Male",
+                    address="456 Oak Ave",
+                    city="Los Angeles",
+                    state="CA",
+                    postal_code="90001",
+                    country="USA",
+                    customer_type=CustomerType.WHOLESALE,
+                    preferred_sales_channel="Retail Store",
+                    status=CustomerStatus.ACTIVE,
+                ),
+                Customer(
+                    company_id=first_company.id,
+                    first_name="Carol",
+                    last_name="White",
+                    email="carol@example.com",
+                    phone="555-0103",
+                    date_of_birth=_dob(34),
+                    gender="Female",
+                    address="789 Pine Rd",
+                    city="Chicago",
+                    state="IL",
+                    postal_code="60601",
+                    country="USA",
+                    customer_type=CustomerType.CORPORATE,
+                    preferred_sales_channel="Retail Store",
+                    status=CustomerStatus.INACTIVE,
+                ),
+                Customer(
+                    company_id=first_company.id,
+                    first_name="David",
+                    last_name="Brown",
+                    email="david@example.com",
+                    phone="555-0104",
+                    date_of_birth=_dob(39),
+                    gender="Male",
+                    address="321 Elm St",
+                    city="Houston",
+                    state="TX",
+                    postal_code="77001",
+                    country="USA",
+                    customer_type=CustomerType.RETAIL,
+                    preferred_sales_channel="Marketplace",
+                    status=CustomerStatus.ACTIVE,
+                ),
+                Customer(
+                    company_id=first_company.id,
+                    first_name="Eve",
+                    last_name="Davis",
+                    email="eve@example.com",
+                    phone="555-0105",
+                    date_of_birth=_dob(26),
+                    gender="Female",
+                    address="654 Maple Dr",
+                    city="Miami",
+                    state="FL",
+                    postal_code="33101",
+                    country="USA",
+                    customer_type=CustomerType.RETAIL,
+                    preferred_sales_channel="Online Store",
+                    status=CustomerStatus.ACTIVE,
+                ),
+            ]
+            session.add_all(seed_customers)
+            await session.commit()
+            print(f"  Seeded {len(seed_customers)} customers.")
+        else:
+            print(f"  {len(existing_customers)} customers already exist — skipping.")
 
     print("\nSeed complete.")
 

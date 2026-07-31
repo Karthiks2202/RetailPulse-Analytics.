@@ -16,6 +16,7 @@ import {
   type SalesChannel,
   type PaymentMethod,
 } from '../../api/saleApi';
+import { getCustomers, type Customer as CustomerType } from '../../api/customerApi';
 import type { Product } from '../../api/productApi';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -51,6 +52,7 @@ interface SaleItemForm {
 }
 
 interface SaleFormValues {
+  customer_id: string;
   customer_name: string;
   sale_date: string;
   sales_channel: SalesChannel;
@@ -77,6 +79,12 @@ export const Sales: React.FC = () => {
   const [modalError, setModalError] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [productOptions, setProductOptions] = useState<Product[]>([]);
+
+  // Customer search state
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerOptions, setCustomerOptions] = useState<CustomerType[]>([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
 
   const { data: sales = [], isLoading, isError } = useQuery({
     queryKey: ['sales', { search, customerFilter, channelFilter, paymentFilter, sortBy, sortDir }],
@@ -141,6 +149,15 @@ export const Sales: React.FC = () => {
       ]
     : [];
 
+  const defaultValues = {
+    customer_id: '',
+    customer_name: '',
+    sale_date: toLocalDatetime(new Date()),
+    sales_channel: 'Retail Store' as SalesChannel,
+    payment_method: 'Cash' as PaymentMethod,
+    items: [] as SaleItemForm[],
+  };
+
   const {
     register,
     handleSubmit,
@@ -149,13 +166,7 @@ export const Sales: React.FC = () => {
     watch,
     formState: { errors },
   } = useForm<SaleFormValues>({
-    defaultValues: {
-      customer_name: '',
-      sale_date: toLocalDatetime(new Date()),
-      sales_channel: 'Retail Store',
-      payment_method: 'Cash',
-      items: [],
-    },
+    defaultValues,
   });
 
   const watchedItems = watch('items') || [];
@@ -175,7 +186,12 @@ export const Sales: React.FC = () => {
     setModalError(null);
     setSelectedProduct('');
     setProductOptions([]);
+    setCustomerSearch('');
+    setCustomerOptions([]);
+    setShowCustomerDropdown(false);
+    setSelectedCustomerId('');
     reset({
+      customer_id: '',
       customer_name: '',
       sale_date: new Date().toISOString().slice(0, 16),
       sales_channel: 'Retail Store',
@@ -190,6 +206,10 @@ export const Sales: React.FC = () => {
     setModalError(null);
     setSelectedProduct('');
     setProductOptions([]);
+    setCustomerSearch(sale.customer_name || '');
+    setCustomerOptions([]);
+    setShowCustomerDropdown(false);
+    setSelectedCustomerId('');
     const full = await getSale(sale.id);
     const items = full.items.map((it) => ({
       product_id: it.product_id || '',
@@ -200,12 +220,31 @@ export const Sales: React.FC = () => {
       tax: it.tax,
       total: it.total,
     }));
+    setValue('customer_id', (full as any).customer_id || '');
+    setSelectedCustomerId((full as any).customer_id || '');
     setValue('customer_name', full.customer_name || '');
     setValue('sale_date', toLocalDatetime(new Date(full.sale_date)));
     setValue('sales_channel', full.sales_channel);
     setValue('payment_method', full.payment_method);
     setValue('items', items);
     setModalOpen(true);
+  };
+
+  const fetchCustomers = async (q: string) => {
+    try {
+      const data = await getCustomers({ search: q || undefined, limit: 20 });
+      setCustomerOptions(data);
+    } catch {
+      setCustomerOptions([]);
+    }
+  };
+
+  const onCustomerSelect = (customer: CustomerType) => {
+    setSelectedCustomerId(customer.id);
+    setCustomerSearch(`${customer.first_name} ${customer.last_name}`.trim());
+    setValue('customer_name', `${customer.first_name} ${customer.last_name}`.trim());
+    setShowCustomerDropdown(false);
+    setCustomerOptions([]);
   };
 
   const addItem = () => {
@@ -264,7 +303,8 @@ export const Sales: React.FC = () => {
         tax: Number(it.tax),
       }));
       const payload: SaleCreate = {
-        customer_name: values.customer_name || undefined,
+        customer_id: selectedCustomerId || undefined,
+        customer_name: customerSearch || values.customer_name || undefined,
         sale_date: values.sale_date,
         sales_channel: values.sales_channel,
         payment_method: values.payment_method,
@@ -274,6 +314,10 @@ export const Sales: React.FC = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-analytics-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-analytics-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['top-customers'] });
+      queryClient.invalidateQueries({ queryKey: ['customers', 'segmentation'] });
       let message = editing ? 'Sale updated successfully.' : 'Sale created successfully.';
       if (data && data.items && data.items.length > 0) {
         const stockInfo = data.items
@@ -302,6 +346,10 @@ export const Sales: React.FC = () => {
     mutationFn: (id: string) => deleteSale(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-analytics-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-analytics-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['top-customers'] });
+      queryClient.invalidateQueries({ queryKey: ['customers', 'segmentation'] });
       showNotification('Sale deleted successfully', 'success');
     },
     onError: (err: any) => {
@@ -547,8 +595,42 @@ export const Sales: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Customer Name</label>
-                  <input {...register('customer_name')} className={inputClass} placeholder="e.g. John Doe" />
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Customer</label>
+                  <div className="relative">
+                    <input
+                      value={customerSearch}
+                      onChange={(e) => {
+                        setCustomerSearch(e.target.value);
+                        setSelectedCustomerId('');
+                        setShowCustomerDropdown(true);
+                        fetchCustomers(e.target.value);
+                      }}
+                      onFocus={() => {
+                        setShowCustomerDropdown(true);
+                        fetchCustomers(customerSearch);
+                      }}
+                      onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 150)}
+                      placeholder="Search or type customer name..."
+                      className={inputClass}
+                    />
+                    {selectedCustomerId && (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/30 px-1.5 py-0.5 rounded-full pointer-events-none">Linked</span>
+                    )}
+                    {showCustomerDropdown && customerOptions.length > 0 && (
+                      <div className="absolute z-20 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl max-h-40 overflow-y-auto">
+                        {customerOptions.map((c) => (
+                          <div
+                            key={c.id}
+                            onMouseDown={() => onCustomerSelect(c)}
+                            className="px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-950/30 cursor-pointer text-slate-700 dark:text-slate-300 flex items-center justify-between"
+                          >
+                            <span className="font-medium">{c.first_name} {c.last_name}</span>
+                            {c.email && <span className="text-slate-400 text-[10px] truncate max-w-[120px]">{c.email}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Sale Date & Time *</label>

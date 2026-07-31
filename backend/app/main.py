@@ -50,6 +50,13 @@ def create_app() -> FastAPI:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             await conn.execute(text("CREATE SEQUENCE IF NOT EXISTS invoice_seq"))
+            await conn.execute(text("ALTER TABLE sales ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE SET NULL"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sales_customer_id ON sales(customer_id)"))
+            await conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS date_of_birth TIMESTAMP NULL"))
+            await conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS gender VARCHAR NULL"))
+            await conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS customer_type VARCHAR NULL DEFAULT 'RETAIL'"))
+            await conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS preferred_sales_channel VARCHAR NULL"))
+            await conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS postal_code VARCHAR NULL"))
 
     return application
 

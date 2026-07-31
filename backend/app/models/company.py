@@ -24,3 +24,5 @@ class Company(Base):
     sales = relationship("Sale", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")
     stock_movements = relationship("StockMovement", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")
     inventory_adjustments = relationship("InventoryAdjustment", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")
+    customers = relationship("Customer", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")
+    customer_timelines = relationship("CustomerTimeline", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")

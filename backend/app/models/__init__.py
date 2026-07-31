@@ -8,6 +8,8 @@ from app.models.transaction import Transaction, TransactionChannel, TransactionT
 from app.models.sale import Sale, SaleItem, SalesChannel, PaymentMethod, SaleStatus
 from app.models.notification import Notification, NotificationType
 from app.models.inventory import StockMovement, MovementType, InventoryAdjustment, AdjustmentType
+from app.models.customer import Customer, CustomerStatus, CustomerType
+from app.models.customer_timeline import CustomerTimeline
 
 __all__ = [
     "Company",
@@ -32,4 +34,8 @@ __all__ = [
     "MovementType",
     "InventoryAdjustment",
     "AdjustmentType",
+    "Customer",
+    "CustomerStatus",
+    "CustomerType",
+    "CustomerTimeline",
 ]

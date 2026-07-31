@@ -39,6 +39,7 @@ class SaleItemResponse(SaleItemBase):
 
 
 class SaleBase(BaseModel):
+    customer_id: Optional[UUID] = None
     customer_name: Optional[str] = None
     sale_date: Optional[datetime] = None
     sales_channel: SalesChannel
@@ -52,6 +53,7 @@ class SaleCreate(SaleBase):
 
 
 class SaleUpdate(BaseModel):
+    customer_id: Optional[UUID] = None
     customer_name: Optional[str] = None
     sale_date: Optional[datetime] = None
     sales_channel: Optional[SalesChannel] = None

@@ -17,6 +17,7 @@ import {
   Close as CloseIcon,
   Analytics as AnalyticsIcon,
   Refresh as RefreshIcon,
+  People as PeopleIcon,
 } from '@mui/icons-material';
 import { NotificationBell } from './NotificationBell';
 import { useQueryClient } from '@tanstack/react-query';
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { to: '/products',  label: 'Products',   Icon: InventoryIcon, adminOnly: true },
   { to: '/inventory', label: 'Inventory',  Icon: ShowChartIcon, adminOnly: true },
   { to: '/categories',label: 'Categories', Icon: CategoryIcon, adminOnly: true },
+  { to: '/customers', label: 'Customers',  Icon: PeopleIcon, adminOnly: true },
   { to: '/sales',     label: 'Sales',      Icon: ReceiptIcon, adminOnly: true },
 ];
 

@@ -10,6 +10,10 @@ class NotificationType(str, enum.Enum):
     LOW_STOCK = "LOW_STOCK"
     OUT_OF_STOCK = "OUT_OF_STOCK"
     SYSTEM = "SYSTEM"
+    CUSTOMER_REGISTERED = "CUSTOMER_REGISTERED"
+    VIP_STATUS = "VIP_STATUS"
+    CUSTOMER_INACTIVE = "CUSTOMER_INACTIVE"
+    FIRST_PURCHASE = "FIRST_PURCHASE"
 
 class Notification(Base):
     __tablename__ = "notifications"

@@ -32,6 +32,7 @@ class Sale(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
     invoice_number = Column(String, nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
     customer_name = Column(String, nullable=True)
     sale_date = Column(DateTime, nullable=False, default=datetime.utcnow)
     sales_channel = Column(SQLEnum(SalesChannel), nullable=False)
@@ -46,6 +47,7 @@ class Sale(Base):
 
     company = relationship("Company", back_populates="sales", lazy="raise_on_sql")
     created_by_user = relationship("User", back_populates="sales", lazy="raise_on_sql")
+    customer = relationship("Customer", back_populates="sales", lazy="raise_on_sql")
     items = relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan", lazy="raise_on_sql")
 
 

@@ -185,6 +185,7 @@ async def create_sale(
         payload.payment_method.value,
         items,
         request,
+        payload.customer_id,
     )
     return await get_sale(sale.id, current_user, db)
 
