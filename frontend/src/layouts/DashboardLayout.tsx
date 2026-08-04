@@ -18,6 +18,7 @@ import {
   Analytics as AnalyticsIcon,
   Refresh as RefreshIcon,
   People as PeopleIcon,
+  Timeline as TimelineIcon,
 } from '@mui/icons-material';
 import { NotificationBell } from './NotificationBell';
 import { useQueryClient } from '@tanstack/react-query';
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', Icon: DashIcon, adminOnly: false },
   { to: '/profile',   label: 'My Profile', Icon: ProfileIcon, adminOnly: false },
   { to: '/analytics', label: 'Analytics', Icon: AnalyticsIcon, adminOnly: true },
+  { to: '/forecast',  label: 'Forecast', Icon: TimelineIcon, adminOnly: true },
   { to: '/products',  label: 'Products',   Icon: InventoryIcon, adminOnly: true },
   { to: '/inventory', label: 'Inventory',  Icon: ShowChartIcon, adminOnly: true },
   { to: '/categories',label: 'Categories', Icon: CategoryIcon, adminOnly: true },

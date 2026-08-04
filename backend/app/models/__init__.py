@@ -10,6 +10,7 @@ from app.models.notification import Notification, NotificationType
 from app.models.inventory import StockMovement, MovementType, InventoryAdjustment, AdjustmentType
 from app.models.customer import Customer, CustomerStatus, CustomerType
 from app.models.customer_timeline import CustomerTimeline
+from app.models.forecast import DemandForecast, ForecastHistory, ForecastPeriodType, RecommendationType
 
 __all__ = [
     "Company",
@@ -38,4 +39,8 @@ __all__ = [
     "CustomerStatus",
     "CustomerType",
     "CustomerTimeline",
+    "DemandForecast",
+    "ForecastHistory",
+    "ForecastPeriodType",
+    "RecommendationType",
 ]

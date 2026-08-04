@@ -24,3 +24,4 @@ class Category(Base):
     company = relationship("Company", back_populates="categories", lazy="raise_on_sql")
     products = relationship("Product", back_populates="category", lazy="raise_on_sql")
     sale_items = relationship("SaleItem", back_populates="category", lazy="raise_on_sql")
+    demand_forecasts = relationship("DemandForecast", back_populates="category", lazy="raise_on_sql")

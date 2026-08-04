@@ -47,3 +47,4 @@ class Product(Base):
     sale_items = relationship("SaleItem", back_populates="product", lazy="raise_on_sql")
     stock_movements = relationship("StockMovement", back_populates="product", lazy="raise_on_sql")
     inventory_adjustments = relationship("InventoryAdjustment", back_populates="product", lazy="raise_on_sql")
+    demand_forecasts = relationship("DemandForecast", back_populates="product", lazy="raise_on_sql")
