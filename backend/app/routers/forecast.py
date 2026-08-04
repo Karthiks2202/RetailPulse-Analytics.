@@ -2,6 +2,7 @@ import csv
 import io
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 from app.database import get_db
@@ -273,7 +274,7 @@ async def export_category_forecast_csv(
     return ForecastExportResponse(content=output.getvalue(), filename="category_forecast_report.csv", content_type="text/csv")
 
 
-@router.get("/export/report", response_model=ForecastExportResponse)
+@router.get("/export/report")
 async def export_forecast_pdf(
     request: Request,
     current_user=Depends(get_current_active_user),
@@ -339,7 +340,12 @@ async def export_forecast_pdf(
     )
     await db.commit()
 
-    return ForecastExportResponse(content=buffer.getvalue(), filename="forecast_report.pdf", content_type="application/pdf")
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=forecast_report.pdf"},
+    )
 
 
 # NOTE: /{forecast_id} MUST be declared LAST — it is a catch-all that would

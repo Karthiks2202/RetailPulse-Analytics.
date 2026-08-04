@@ -49,7 +49,7 @@ class DemandForecastListItem(BaseModel):
 
 
 class CategoryForecastResponse(BaseModel):
-    id: UUID
+    id: str
     category_id: Optional[UUID]
     category_name: str
     total_historical_sales: int

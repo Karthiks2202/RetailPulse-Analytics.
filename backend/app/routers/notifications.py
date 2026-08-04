@@ -20,8 +20,11 @@ async def list_notifications(
     notifications, total = await notification_crud.get_all(
         db, current_user.company_id, skip=skip, limit=limit
     )
+    
+    serialized_notifications = [NotificationResponse.model_validate(n).model_dump(mode='json') for n in notifications]
+    
     return {
-        "data": notifications,
+        "data": serialized_notifications,
         "total": total,
         "skip": skip,
         "limit": limit

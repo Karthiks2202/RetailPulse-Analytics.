@@ -3,7 +3,7 @@ from sqlalchemy import select, func
 from uuid import UUID
 from datetime import datetime
 from typing import Optional, Tuple, List
-from app.models.forecast import DemandForecast, ForecastHistory, ForecastPeriodType
+from app.models.forecast import DemandForecast, ForecastHistory, ForecastPeriodType, RecommendationType
 from app.models.product import Product, ProductStatus
 from app.models.category import Category
 from app.models.sale import Sale, SaleItem, SaleStatus

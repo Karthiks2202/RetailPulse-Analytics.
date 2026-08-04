@@ -115,8 +115,8 @@ export const getTopPredictedProducts = async (forecast_period?: string) => {
   return data;
 };
 
-export const getAccuracyTrend = async (): Promise<Array<{ period: string; historical: number; prediction: number; accuracy: number | null }>> => {
-  const { data } = await axiosInstance.get('/forecast/charts/accuracy-trend');
+export const getAccuracyTrend = async (forecast_period?: string): Promise<Array<{ period: string; historical: number; prediction: number; accuracy: number | null }>> => {
+  const { data } = await axiosInstance.get('/forecast/charts/accuracy-trend', { params: { forecast_period } });
   return data;
 };
 

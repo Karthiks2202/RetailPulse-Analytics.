@@ -120,8 +120,8 @@ export const Forecast: React.FC = () => {
   });
 
   const { data: accuracyTrend } = useQuery({
-    queryKey: ['forecast', 'charts', 'accuracy-trend'],
-    queryFn: getAccuracyTrend,
+    queryKey: ['forecast', 'charts', 'accuracy-trend', forecastPeriod],
+    queryFn: () => getAccuracyTrend(forecastPeriod),
     enabled: tab === 'analytics',
   });
 

@@ -8,3 +8,4 @@ python-multipart==0.0.18
 pydantic==2.10.4
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
+reportlab>=4.0.0
