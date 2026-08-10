@@ -26,6 +26,12 @@ class SaleStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class PaymentStatus(str, enum.Enum):
+    PAID = "PAID"
+    PENDING = "PENDING"
+    PARTIAL = "PARTIAL"
+
+
 class Sale(Base):
     __tablename__ = "sales"
 
@@ -37,6 +43,7 @@ class Sale(Base):
     sale_date = Column(DateTime, nullable=False, default=datetime.utcnow)
     sales_channel = Column(SQLEnum(SalesChannel), nullable=False)
     payment_method = Column(SQLEnum(PaymentMethod), nullable=False)
+    payment_status = Column(SQLEnum(PaymentStatus), nullable=False, default=PaymentStatus.PAID)
     total_amount = Column(Numeric(12, 2), nullable=False, default=0)
     status = Column(SQLEnum(SaleStatus), nullable=False, default=SaleStatus.COMPLETED)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

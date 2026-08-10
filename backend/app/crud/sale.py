@@ -57,6 +57,7 @@ class CRUDSale:
         date_to: datetime | None = None,
         sales_channel: str | None = None,
         payment_method: str | None = None,
+        payment_status: str | None = None,
         category_id: UUID | None = None,
         sort_by: str = "created_at",
         sort_dir: str = "desc",
@@ -89,6 +90,9 @@ class CRUDSale:
 
         if payment_method:
             query = query.where(Sale.payment_method == payment_method)
+
+        if payment_status:
+            query = query.where(Sale.payment_status == payment_status)
 
         if category_id:
             query = query.join(SaleItem).where(SaleItem.category_id == category_id).distinct()
@@ -123,6 +127,7 @@ class CRUDSale:
         date_to: datetime | None = None,
         sales_channel: str | None = None,
         payment_method: str | None = None,
+        payment_status: str | None = None,
         category_id: UUID | None = None,
         sort_by: str = "created_at",
         sort_dir: str = "desc",
@@ -155,6 +160,9 @@ class CRUDSale:
 
         if payment_method:
             query = query.where(Sale.payment_method == payment_method)
+
+        if payment_status:
+            query = query.where(Sale.payment_status == payment_status)
 
         if category_id:
             query = query.join(SaleItem).where(SaleItem.category_id == category_id).distinct()
@@ -204,6 +212,12 @@ class CRUDSale:
             if matched:
                 customer_id = matched.id
 
+        if customer_id:
+            from app.models.customer import Customer
+            customer = await db.get(Customer, customer_id)
+            if not customer or customer.company_id != company_id:
+                raise ValueError("Customer not found")
+
         total_amount = Decimal("0")
         sale_items = []
         product_updates = []
@@ -231,8 +245,8 @@ class CRUDSale:
                     raise ValueError("Unit price cannot be negative")
                 if discount < 0:
                     raise ValueError("Discount cannot be negative")
-                item_subtotal = (unit_price * quantity) - discount
-                if discount > item_subtotal:
+                gross_amount = unit_price * quantity
+                if discount > gross_amount:
                     raise ValueError("Discount cannot exceed total product value")
                 if tax < 0:
                     raise ValueError("Tax cannot be negative")
@@ -376,8 +390,8 @@ class CRUDSale:
                         raise ValueError("Unit price cannot be negative")
                     if discount < 0:
                         raise ValueError("Discount cannot be negative")
-                    item_subtotal = (unit_price * quantity) - discount
-                    if discount > item_subtotal:
+                    gross_amount = unit_price * quantity
+                    if discount > gross_amount:
                         raise ValueError("Discount cannot exceed total product value")
                     if tax < 0:
                         raise ValueError("Tax cannot be negative")
@@ -424,11 +438,6 @@ class CRUDSale:
                 setattr(sale, field, payload[field])
 
         sale.updated_at = datetime.utcnow()
-        await db.commit()
-        await db.refresh(sale, attribute_names=["items"])
-
-        for item in sale.items:
-            await db.refresh(item)
 
         await self._log_audit(db, company_id, user_id, "Sale Updated", request, entity_name=sale.invoice_number, details=f"Sale {sale.invoice_number} updated")
 
@@ -448,6 +457,12 @@ class CRUDSale:
                         user_id=user_id,
                         reason=f"Sale update - {sale.invoice_number}",
                     )
+
+        await db.commit()
+        await db.refresh(sale, attribute_names=["items"])
+
+        for item in sale.items:
+            await db.refresh(item)
 
         return sale
 

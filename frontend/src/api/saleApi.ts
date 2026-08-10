@@ -5,6 +5,7 @@ import type { Product } from './productApi';
 export type SalesChannel = 'Retail Store' | 'Online Store' | 'Marketplace';
 
 export type PaymentMethod = 'Cash' | 'Card' | 'UPI' | 'Bank Transfer';
+export type PaymentStatus = 'PAID' | 'PENDING' | 'PARTIAL';
 
 export interface SaleItem {
   id: string;
@@ -28,9 +29,11 @@ export interface Sale {
   sale_date: string;
   sales_channel: SalesChannel;
   payment_method: PaymentMethod;
+  payment_status: PaymentStatus;
   total_amount: number;
   status: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
   created_by: string | null;
+  created_by_name: string | null;
   created_at: string;
   updated_at: string;
   items: SaleItem[];
@@ -44,8 +47,10 @@ export interface SaleListItem {
   sale_date: string;
   sales_channel: SalesChannel;
   payment_method: PaymentMethod;
+  payment_status: PaymentStatus;
   total_amount: number;
   status: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
+  created_by_name: string | null;
   item_count: number;
   created_at: string;
   updated_at: string;
@@ -93,6 +98,7 @@ export const getSales = async (params?: {
   date_to?: string;
   sales_channel?: string;
   payment_method?: string;
+  payment_status?: string;
   category_id?: string;
   sort_by?: string;
   sort_dir?: string;

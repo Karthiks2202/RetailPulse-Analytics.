@@ -8,15 +8,15 @@ from app.models.customer import CustomerStatus, CustomerType
 class CustomerBase(BaseModel):
     first_name: str
     last_name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
+    email: str
+    phone: str
+    address: str
+    city: str
+    state: str
+    country: str
+    postal_code: str
     date_of_birth: Optional[datetime] = None
     gender: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    postal_code: Optional[str] = None
-    country: Optional[str] = None
     customer_type: CustomerType = CustomerType.RETAIL
     preferred_sales_channel: Optional[str] = None
     notes: Optional[str] = None

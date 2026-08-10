@@ -8,9 +8,10 @@ from datetime import datetime
 from io import StringIO
 import csv
 from app.database import get_db
-from app.models.sale import Sale, SaleStatus
+from app.models.sale import Sale, SaleStatus, PaymentStatus
 from app.models.product import Product
 from app.models.category import Category
+from app.models.user import User
 from app.schemas.sale import SaleCreate, SaleUpdate, SaleResponse, SaleListItemResponse, SaleSummaryResponse, SaleItemResponse
 from app.schemas.category import CategoryResponse
 from app.schemas.product import ProductResponse
@@ -66,6 +67,7 @@ async def list_sales(
     date_to: datetime | None = Query(None),
     sales_channel: str | None = Query(None),
     payment_method: str | None = Query(None),
+    payment_status: str | None = Query(None),
     category_id: UUID | None = Query(None),
     sort_by: str = Query("created_at", pattern="^(created_at|invoice_number|total_amount|sale_date)$"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
@@ -84,12 +86,17 @@ async def list_sales(
         date_to=date_to,
         sales_channel=sales_channel,
         payment_method=payment_method,
+        payment_status=payment_status,
         category_id=category_id,
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
     result = []
     for s in sales:
+        creator_name = None
+        if s.created_by:
+            user_result = await db.execute(select(User.name).where(User.id == s.created_by))
+            creator_name = user_result.scalar_one_or_none()
         result.append(SaleListItemResponse(
             id=s.id,
             company_id=s.company_id,
@@ -98,8 +105,10 @@ async def list_sales(
             sale_date=s.sale_date,
             sales_channel=s.sales_channel,
             payment_method=s.payment_method,
+            payment_status=s.payment_status,
             total_amount=float(s.total_amount),
             status=s.status,
+            created_by_name=creator_name,
             item_count=len(s.items) if s.items else 0,
             created_at=s.created_at,
             updated_at=s.updated_at,
@@ -150,6 +159,11 @@ async def get_sale(
             category=None,
         ))
 
+    creator_name = None
+    if sale.created_by:
+        user_result = await db.execute(select(User.name).where(User.id == sale.created_by))
+        creator_name = user_result.scalar_one_or_none()
+
     return SaleResponse(
         id=sale.id,
         company_id=sale.company_id,
@@ -158,9 +172,11 @@ async def get_sale(
         sale_date=sale.sale_date,
         sales_channel=sale.sales_channel,
         payment_method=sale.payment_method,
+        payment_status=sale.payment_status,
         total_amount=float(sale.total_amount),
         status=sale.status,
         created_by=sale.created_by,
+        created_by_name=creator_name,
         created_at=sale.created_at,
         updated_at=sale.updated_at,
         items=items,

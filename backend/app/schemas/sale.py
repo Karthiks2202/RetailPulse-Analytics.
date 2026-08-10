@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
 from uuid import UUID
-from app.models.sale import SalesChannel, PaymentMethod, SaleStatus
+from app.models.sale import SalesChannel, PaymentMethod, SaleStatus, PaymentStatus
 from app.schemas.product import ProductResponse
 from app.schemas.category import CategoryResponse
 
@@ -44,6 +44,7 @@ class SaleBase(BaseModel):
     sale_date: Optional[datetime] = None
     sales_channel: SalesChannel
     payment_method: PaymentMethod
+    payment_status: PaymentStatus = PaymentStatus.PAID
     status: SaleStatus = SaleStatus.COMPLETED
     notes: Optional[str] = None
     items: List[SaleItemCreate]
@@ -59,6 +60,7 @@ class SaleUpdate(BaseModel):
     sale_date: Optional[datetime] = None
     sales_channel: Optional[SalesChannel] = None
     payment_method: Optional[PaymentMethod] = None
+    payment_status: Optional[PaymentStatus] = None
     status: Optional[SaleStatus] = None
     notes: Optional[str] = None
     items: Optional[List[SaleItemCreate]] = None
@@ -70,6 +72,7 @@ class SaleResponse(SaleBase):
     invoice_number: str
     total_amount: float
     created_by: Optional[UUID] = None
+    created_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     items: List[SaleItemResponse] = []
@@ -85,8 +88,10 @@ class SaleListItemResponse(BaseModel):
     sale_date: datetime
     sales_channel: SalesChannel
     payment_method: PaymentMethod
+    payment_status: PaymentStatus
     total_amount: float
     status: SaleStatus
+    created_by_name: Optional[str] = None
     notes: Optional[str] = None
     item_count: int = 0
     created_at: datetime

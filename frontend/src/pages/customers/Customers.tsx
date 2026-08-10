@@ -98,6 +98,7 @@ const Customers: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [customerTypeFilter, setCustomerTypeFilter] = useState('');
+  const [segmentFilter, setSegmentFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [stateFilter, setStateFilter] = useState('');
   const [countryFilter, setCountryFilter] = useState('');
@@ -136,12 +137,13 @@ const Customers: React.FC = () => {
   });
 
   const { data: customers = [], isLoading, isError } = useQuery({
-    queryKey: ['customers', { search, statusFilter, customerTypeFilter, cityFilter, stateFilter, countryFilter, dateFrom, dateTo, sortBy, sortDir }],
+    queryKey: ['customers', { search, statusFilter, customerTypeFilter, segmentFilter, cityFilter, stateFilter, countryFilter, dateFrom, dateTo, sortBy, sortDir }],
     queryFn: () =>
       getCustomers({
         search: search || undefined,
         status: statusFilter || undefined,
         customer_type: customerTypeFilter || undefined,
+        segment: segmentFilter || undefined,
         city: cityFilter || undefined,
         state: stateFilter || undefined,
         country: countryFilter || undefined,
@@ -598,6 +600,13 @@ const Customers: React.FC = () => {
             <option value="WHOLESALE">Wholesale</option>
             <option value="CORPORATE">Corporate</option>
           </select>
+          <select value={segmentFilter} onChange={(e) => setSegmentFilter(e.target.value)} className={`${inputClass} lg:w-36`}>
+            <option value="">All Segments</option>
+            <option value="NEW">New</option>
+            <option value="REGULAR">Regular</option>
+            <option value="LOYAL">Loyal</option>
+            <option value="VIP">VIP</option>
+          </select>
           <input
             type="text"
             value={cityFilter}
@@ -673,12 +682,12 @@ const Customers: React.FC = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
-                  <th className="px-6 py-3 font-bold">Customer</th>
-                  <th className="px-6 py-3 font-bold">Contact</th>
-                  <th className="px-6 py-3 font-bold">Location</th>
-                  <th className="px-6 py-3 font-bold">Type</th>
-                  <th className="px-6 py-3 font-bold">Purchases</th>
-                  <th className="px-6 py-3 font-bold">Total Spent</th>
+                  <th className="px-6 py-3 font-bold">Customer Name</th>
+                  <th className="px-6 py-3 font-bold">Email</th>
+                  <th className="px-6 py-3 font-bold">Phone</th>
+                  <th className="px-6 py-3 font-bold">Segment</th>
+                  <th className="px-6 py-3 font-bold">Total Purchases</th>
+                  <th className="px-6 py-3 font-bold">Total Spend</th>
                   <th className="px-6 py-3 font-bold">Status</th>
                   {isAdmin && <th className="px-6 py-3 font-bold text-right">Actions</th>}
                 </tr>
@@ -688,20 +697,11 @@ const Customers: React.FC = () => {
                   <tr key={cust.id} className="group border-b border-slate-100 dark:border-slate-800/60 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
                     <td className="px-6 py-3.5">
                       <div className="font-bold text-slate-800 dark:text-slate-100">{fullName(cust)}</div>
-                      {cust.notes && (
-                        <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[220px]">{cust.notes}</div>
-                      )}
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-slate-600 dark:text-slate-300">{cust.email || '—'}</div>
-                      <div className="text-[11px] text-slate-400 dark:text-slate-500">{cust.phone || '—'}</div>
-                    </td>
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{cust.email || '—'}</td>
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{cust.phone || '—'}</td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-300">
-                      {[cust.city, cust.state, cust.country].filter(Boolean).join(', ') || '—'}
-                    </td>
-                    <td className="px-6 py-4 text-slate-600 dark:text-slate-300">
-                      <div className="font-semibold capitalize">{(cust as any).customer_type?.toLowerCase() || '—'}</div>
-                      <div className="text-[11px] text-slate-400">{(cust as any).preferred_sales_channel || '—'}</div>
+                      <div className="font-semibold capitalize">{(cust as any).segment?.toLowerCase() || '—'}</div>
                     </td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{cust.total_purchases}</td>
                     <td className="px-6 py-4 font-semibold text-slate-800 dark:text-slate-100">{formatCurrency(cust.total_spent)}</td>
@@ -756,8 +756,133 @@ const Customers: React.FC = () => {
               </tbody>
             </table>
         </div>
+        )}
+      </div>
+
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto animate-modal-enter">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900">
+              <div>
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                  {editing ? 'Edit Customer' : 'New Customer'}
+                </h2>
+                <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                  {editing ? 'Update customer information' : 'Add a new customer to your database'}
+                </p>
+              </div>
+              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+                <CloseIcon style={{ fontSize: 20 }} />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
+              {modalError && (
+                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-red-700 dark:text-red-400 text-xs font-medium px-4 py-3 rounded-lg">
+                  {modalError}
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">First Name</label>
+                  <input {...register('first_name')} className={`${inputClass} w-full`} placeholder="First name" />
+                  {errors.first_name && <p className="text-red-500 text-[10px] mt-1">{errors.first_name.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Last Name</label>
+                  <input {...register('last_name')} className={`${inputClass} w-full`} placeholder="Last name" />
+                  {errors.last_name && <p className="text-red-500 text-[10px] mt-1">{errors.last_name.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Email</label>
+                  <input type="email" {...register('email')} className={`${inputClass} w-full`} placeholder="email@example.com" />
+                  {errors.email && <p className="text-red-500 text-[10px] mt-1">{errors.email.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Phone</label>
+                  <input {...register('phone')} className={`${inputClass} w-full`} placeholder="+1 234 567 8900" />
+                  {errors.phone && <p className="text-red-500 text-[10px] mt-1">{errors.phone.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Date of Birth</label>
+                  <input type="date" {...register('date_of_birth')} className={`${inputClass} w-full`} />
+                  {errors.date_of_birth && <p className="text-red-500 text-[10px] mt-1">{errors.date_of_birth.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Gender</label>
+                  <select {...register('gender')} className={`${inputClass} w-full`}>
+                    <option value="">Select gender</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                    <option value="prefer_not_to_say">Prefer not to say</option>
+                  </select>
+                  {errors.gender && <p className="text-red-500 text-[10px] mt-1">{errors.gender.message}</p>}
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Address</label>
+                  <input {...register('address')} className={`${inputClass} w-full`} placeholder="Street address" />
+                  {errors.address && <p className="text-red-500 text-[10px] mt-1">{errors.address.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">City</label>
+                  <input {...register('city')} className={`${inputClass} w-full`} placeholder="City" />
+                  {errors.city && <p className="text-red-500 text-[10px] mt-1">{errors.city.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">State</label>
+                  <input {...register('state')} className={`${inputClass} w-full`} placeholder="State" />
+                  {errors.state && <p className="text-red-500 text-[10px] mt-1">{errors.state.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Postal Code</label>
+                  <input {...register('postal_code')} className={`${inputClass} w-full`} placeholder="Postal code" />
+                  {errors.postal_code && <p className="text-red-500 text-[10px] mt-1">{errors.postal_code.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Country</label>
+                  <input {...register('country')} className={`${inputClass} w-full`} placeholder="Country" />
+                  {errors.country && <p className="text-red-500 text-[10px] mt-1">{errors.country.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Customer Type</label>
+                  <select {...register('customer_type')} className={`${inputClass} w-full`}>
+                    <option value="RETAIL">Retail</option>
+                    <option value="WHOLESALE">Wholesale</option>
+                    <option value="CORPORATE">Corporate</option>
+                  </select>
+                  {errors.customer_type && <p className="text-red-500 text-[10px] mt-1">{errors.customer_type.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Preferred Sales Channel</label>
+                  <input {...register('preferred_sales_channel')} className={`${inputClass} w-full`} placeholder="e.g. Online, In-store" />
+                  {errors.preferred_sales_channel && <p className="text-red-500 text-[10px] mt-1">{errors.preferred_sales_channel.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Status</label>
+                  <select {...register('status')} className={`${inputClass} w-full`}>
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                  </select>
+                  {errors.status && <p className="text-red-500 text-[10px] mt-1">{errors.status.message}</p>}
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Notes</label>
+                  <textarea {...register('notes')} className={`${inputClass} w-full`} rows={3} placeholder="Optional notes about this customer" />
+                  {errors.notes && <p className="text-red-500 text-[10px] mt-1">{errors.notes.message}</p>}
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
+                  Cancel
+                </button>
+                <button type="submit" disabled={mutation.isPending} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                  {mutation.isPending ? 'Saving...' : editing ? 'Update Customer' : 'Create Customer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
-    </div>
 
       {historyOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4 animate-fade-in">

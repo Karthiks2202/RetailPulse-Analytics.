@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { formatCurrency } from '../../utils/currency';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 import {
@@ -48,6 +50,9 @@ const currency = formatCurrency;
 interface SaleItemForm {
   product_id: string;
   product_name: string;
+  sku: string;
+  category: string;
+  available_stock: number;
   quantity: number;
   unit_price: number;
   discount: number;
@@ -76,6 +81,9 @@ export const Sales: React.FC = () => {
   const [customerFilter, setCustomerFilter] = useState('');
   const [channelFilter, setChannelFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [sortBy, setSortBy] = useState<'created_at' | 'invoice_number' | 'total_amount' | 'sale_date'>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -92,13 +100,16 @@ export const Sales: React.FC = () => {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
 
   const { data: sales = [], isLoading, isError } = useQuery({
-    queryKey: ['sales', { search, customerFilter, channelFilter, paymentFilter, sortBy, sortDir }],
+    queryKey: ['sales', { search, customerFilter, channelFilter, paymentFilter, paymentStatusFilter, dateFrom, dateTo, sortBy, sortDir }],
     queryFn: () =>
       getSales({
         search: search || undefined,
         customer_name: customerFilter || undefined,
         sales_channel: channelFilter || undefined,
         payment_method: paymentFilter || undefined,
+        payment_status: paymentStatusFilter || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
         sort_by: sortBy,
         sort_dir: sortDir,
       }),
@@ -221,6 +232,9 @@ export const Sales: React.FC = () => {
     const items = full.items.map((it) => ({
       product_id: it.product_id || '',
       product_name: it.product?.name || '',
+      sku: it.product?.sku || '',
+      category: it.product?.category?.name || it.category?.name || '',
+      available_stock: it.product?.stock_quantity || 0,
       quantity: it.quantity,
       unit_price: it.unit_price,
       discount: it.discount,
@@ -260,6 +274,9 @@ export const Sales: React.FC = () => {
     setValue('items', [...items, {
       product_id: '',
       product_name: '',
+      sku: '',
+      category: '',
+      available_stock: 0,
       quantity: 1,
       unit_price: 0,
       discount: 0,
@@ -304,6 +321,9 @@ export const Sales: React.FC = () => {
     if (prod) {
       updateItemField(index, 'product_id', prod.id);
       updateItemField(index, 'product_name', prod.name);
+      updateItemField(index, 'sku', prod.sku);
+      updateItemField(index, 'category', prod.category?.name || '');
+      updateItemField(index, 'available_stock', prod.stock_quantity);
       updateItemField(index, 'unit_price', prod.unit_price);
       const availableStock = prod.stock_quantity;
       const qty = availableStock > 0 ? 1 : 0;
@@ -452,9 +472,27 @@ export const Sales: React.FC = () => {
   const handleExportPDF = async () => {
     try {
       const result = await exportSalesPDF();
-      showNotification(result.message || 'PDF data generated. Use a PDF library to render.', 'success');
+      const rows = result.content || [];
+      if (!Array.isArray(rows) || rows.length === 0) {
+        showNotification('No data to export', 'error');
+        return;
+      }
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Sales Report', 14, 15);
+      const headers = Object.keys(rows[0]);
+      const body = rows.map((row: any) => headers.map(key => String(row[key] !== null && row[key] !== undefined ? row[key] : '')));
+      autoTable(doc, {
+        head: [headers],
+        body: body,
+        startY: 20,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [220, 38, 38] }
+      });
+      doc.save(result.filename || 'sales.pdf');
+      showNotification('Sales exported as PDF', 'success');
     } catch {
-      showNotification('Failed to export sales as PDF.', 'error');
+      showNotification('Failed to export sales as PDF', 'error');
     }
   };
 
@@ -548,6 +586,26 @@ export const Sales: React.FC = () => {
               <option key={p} value={p}>{p}</option>
             ))}
           </select>
+          <select value={paymentStatusFilter} onChange={(e) => setPaymentStatusFilter(e.target.value)} className={`${inputClass} lg:w-40`}>
+            <option value="">All Payment Status</option>
+            <option value="PAID">Paid</option>
+            <option value="PENDING">Pending</option>
+            <option value="PARTIAL">Partial</option>
+          </select>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            placeholder="From"
+            className={`${inputClass} lg:w-40`}
+          />
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            placeholder="To"
+            className={`${inputClass} lg:w-40`}
+          />
           <select
             value={`${sortBy}-${sortDir}`}
             onChange={(e) => {
@@ -587,12 +645,12 @@ export const Sales: React.FC = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
-                  <th className="px-6 py-3 font-bold">Invoice</th>
-                  <th className="px-6 py-3 font-bold">Customer</th>
-                  <th className="px-6 py-3 font-bold">Date</th>
-                  <th className="px-6 py-3 font-bold">Items</th>
-                  <th className="px-6 py-3 font-bold">Amount</th>
-                  <th className="px-6 py-3 font-bold">Status</th>
+                  <th className="px-6 py-3 font-bold">Invoice Number</th>
+                  <th className="px-6 py-3 font-bold">Customer Name</th>
+                  <th className="px-6 py-3 font-bold">Sale Date</th>
+                  <th className="px-6 py-3 font-bold">Number of Items</th>
+                  <th className="px-6 py-3 font-bold">Total Amount</th>
+                  <th className="px-6 py-3 font-bold">Payment Status</th>
                   {isAdmin && <th className="px-6 py-3 font-bold text-right">Actions</th>}
                 </tr>
               </thead>
@@ -606,11 +664,12 @@ export const Sales: React.FC = () => {
                     <td className="px-6 py-3.5 font-semibold text-slate-800 dark:text-slate-100">{currency(sale.total_amount)}</td>
                     <td className="px-6 py-3.5">
                       <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold capitalize tracking-wide ${
-                        sale.status === 'COMPLETED' ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/30' :
-                        sale.status === 'DRAFT' ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/30' :
+                        sale.payment_status === 'PAID' ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/30' :
+                        sale.payment_status === 'PENDING' ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/30' :
+                        sale.payment_status === 'PARTIAL' ? 'bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-900/30' :
                         'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/30'
                       }`}>
-                        {sale.status.toLowerCase()}
+                        {sale.payment_status.toLowerCase()}
                       </span>
                     </td>
                     {isAdmin && (
@@ -745,65 +804,77 @@ export const Sales: React.FC = () => {
                 {watchedItems.length === 0 && (
                   <p className="text-xs text-slate-400 mb-2">No items added yet. Click "Add Item" to add products.</p>
                 )}
-                <div className="space-y-3">
-                  {watchedItems.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-end p-3 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50/50 dark:bg-slate-950/30">
-                      <div className="col-span-12 md:col-span-3">
-                        <label className="block text-[10px] font-semibold text-slate-500 mb-1">Product *</label>
-                        <input
-                          value={item.product_name}
-                          onChange={(e) => updateItemField(idx, 'product_name', e.target.value)}
-                          onFocus={async () => {
-                            setSelectedProduct(item.product_id);
-                            await fetchProducts(item.product_name);
-                          }}
-                          placeholder="Search product..."
-                          className={`${inputClass} text-[11px]`}
-                        />
-                        {productOptions.length > 0 && selectedProduct === item.product_id && (
-                          <div className="relative">
-                            <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl max-h-40 overflow-y-auto">
-                              {productOptions.map((p) => (
-                                <div
-                                  key={p.id}
-                                  className="px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-950/30 cursor-pointer text-slate-700 dark:text-slate-300"
-                                  onClick={() => onProductSelect(idx, p.id)}
-                                >
-                                  {p.name} ({p.sku}) - Stock: {p.stock_quantity}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <div className="col-span-6 md:col-span-1">
-                        <label className="block text-[10px] font-semibold text-slate-500 mb-1">Qty *</label>
-                        <input type="number" min="1" value={item.quantity} onChange={(e) => updateItemField(idx, 'quantity', Number(e.target.value))} className={`${inputClass} text-[11px] w-full`} />
-                      </div>
-                      <div className="col-span-6 md:col-span-2">
-                        <label className="block text-[10px] font-semibold text-slate-500 mb-1">Unit Price</label>
-                        <input type="number" step="0.01" min="0" value={item.unit_price} onChange={(e) => updateItemField(idx, 'unit_price', Number(e.target.value))} className={`${inputClass} text-[11px] w-full`} />
-                      </div>
-                      <div className="col-span-6 md:col-span-1">
-                        <label className="block text-[10px] font-semibold text-slate-500 mb-1">Disc</label>
-                        <input type="number" step="0.01" min="0" value={item.discount} onChange={(e) => updateItemField(idx, 'discount', Number(e.target.value))} className={`${inputClass} text-[11px] w-full`} />
-                      </div>
-                      <div className="col-span-6 md:col-span-2">
-                        <label className="block text-[10px] font-semibold text-slate-500 mb-1">Tax</label>
-                        <input type="number" step="0.01" min="0" value={item.tax} onChange={(e) => updateItemField(idx, 'tax', Number(e.target.value))} className={`${inputClass} text-[11px] w-full`} />
-                      </div>
-                      <div className="col-span-10 md:col-span-2">
-                        <label className="block text-[10px] font-semibold text-slate-500 mb-1">Total</label>
-                        <div className="text-xs font-bold text-slate-700 dark:text-slate-200 pt-2 px-1 truncate" title={currency(item.total)}>{currency(item.total)}</div>
-                      </div>
-                      <div className="col-span-2 md:col-span-1 flex justify-end">
-                        <button type="button" onClick={() => removeItem(idx)} className="p-1.5 rounded text-red-500 hover:text-red-700 mb-1">
-                          <CloseIcon style={{ fontSize: 16 }} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                 <div className="space-y-3">
+                   {watchedItems.map((item, idx) => (
+                     <div key={idx} className="grid grid-cols-12 gap-2 items-end p-3 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50/50 dark:bg-slate-950/30">
+                       <div className="col-span-12 md:col-span-2">
+                         <label className="block text-[10px] font-semibold text-slate-500 mb-1">Product *</label>
+                         <input
+                           value={item.product_name}
+                           onChange={(e) => updateItemField(idx, 'product_name', e.target.value)}
+                           onFocus={async () => {
+                             setSelectedProduct(item.product_id);
+                             await fetchProducts(item.product_name);
+                           }}
+                           placeholder="Search product..."
+                           className={`${inputClass} text-[11px]`}
+                         />
+                         {productOptions.length > 0 && selectedProduct === item.product_id && (
+                           <div className="relative">
+                             <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl max-h-40 overflow-y-auto">
+                               {productOptions.map((p) => (
+                                 <div
+                                   key={p.id}
+                                   className="px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-950/30 cursor-pointer text-slate-700 dark:text-slate-300"
+                                   onClick={() => onProductSelect(idx, p.id)}
+                                 >
+                                   {p.name} ({p.sku}) - Stock: {p.stock_quantity}
+                                 </div>
+                               ))}
+                             </div>
+                           </div>
+                         )}
+                       </div>
+                       <div className="col-span-6 md:col-span-1">
+                         <label className="block text-[10px] font-semibold text-slate-500 mb-1">SKU</label>
+                         <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300 pt-2 truncate" title={item.sku}>{item.sku || '—'}</div>
+                       </div>
+                       <div className="col-span-6 md:col-span-1">
+                         <label className="block text-[10px] font-semibold text-slate-500 mb-1">Category</label>
+                         <div className="text-[11px] text-slate-600 dark:text-slate-300 pt-2 truncate" title={item.category}>{item.category || '—'}</div>
+                       </div>
+                       <div className="col-span-4 md:col-span-1">
+                         <label className="block text-[10px] font-semibold text-slate-500 mb-1">Available</label>
+                         <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300 pt-2">{item.available_stock}</div>
+                       </div>
+                       <div className="col-span-4 md:col-span-1">
+                         <label className="block text-[10px] font-semibold text-slate-500 mb-1">Qty *</label>
+                         <input type="number" min="1" value={item.quantity} onChange={(e) => updateItemField(idx, 'quantity', Number(e.target.value))} className={`${inputClass} text-[11px] w-full`} />
+                       </div>
+                       <div className="col-span-4 md:col-span-1">
+                         <label className="block text-[10px] font-semibold text-slate-500 mb-1">Unit Price</label>
+                         <input type="number" step="0.01" min="0" value={item.unit_price} onChange={(e) => updateItemField(idx, 'unit_price', Number(e.target.value))} className={`${inputClass} text-[11px] w-full`} />
+                       </div>
+                       <div className="col-span-6 md:col-span-1">
+                         <label className="block text-[10px] font-semibold text-slate-500 mb-1">Disc</label>
+                         <input type="number" step="0.01" min="0" value={item.discount} onChange={(e) => updateItemField(idx, 'discount', Number(e.target.value))} className={`${inputClass} text-[11px] w-full`} />
+                       </div>
+                       <div className="col-span-6 md:col-span-1">
+                         <label className="block text-[10px] font-semibold text-slate-500 mb-1">Tax</label>
+                         <input type="number" step="0.01" min="0" value={item.tax} onChange={(e) => updateItemField(idx, 'tax', Number(e.target.value))} className={`${inputClass} text-[11px] w-full`} />
+                       </div>
+                       <div className="col-span-12 md:col-span-2">
+                         <label className="block text-[10px] font-semibold text-slate-500 mb-1">Total</label>
+                         <div className="text-xs font-bold text-slate-700 dark:text-slate-200 pt-2 px-1 truncate" title={currency(item.total)}>{currency(item.total)}</div>
+                       </div>
+                       <div className="col-span-12 md:col-span-1 flex justify-end">
+                         <button type="button" onClick={() => removeItem(idx)} className="p-1.5 rounded text-red-500 hover:text-red-700 mb-1">
+                           <CloseIcon style={{ fontSize: 16 }} />
+                         </button>
+                       </div>
+                     </div>
+                   ))}
+                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

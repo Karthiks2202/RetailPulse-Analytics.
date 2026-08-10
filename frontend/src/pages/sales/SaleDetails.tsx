@@ -2,7 +2,9 @@ import React from 'react';
 import { formatCurrency } from '../../utils/currency';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getSale, exportSalesCSV, exportSalesPDF } from '../../api/saleApi';
+import { getSale } from '../../api/saleApi';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   ArrowBack as ArrowBackIcon,
   Print as PrintIcon,
@@ -24,12 +26,26 @@ export const SaleDetails: React.FC = () => {
 
   const handleExportCSV = async () => {
     try {
-      const result = await exportSalesCSV();
-      const blob = new Blob([result.content], { type: 'text/csv' });
+      if (!sale || !sale.items.length) {
+        alert('No data to export');
+        return;
+      }
+      const headers = ['Product', 'Category', 'Qty', 'Unit Price', 'Discount', 'Tax', 'Total'];
+      const rows = sale.items.map(item => [
+        item.product?.name || '—',
+        item.category?.name || '—',
+        item.quantity,
+        item.unit_price,
+        item.discount,
+        item.tax,
+        item.total,
+      ]);
+      const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = result.filename || 'sales.csv';
+      a.download = `${sale.invoice_number}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -41,8 +57,49 @@ export const SaleDetails: React.FC = () => {
 
   const handleExportPDF = async () => {
     try {
-      const result = await exportSalesPDF();
-      alert(result.message || 'PDF export initiated');
+      if (!sale || !sale.items.length) {
+        alert('No data to export');
+        return;
+      }
+      const doc = new jsPDF();
+      doc.setFontSize(18);
+      doc.text('Invoice', 14, 15);
+      doc.setFontSize(10);
+      doc.text(`Invoice Number: ${sale.invoice_number}`, 14, 22);
+      doc.text(`Date: ${new Date(sale.sale_date).toLocaleString()}`, 14, 27);
+      doc.text(`Customer: ${sale.customer_name || 'Walk-in Customer'}`, 14, 32);
+      doc.text(`Salesperson: ${sale.created_by_name || '—'}`, 14, 37);
+      doc.text(`Payment Method: ${sale.payment_method}`, 14, 42);
+      doc.text(`Status: ${sale.status}`, 14, 47);
+      const tableRows = sale.items.map(item => [
+        item.product?.name || '—',
+        item.product?.sku || '—',
+        item.category?.name || '—',
+        item.quantity.toString(),
+        formatCurrency(item.unit_price),
+        formatCurrency(item.discount),
+        formatCurrency(item.tax),
+        formatCurrency(item.total),
+      ]);
+      autoTable(doc, {
+        head: [['Product', 'SKU', 'Category', 'Qty', 'Unit Price', 'Discount', 'Tax', 'Total']],
+        body: tableRows,
+        startY: 52,
+        styles: { fontSize: 9, cellPadding: 2 },
+        headStyles: { fillColor: [79, 70, 229] },
+      });
+      const finalY = (doc as any).lastAutoTable.finalY || 52;
+      const subtotal = sale.items.reduce((sum, it) => sum + (it.quantity * it.unit_price - it.discount), 0);
+      const totalDiscount = sale.items.reduce((sum, it) => sum + it.discount, 0);
+      const totalTax = sale.items.reduce((sum, it) => sum + it.tax, 0);
+      const grandTotal = subtotal - totalDiscount + totalTax;
+      doc.setFontSize(10);
+      doc.text(`Subtotal: ${formatCurrency(subtotal)}`, 14, finalY + 8);
+      doc.text(`Discount: -${formatCurrency(totalDiscount)}`, 14, finalY + 13);
+      doc.text(`Tax: ${formatCurrency(totalTax)}`, 14, finalY + 18);
+      doc.setFontSize(12);
+      doc.text(`Grand Total: ${formatCurrency(grandTotal)}`, 14, finalY + 23);
+      doc.save(`${sale.invoice_number}.pdf`);
     } catch {
       alert('Failed to export as PDF');
     }
@@ -149,6 +206,10 @@ export const SaleDetails: React.FC = () => {
           <div>
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Payment Method</div>
             <div className="text-sm font-bold text-slate-800 dark:text-slate-100 mt-1">{sale.payment_method}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Salesperson</div>
+            <div className="text-sm font-bold text-slate-800 dark:text-slate-100 mt-1">{sale.created_by_name || '—'}</div>
           </div>
         </div>
       </div>
