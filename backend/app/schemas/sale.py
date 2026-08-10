@@ -45,6 +45,7 @@ class SaleBase(BaseModel):
     sales_channel: SalesChannel
     payment_method: PaymentMethod
     status: SaleStatus = SaleStatus.COMPLETED
+    notes: Optional[str] = None
     items: List[SaleItemCreate]
 
 
@@ -59,6 +60,7 @@ class SaleUpdate(BaseModel):
     sales_channel: Optional[SalesChannel] = None
     payment_method: Optional[PaymentMethod] = None
     status: Optional[SaleStatus] = None
+    notes: Optional[str] = None
     items: Optional[List[SaleItemCreate]] = None
 
 
@@ -85,6 +87,7 @@ class SaleListItemResponse(BaseModel):
     payment_method: PaymentMethod
     total_amount: float
     status: SaleStatus
+    notes: Optional[str] = None
     item_count: int = 0
     created_at: datetime
     updated_at: datetime

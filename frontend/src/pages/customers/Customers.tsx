@@ -13,7 +13,6 @@ import {
   deleteCustomer,
   activateCustomer,
   deactivateCustomer,
-  getCustomerProfile,
   getCustomerTimeline,
   getCustomerAnalyticsDashboard,
   getCustomerPurchaseDetail,
@@ -28,7 +27,6 @@ import {
   type Customer,
   type CustomerCreate,
   type CustomerPurchaseDetailResponse,
-  type CustomerDetailedProfileResponse,
   type CustomerTimelineResponse,
 } from '../../api/customerApi';
 import {
@@ -43,7 +41,7 @@ import {
   TrendingUp as TrendingUpIcon,
   People as PeopleIcon,
   BarChart as BarChartIcon,
-  Visibility as ViewIcon,
+  Visibility as ViewIcon
 } from '@mui/icons-material';
 
 const inputClass =
@@ -87,7 +85,11 @@ const AnalyticsCard: React.FC<{ title: string; value: string | number; subtitle?
   </div>
 );
 
-export const Customers: React.FC = () => {
+const NewVsReturningSection: React.FC = () => {
+  return <div>test</div>;
+};
+
+const Customers: React.FC = () => {
   const { user } = useAuth();
   const { showNotification } = useNotification();
   const queryClient = useQueryClient();
@@ -112,11 +114,6 @@ export const Customers: React.FC = () => {
   const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null);
   const [historyDetail, setHistoryDetail] = useState<CustomerPurchaseDetailResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
-
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [profileCustomer, setProfileCustomer] = useState<Customer | null>(null);
-  const [profileData, setProfileData] = useState<CustomerDetailedProfileResponse | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
 
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelineCustomer, setTimelineCustomer] = useState<Customer | null>(null);
@@ -243,7 +240,8 @@ export const Customers: React.FC = () => {
         preferred_sales_channel: values.preferred_sales_channel || undefined,
         notes: values.notes || undefined,
         status: values.status,
-      };
+};
+
       return editing ? updateCustomer(editing.id, payload) : createCustomer(payload);
     },
     onSuccess: () => {
@@ -412,20 +410,6 @@ export const Customers: React.FC = () => {
       showNotification('Failed to load purchase details', 'error');
     } finally {
       setHistoryLoading(false);
-    }
-  };
-
-  const openProfile = async (cust: Customer) => {
-    setProfileCustomer(cust);
-    setProfileLoading(true);
-    setProfileOpen(true);
-    try {
-      const data = await getCustomerProfile(cust.id);
-      setProfileData(data);
-    } catch {
-      showNotification('Failed to load customer profile', 'error');
-    } finally {
-      setProfileLoading(false);
     }
   };
 
@@ -733,13 +717,6 @@ export const Customers: React.FC = () => {
                           <TrendingUpIcon style={{ fontSize: 16 }} />
                         </button>
                         <button
-                          onClick={() => openProfile(cust)}
-                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:border-indigo-300 dark:hover:border-indigo-800 transition-all"
-                          title="View Profile"
-                        >
-                          <ViewIcon style={{ fontSize: 16 }} />
-                        </button>
-                        <button
                           onClick={() => openHistory(cust)}
                           className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:border-indigo-300 dark:hover:border-indigo-800 transition-all"
                           title="Purchase History"
@@ -780,289 +757,7 @@ export const Customers: React.FC = () => {
             </table>
         </div>
       )}
-
-      {profileOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-4xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto animate-modal-enter">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900">
-              <div>
-                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                  Customer Profile
-                </h2>
-                <p className="text-[10px] text-slate-400 font-medium mt-0.5">
-                  {profileCustomer ? `${profileCustomer.first_name} ${profileCustomer.last_name}` : ''}
-                </p>
-              </div>
-              <button onClick={() => setProfileOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
-                <CloseIcon style={{ fontSize: 20 }} />
-              </button>
-            </div>
-            <div className="p-6 space-y-6">
-              {profileLoading ? (
-                <div className="flex justify-center py-12">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent"></div>
-                </div>
-              ) : !profileData ? (
-                <div className="text-center py-12">
-                  <p className="text-xs text-slate-500 font-medium">Failed to load profile</p>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="md:col-span-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3">
-                      <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Personal Information</h3>
-                      <div className="space-y-2 text-xs">
-                        <div><span className="text-slate-400">Name:</span> <span className="font-semibold text-slate-800 dark:text-slate-100">{profileData.first_name} {profileData.last_name}</span></div>
-                        <div><span className="text-slate-400">Email:</span> <span className="font-semibold text-slate-800 dark:text-slate-100">{profileData.email || '—'}</span></div>
-                        <div><span className="text-slate-400">Phone:</span> <span className="font-semibold text-slate-800 dark:text-slate-100">{profileData.phone || '—'}</span></div>
-                        <div><span className="text-slate-400">DOB:</span> <span className="font-semibold text-slate-800 dark:text-slate-100">{profileData.date_of_birth ? new Date(profileData.date_of_birth).toLocaleDateString() : '—'}</span></div>
-                        <div><span className="text-slate-400">Gender:</span> <span className="font-semibold text-slate-800 dark:text-slate-100 capitalize">{profileData.gender?.toLowerCase() || '—'}</span></div>
-                      </div>
-                    </div>
-                    <div className="md:col-span-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3">
-                      <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Address & Classification</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <div><span className="text-slate-400">Address:</span> <span className="font-semibold text-slate-800 dark:text-slate-100">{profileData.address || '—'}</span></div>
-                        <div><span className="text-slate-400">City:</span> <span className="font-semibold text-slate-800 dark:text-slate-100">{profileData.city || '—'}</span></div>
-                        <div><span className="text-slate-400">State:</span> <span className="font-semibold text-slate-800 dark:text-slate-100">{profileData.state || '—'}</span></div>
-                        <div><span className="text-slate-400">Country:</span> <span className="font-semibold text-slate-800 dark:text-slate-100">{profileData.country || '—'}</span></div>
-                        <div><span className="text-slate-400">Postal Code:</span> <span className="font-semibold text-slate-800 dark:text-slate-100">{profileData.postal_code || '—'}</span></div>
-                        <div><span className="text-slate-400">Customer Type:</span> <span className="font-semibold text-slate-800 dark:text-slate-100 capitalize">{profileData.customer_type?.toLowerCase()}</span></div>
-                        <div><span className="text-slate-400">Preferred Channel:</span> <span className="font-semibold text-slate-800 dark:text-slate-100">{profileData.preferred_sales_channel || '—'}</span></div>
-                        <div><span className="text-slate-400">Status:</span> <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${profileData.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>{profileData.status.toLowerCase()}</span></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Orders</p>
-                      <p className="text-lg font-extrabold text-slate-900 dark:text-white">{profileData.total_orders}</p>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lifetime Revenue</p>
-                      <p className="text-lg font-extrabold text-slate-900 dark:text-white">{formatCurrency(profileData.total_revenue)}</p>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avg Order Value</p>
-                      <p className="text-lg font-extrabold text-slate-900 dark:text-white">{formatCurrency(profileData.average_order_value)}</p>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Purchase Frequency</p>
-                      <p className="text-lg font-extrabold text-slate-900 dark:text-white">{profileData.purchase_frequency.toFixed(2)} <span className="text-xs font-medium text-slate-500">/ month</span></p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">First Purchase</p>
-                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 mt-1">
-                        {profileData.first_purchase_date ? new Date(profileData.first_purchase_date).toLocaleDateString() : '—'}
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Last Purchase</p>
-                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 mt-1">
-                        {profileData.last_purchase_date ? new Date(profileData.last_purchase_date).toLocaleDateString() : '—'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Favourite Category</p>
-                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 mt-1">
-                        {profileData.favourite_category?.name || '—'}
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Favourite Product</p>
-                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 mt-1">
-                        {profileData.favourite_product ? `${profileData.favourite_product.name} (${profileData.favourite_product.sku})` : '—'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3">Recent Activity</h3>
-                    {profileData.recent_activity.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-4">No recent activity</p>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
-                              <th className="px-3 py-2 font-bold">Invoice</th>
-                              <th className="px-3 py-2 font-bold">Date</th>
-                              <th className="px-3 py-2 font-bold">Channel</th>
-                              <th className="px-3 py-2 font-bold">Payment</th>
-                              <th className="px-3 py-2 font-bold">Status</th>
-                              <th className="px-3 py-2 font-bold text-right">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {profileData.recent_activity.map((item) => (
-                              <tr key={item.id} className="border-b border-slate-100 dark:border-slate-800/60">
-                                <td className="px-3 py-2 font-mono text-xs text-slate-600 dark:text-slate-300">{item.invoice_number}</td>
-                                <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{new Date(item.sale_date).toLocaleDateString()}</td>
-                                <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.sales_channel}</td>
-                                <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.payment_method}</td>
-                                <td className="px-3 py-2"><StatusBadge status={item.status as any} /></td>
-                                <td className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">{formatCurrency(item.total_amount)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      </div>
-
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto animate-modal-enter">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900">
-              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                {editing ? 'Edit Customer' : 'New Customer'}
-              </h2>
-              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
-                <CloseIcon style={{ fontSize: 20 }} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
-              {modalError && (
-                <div className="flex items-start gap-2.5 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-400 text-sm font-medium">
-                  <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>{modalError}</span>
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">First Name *</label>
-                  <input {...register('first_name', { required: 'First name is required' })} className={inputClass} placeholder="e.g. Alice" />
-                  {errors.first_name && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.first_name.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Last Name *</label>
-                  <input {...register('last_name', { required: 'Last name is required' })} className={inputClass} placeholder="e.g. Johnson" />
-                  {errors.last_name && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.last_name.message}</p>}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Email</label>
-                  <input {...register('email')} type="email" className={inputClass} placeholder="e.g. alice@example.com" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Phone</label>
-                  <input {...register('phone')} className={inputClass} placeholder="e.g. 555-0101" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Date of Birth</label>
-                  <input {...register('date_of_birth')} type="date" className={inputClass} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Gender</label>
-                  <select {...register('gender')} className={inputClass}>
-                    <option value="">Select gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                    <option value="Prefer not to say">Prefer not to say</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Address</label>
-                <input {...register('address')} className={inputClass} placeholder="Street address" />
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">City</label>
-                  <input {...register('city')} className={inputClass} placeholder="City" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">State</label>
-                  <input {...register('state')} className={inputClass} placeholder="State" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Postal Code</label>
-                  <input {...register('postal_code')} className={inputClass} placeholder="Zip" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Country</label>
-                  <input {...register('country')} className={inputClass} placeholder="Country" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Customer Type</label>
-                  <select {...register('customer_type')} className={inputClass}>
-                    <option value="RETAIL">Retail</option>
-                    <option value="WHOLESALE">Wholesale</option>
-                    <option value="CORPORATE">Corporate</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Preferred Sales Channel</label>
-                  <select {...register('preferred_sales_channel')} className={inputClass}>
-                    <option value="">None</option>
-                    <option value="Retail Store">Retail Store</option>
-                    <option value="Online Store">Online Store</option>
-                    <option value="Marketplace">Marketplace</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Notes</label>
-                <textarea {...register('notes')} rows={2} className={`${inputClass} resize-none`} placeholder="Internal notes (optional)" />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Status</label>
-                <select {...register('status')} className={inputClass}>
-                  <option value="ACTIVE">Active</option>
-                  <option value="INACTIVE">Inactive</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-                >
-                  CANCEL
-                </button>
-                <button
-                  type="submit"
-                  disabled={mutation.isPending}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-500/10 transition-all disabled:opacity-60"
-                >
-                  {mutation.isPending ? 'SAVING...' : editing ? 'UPDATE' : 'CREATE'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+    </div>
 
       {historyOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4 animate-fade-in">
@@ -1246,62 +941,6 @@ export const Customers: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
-  );
-};
-
-const NewVsReturningSection: React.FC = () => {
-  const { data } = useQuery({
-    queryKey: ['new-vs-returning'],
-    queryFn: () => getNewVsReturning(),
-  });
-
-  if (!data) return <div className="flex justify-center py-8"><div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" /></div>;
-
-  const total = data.new_customers + data.returning_customers || 1;
-  const newPct = (data.new_customers / total) * 100;
-  const retPct = (data.returning_customers / total) * 100;
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
-              <PeopleIcon style={{ fontSize: 20 }} />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">New Customers</p>
-              <p className="text-lg font-extrabold text-slate-900 dark:text-white">{data.new_customers}</p>
-            </div>
-          </div>
-          <div className="mt-3 flex items-center gap-2">
-            <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-              <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${newPct}%` }} />
-            </div>
-            <span className="text-[10px] font-bold text-slate-500">{Math.round(newPct)}%</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1.5">{formatCurrency(data.new_customer_revenue)} revenue</p>
-        </div>
-        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 flex items-center justify-center">
-              <TrendingUpIcon style={{ fontSize: 20 }} />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Returning Customers</p>
-              <p className="text-lg font-extrabold text-slate-900 dark:text-white">{data.returning_customers}</p>
-            </div>
-          </div>
-          <div className="mt-3 flex items-center gap-2">
-            <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-              <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${retPct}%` }} />
-            </div>
-            <span className="text-[10px] font-bold text-slate-500">{Math.round(retPct)}%</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1.5">{formatCurrency(data.returning_customer_revenue)} revenue</p>
-        </div>
-      </div>
     </div>
   );
 };

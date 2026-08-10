@@ -2,10 +2,12 @@ import React from 'react';
 import { formatCurrency } from '../../utils/currency';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getSale } from '../../api/saleApi';
+import { getSale, exportSalesCSV, exportSalesPDF } from '../../api/saleApi';
 import {
   ArrowBack as ArrowBackIcon,
   Print as PrintIcon,
+  PictureAsPdf as PdfIcon,
+  TableChart as CsvIcon,
 } from '@mui/icons-material';
 
 const currency = formatCurrency;
@@ -19,6 +21,32 @@ export const SaleDetails: React.FC = () => {
     queryFn: () => getSale(id!),
     enabled: !!id,
   });
+
+  const handleExportCSV = async () => {
+    try {
+      const result = await exportSalesCSV();
+      const blob = new Blob([result.content], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename || 'sales.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert('Failed to export as CSV');
+    }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      const result = await exportSalesPDF();
+      alert(result.message || 'PDF export initiated');
+    } catch {
+      alert('Failed to export as PDF');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -55,14 +83,34 @@ export const SaleDetails: React.FC = () => {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold tracking-wide shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30"
-          style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
-        >
-          <PrintIcon style={{ fontSize: 17 }} />
-          Print Invoice
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-white text-xs font-bold tracking-wide shadow-lg shadow-emerald-500/20 transition-all hover:shadow-emerald-500/30"
+            style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)' }}
+            title="Export as CSV"
+          >
+            <CsvIcon style={{ fontSize: 16 }} />
+            CSV
+          </button>
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-white text-xs font-bold tracking-wide shadow-lg shadow-rose-500/20 transition-all hover:shadow-rose-500/30"
+            style={{ background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)' }}
+            title="Export as PDF"
+          >
+            <PdfIcon style={{ fontSize: 16 }} />
+            PDF
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold tracking-wide shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30"
+            style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+          >
+            <PrintIcon style={{ fontSize: 17 }} />
+            Print Invoice
+          </button>
+        </div>
       </div>
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden transition-all duration-300">

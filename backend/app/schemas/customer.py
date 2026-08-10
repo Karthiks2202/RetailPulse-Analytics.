@@ -54,6 +54,7 @@ class CustomerResponse(CustomerBase):
     last_purchase_date: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    segment: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -73,6 +74,7 @@ class CustomerListItem(BaseModel):
     total_spent: float = 0.0
     last_purchase_date: Optional[datetime] = None
     customer_since: datetime
+    segment: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -223,6 +225,7 @@ class CustomerDetailedProfileResponse(BaseModel):
     favourite_category: Optional[dict] = None
     favourite_product: Optional[dict] = None
     recent_activity: list[CustomerPurchaseHistoryResponse] = []
+    segment: Optional[str] = None
 
 
 class CustomerTimelineResponse(BaseModel):

@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
 from typing import Optional
 from datetime import datetime
+from io import StringIO
+import csv
 from app.database import get_db
 from app.models.sale import Sale, SaleStatus
 from app.models.product import Product
@@ -15,6 +18,7 @@ from app.utils.dependencies import get_current_active_user
 from app.crud.sale import sale as sale_crud
 from app.crud.category import category as category_crud
 from app.crud.product import product as product_crud
+from app.services.audit import audit_service
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
@@ -186,6 +190,7 @@ async def create_sale(
         items,
         request,
         payload.customer_id,
+        payload.notes,
     )
     return await get_sale(sale.id, current_user, db)
 
@@ -224,3 +229,50 @@ async def delete_sale(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     await sale_crud.delete(db, sale_id, current_user.company_id, current_user.id, request)
+
+
+@router.get("/export/csv")
+async def export_sales_csv(
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    request: Request = None,
+):
+    rows = await sale_crud.export_sales(db, current_user.company_id)
+    await audit_service.log(db, current_user.company_id, current_user.id, "Sales Exported", request, entity_name="Sales", details=f"Exported {len(rows)} sale rows as CSV")
+    if not rows:
+        return {
+            "content": "",
+            "filename": "sales.csv",
+            "content_type": "text/csv",
+            "message": "No sales data available to export.",
+        }
+
+    output = StringIO()
+    fieldnames = list(rows[0].keys())
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    output.seek(0)
+    return {
+        "content": output.read(),
+        "filename": "sales.csv",
+        "content_type": "text/csv",
+        "message": "CSV data generated.",
+    }
+
+
+@router.get("/export/pdf")
+async def export_sales_pdf(
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    request: Request = None,
+):
+    rows = await sale_crud.export_sales(db, current_user.company_id)
+    await audit_service.log(db, current_user.company_id, current_user.id, "Sales Exported", request, entity_name="Sales", details=f"Exported {len(rows)} sale rows as PDF")
+    return {
+        "content": rows,
+        "filename": "sales.pdf",
+        "content_type": "application/json",
+        "message": "PDF data generated. Use frontend PDF library to render.",
+    }

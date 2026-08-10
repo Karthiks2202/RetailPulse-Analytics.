@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +43,23 @@ from app.models.user import UserRole
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
+EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+PHONE_RE = re.compile(r"^\+?[\d\s()-]{7,}$")
+
+
+def validate_email(value: str) -> str:
+    value = value.strip()
+    if not EMAIL_RE.match(value):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    return value
+
+
+def validate_phone(value: str) -> str:
+    value = value.strip()
+    if not PHONE_RE.match(value):
+        raise HTTPException(status_code=400, detail="Invalid phone number format")
+    return value
+
 
 def is_admin(user):
     return user.role in (UserRole.COMPANY_ADMIN, UserRole.SUPER_ADMIN)
@@ -73,10 +91,11 @@ def serialize_customer(cust: Customer) -> CustomerResponse:
         status=cust.status,
         created_at=cust.created_at,
         updated_at=cust.updated_at,
+        segment=None,
     )
 
 
-def serialize_customer_item(cust: Customer, purchases: int, spent: float, last_purchase: datetime | None) -> CustomerListItem:
+def serialize_customer_item(cust: Customer, purchases: int, spent: float, last_purchase: datetime | None, segment: str | None = None) -> CustomerListItem:
     return CustomerListItem(
         id=cust.id,
         company_id=cust.company_id,
@@ -92,6 +111,7 @@ def serialize_customer_item(cust: Customer, purchases: int, spent: float, last_p
         total_spent=spent,
         last_purchase_date=last_purchase,
         customer_since=cust.customer_since,
+        segment=segment,
     )
 
 
@@ -109,6 +129,7 @@ async def list_customers(
     date_to: Optional[str] = Query(None),
     sort_by: str = Query("created_at", pattern="^(created_at|first_name|last_name|customer_type|total_spent|total_orders|last_purchase_date|customer_since|name)$"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
+    segment: str | None = Query(None, pattern="^(NEW|REGULAR|LOYAL|VIP)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
 ):
@@ -140,7 +161,10 @@ async def list_customers(
         if parsed_to and cust.customer_since > parsed_to:
             continue
         summary = await customer_crud.get_purchase_summary(db, cust.id)
-        result.append(serialize_customer_item(cust, summary["total_purchases"], summary["total_spent"], summary["last_purchase_date"]))
+        cust_segment = await customer_crud.get_segment(db, cust.id)
+        if segment and cust_segment != segment:
+            continue
+        result.append(serialize_customer_item(cust, summary["total_purchases"], summary["total_spent"], summary["last_purchase_date"], cust_segment))
     return result
 
 
@@ -479,6 +503,7 @@ async def get_customer(
     response.total_purchases = summary["total_purchases"]
     response.total_spent = summary["total_spent"]
     response.last_purchase_date = summary["last_purchase_date"]
+    response.segment = await customer_crud.get_segment(db, cust.id)
     return response
 
 
@@ -515,11 +540,13 @@ async def create_customer(
     db: AsyncSession = Depends(get_db),
 ):
     if payload.email:
+        payload.email = validate_email(payload.email)
         existing = await customer_crud.get_by_email(db, current_user.company_id, payload.email)
         if existing:
             raise HTTPException(status_code=400, detail="A customer with this email already exists")
 
     if payload.phone:
+        payload.phone = validate_phone(payload.phone)
         existing_phone = await customer_crud.get_by_phone(db, current_user.company_id, payload.phone)
         if existing_phone:
             raise HTTPException(status_code=400, detail="A customer with this phone number already exists")
@@ -563,11 +590,13 @@ async def update_customer(
     update_data = payload.model_dump(exclude_unset=True)
 
     if "email" in update_data and update_data["email"] and update_data["email"] != cust.email:
+        update_data["email"] = validate_email(update_data["email"])
         existing = await customer_crud.get_by_email(db, current_user.company_id, update_data["email"])
         if existing and existing.id != customer_id:
             raise HTTPException(status_code=400, detail="A customer with this email already exists")
 
     if "phone" in update_data and update_data["phone"] and update_data["phone"] != cust.phone:
+        update_data["phone"] = validate_phone(update_data["phone"])
         existing_phone = await customer_crud.get_by_phone(db, current_user.company_id, update_data["phone"])
         if existing_phone and existing_phone.id != customer_id:
             raise HTTPException(status_code=400, detail="A customer with this phone number already exists")

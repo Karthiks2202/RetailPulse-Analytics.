@@ -10,6 +10,8 @@ import {
   createSale,
   updateSale,
   deleteSale,
+  exportSalesCSV,
+  exportSalesPDF,
   type SaleCreate,
   type SaleUpdate,
   type SaleListItem,
@@ -27,6 +29,8 @@ import {
   Close as CloseIcon,
   ShoppingCart as CartIcon,
   Visibility as ViewIcon,
+  PictureAsPdf as PdfIcon,
+  TableChart as CsvIcon,
 } from '@mui/icons-material';
 
 const CHANNEL_OPTIONS: SalesChannel[] = ['Retail Store', 'Online Store', 'Marketplace'];
@@ -57,6 +61,7 @@ interface SaleFormValues {
   sale_date: string;
   sales_channel: SalesChannel;
   payment_method: PaymentMethod;
+  notes: string;
   items: SaleItemForm[];
 }
 
@@ -155,6 +160,7 @@ export const Sales: React.FC = () => {
     sale_date: toLocalDatetime(new Date()),
     sales_channel: 'Retail Store' as SalesChannel,
     payment_method: 'Cash' as PaymentMethod,
+    notes: '',
     items: [] as SaleItemForm[],
   };
 
@@ -196,6 +202,7 @@ export const Sales: React.FC = () => {
       sale_date: new Date().toISOString().slice(0, 16),
       sales_channel: 'Retail Store',
       payment_method: 'Cash',
+      notes: '',
       items: [],
     });
     setModalOpen(true);
@@ -226,6 +233,7 @@ export const Sales: React.FC = () => {
     setValue('sale_date', toLocalDatetime(new Date(full.sale_date)));
     setValue('sales_channel', full.sales_channel);
     setValue('payment_method', full.payment_method);
+    setValue('notes', (full as any).notes || '');
     setValue('items', items);
     setModalOpen(true);
   };
@@ -273,7 +281,20 @@ export const Sales: React.FC = () => {
     updated[index] = { ...updated[index], [field]: value };
     if (field === 'quantity' || field === 'unit_price' || field === 'discount' || field === 'tax') {
       const item = updated[index];
-      item.total = Number(item.quantity) * Number(item.unit_price) - Number(item.discount) + Number(item.tax);
+      const qty = Number(item.quantity);
+      const price = Number(item.unit_price);
+      const disc = Number(item.discount);
+      const tax = Number(item.tax);
+      const lineTotal = (qty * price) - disc + tax;
+      item.total = lineTotal;
+      if (field === 'quantity' && item.product_id) {
+        const prod = productOptions.find((p) => p.id === item.product_id);
+        if (prod && qty > prod.stock_quantity) {
+          setModalError(`Quantity (${qty}) exceeds available stock (${prod.stock_quantity}) for ${prod.name}`);
+        } else if (modalError?.includes('exceeds available stock')) {
+          setModalError(null);
+        }
+      }
     }
     setValue('items', updated);
   };
@@ -284,10 +305,15 @@ export const Sales: React.FC = () => {
       updateItemField(index, 'product_id', prod.id);
       updateItemField(index, 'product_name', prod.name);
       updateItemField(index, 'unit_price', prod.unit_price);
-      updateItemField(index, 'quantity', 1);
+      const availableStock = prod.stock_quantity;
+      const qty = availableStock > 0 ? 1 : 0;
+      updateItemField(index, 'quantity', qty);
       updateItemField(index, 'discount', 0);
       updateItemField(index, 'tax', 0);
-      updateItemField(index, 'total', prod.unit_price);
+      updateItemField(index, 'total', prod.unit_price * qty);
+      if (availableStock === 0) {
+        setModalError(`Product "${prod.name}" is out of stock.`);
+      }
     }
     setSelectedProduct('');
     setProductOptions([]);
@@ -308,6 +334,7 @@ export const Sales: React.FC = () => {
         sale_date: values.sale_date,
         sales_channel: values.sales_channel,
         payment_method: values.payment_method,
+        notes: values.notes || undefined,
         items,
       };
       return editing ? updateSale(editing.id, { ...payload, status: 'COMPLETED' } as SaleUpdate) : createSale(payload);
@@ -388,6 +415,11 @@ export const Sales: React.FC = () => {
         setModalError('Discount cannot exceed total product value');
         return;
       }
+      const prod = productOptions.find((p) => p.id === item.product_id);
+      if (prod && item.quantity > prod.stock_quantity) {
+        setModalError(`Insufficient stock for ${prod.name}. Available: ${prod.stock_quantity}, Requested: ${item.quantity}`);
+        return;
+      }
     }
     setModalError(null);
     mutation.mutate(values);
@@ -396,6 +428,33 @@ export const Sales: React.FC = () => {
   const confirmDelete = (sale: SaleListItem) => {
     if (window.confirm(`Delete sale ${sale.invoice_number}? This cannot be undone.`)) {
       removeMutation.mutate(sale.id);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      const result = await exportSalesCSV();
+      const blob = new Blob([result.content], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename || 'sales.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showNotification('Sales exported as CSV successfully.', 'success');
+    } catch {
+      showNotification('Failed to export sales as CSV.', 'error');
+    }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      const result = await exportSalesPDF();
+      showNotification(result.message || 'PDF data generated. Use a PDF library to render.', 'success');
+    } catch {
+      showNotification('Failed to export sales as PDF.', 'error');
     }
   };
 
@@ -411,16 +470,36 @@ export const Sales: React.FC = () => {
             Manage your sales transactions and invoices.
           </p>
         </div>
-        {isAdmin && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={openCreate}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold tracking-wide shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+            onClick={handleExportCSV}
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-white text-xs font-bold tracking-wide shadow-lg shadow-emerald-500/20 transition-all hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)' }}
+            title="Export as CSV"
           >
-            <AddIcon style={{ fontSize: 17 }} />
-            New Sale
+            <CsvIcon style={{ fontSize: 16 }} />
+            CSV
           </button>
-        )}
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-white text-xs font-bold tracking-wide shadow-lg shadow-rose-500/20 transition-all hover:shadow-rose-500/30 hover:scale-[1.02] active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)' }}
+            title="Export as PDF"
+          >
+            <PdfIcon style={{ fontSize: 16 }} />
+            PDF
+          </button>
+          {isAdmin && (
+            <button
+              onClick={openCreate}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold tracking-wide shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+            >
+              <AddIcon style={{ fontSize: 17 }} />
+              New Sale
+            </button>
+          )}
+        </div>
       </div>
 
       {summaryCards.length > 0 && (
@@ -511,8 +590,7 @@ export const Sales: React.FC = () => {
                   <th className="px-6 py-3 font-bold">Invoice</th>
                   <th className="px-6 py-3 font-bold">Customer</th>
                   <th className="px-6 py-3 font-bold">Date</th>
-                  <th className="px-6 py-3 font-bold">Channel</th>
-                  <th className="px-6 py-3 font-bold">Payment</th>
+                  <th className="px-6 py-3 font-bold">Items</th>
                   <th className="px-6 py-3 font-bold">Amount</th>
                   <th className="px-6 py-3 font-bold">Status</th>
                   {isAdmin && <th className="px-6 py-3 font-bold text-right">Actions</th>}
@@ -524,8 +602,7 @@ export const Sales: React.FC = () => {
                     <td className="px-6 py-3.5 font-mono text-xs font-bold text-slate-800 dark:text-slate-100">{sale.invoice_number}</td>
                     <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{sale.customer_name || '—'}</td>
                     <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{new Date(sale.sale_date).toLocaleDateString()}</td>
-                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{sale.sales_channel}</td>
-                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{sale.payment_method}</td>
+                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{sale.item_count || 0}</td>
                     <td className="px-6 py-3.5 font-semibold text-slate-800 dark:text-slate-100">{currency(sale.total_amount)}</td>
                     <td className="px-6 py-3.5">
                       <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold capitalize tracking-wide ${
@@ -726,6 +803,45 @@ export const Sales: React.FC = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-2">
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Billing Summary</h3>
+                  {(() => {
+                    const subtotal = watchedItems.reduce((sum, it) => sum + (Number(it.quantity) * Number(it.unit_price)), 0);
+                    const totalDiscount = watchedItems.reduce((sum, it) => sum + Number(it.discount), 0);
+                    const totalTax = watchedItems.reduce((sum, it) => sum + Number(it.tax), 0);
+                    const grandTotal = subtotal - totalDiscount + totalTax;
+                    return (
+                      <>
+                        <div className="flex justify-between text-xs text-slate-600 dark:text-slate-300">
+                          <span>Subtotal</span>
+                          <span className="font-mono">{currency(subtotal)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-slate-600 dark:text-slate-300">
+                          <span>Discount</span>
+                          <span className="font-mono text-red-600">-{currency(totalDiscount)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-slate-600 dark:text-slate-300">
+                          <span>Tax</span>
+                          <span className="font-mono">{currency(totalTax)}</span>
+                        </div>
+                        <div className="border-t border-slate-200 dark:border-slate-800 pt-2 flex justify-between text-sm font-extrabold text-slate-900 dark:text-white">
+                          <span>Grand Total</span>
+                          <span className="font-mono">{currency(grandTotal)}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Notes</h3>
+                  <textarea
+                    placeholder="Add any notes about this sale..."
+                    className={`${inputClass} w-full h-full min-h-[80px] resize-none text-xs`}
+                  />
                 </div>
               </div>
 

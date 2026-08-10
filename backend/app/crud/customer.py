@@ -20,13 +20,13 @@ class CRUDCustomer:
 
     async def get_by_email(self, db: AsyncSession, company_id: UUID, email: str) -> Customer | None:
         result = await db.execute(
-            select(Customer).where(Customer.company_id == company_id).where(Customer.email == email)
+            select(Customer).where(Customer.company_id == company_id).where(Customer.email == email).where(Customer.is_deleted == False)
         )
         return result.scalar_one_or_none()
 
     async def get_by_phone(self, db: AsyncSession, company_id: UUID, phone: str) -> Customer | None:
         result = await db.execute(
-            select(Customer).where(Customer.company_id == company_id).where(Customer.phone == phone)
+            select(Customer).where(Customer.company_id == company_id).where(Customer.phone == phone).where(Customer.is_deleted == False)
         )
         return result.scalar_one_or_none()
 
@@ -41,8 +41,9 @@ class CRUDCustomer:
         customer_type: CustomerType | None = None,
         sort_by: str = "created_at",
         sort_dir: str = "desc",
+        segment: str | None = None,
     ) -> tuple[list[Customer], int]:
-        query = select(Customer).where(Customer.company_id == company_id)
+        query = select(Customer).where(Customer.company_id == company_id).where(Customer.is_deleted == False)
 
         if search:
             search = search.strip()
@@ -199,20 +200,29 @@ class CRUDCustomer:
         return customer
 
     async def delete(self, db: AsyncSession, customer: Customer) -> None:
-        sale_check = await db.execute(
-            select(Sale).where(Sale.customer_id == customer.id).limit(1)
-        )
-        if sale_check.scalar_one_or_none():
-            raise ValueError("Cannot delete customer that has purchase history. Deactivate them instead.")
-
-        email_check = await db.execute(
-            select(Sale).where(Sale.customer_name == f"{customer.first_name} {customer.last_name}").limit(1)
-        )
-        if email_check.scalar_one_or_none():
-            raise ValueError("Cannot delete customer that has purchase history. Deactivate them instead.")
-
-        await db.delete(customer)
+        customer.is_deleted = True
         await db.commit()
+
+    async def get_segment(self, db: AsyncSession, customer_id: UUID) -> str:
+        result = await db.execute(
+            select(
+                func.count(Sale.id).label("total_orders"),
+                func.coalesce(func.sum(Sale.total_amount), 0).label("total_spent"),
+            )
+            .where(Sale.customer_id == customer_id)
+            .where(Sale.status == SaleStatus.COMPLETED)
+        )
+        row = result.one_or_none()
+        orders = int(row.total_orders) if row else 0
+        spent = float(row.total_spent or 0) if row else 0.0
+
+        if orders >= 10 and spent >= 5000:
+            return "VIP"
+        if orders >= 5 and spent >= 1000:
+            return "LOYAL"
+        if orders >= 2:
+            return "REGULAR"
+        return "NEW"
 
     async def get_purchase_summary(self, db: AsyncSession, customer_id: UUID) -> dict:
         result = await db.execute(
@@ -582,6 +592,7 @@ class CRUDCustomer:
             "favourite_category": favourite_category,
             "favourite_product": favourite_product,
             "recent_activity": recent_activity,
+            "segment": await self.get_segment(db, cust.id),
         }
 
     async def get_customer_analytics_dashboard(self, db: AsyncSession, company_id: UUID) -> dict:

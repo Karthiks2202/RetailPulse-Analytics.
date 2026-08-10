@@ -64,6 +64,7 @@ export interface SaleCreate {
   sale_date?: string;
   sales_channel: SalesChannel;
   payment_method: PaymentMethod;
+  notes?: string;
   items: SaleItemCreate[];
 }
 
@@ -122,4 +123,25 @@ export const updateSale = async (id: string, payload: SaleUpdate): Promise<Sale>
 
 export const deleteSale = async (id: string): Promise<void> => {
   await axiosInstance.delete(`/sales/${id}`);
+};
+
+export interface SaleExportCSVResponse {
+  content: string;
+  filename: string;
+}
+
+export interface SaleExportPDFResponse {
+  content: any;
+  filename: string;
+  message: string;
+}
+
+export const exportSalesCSV = async (): Promise<SaleExportCSVResponse> => {
+  const { data } = await axiosInstance.get('/sales/export/csv');
+  return data;
+};
+
+export const exportSalesPDF = async (): Promise<SaleExportPDFResponse> => {
+  const { data } = await axiosInstance.get('/sales/export/pdf');
+  return data;
 };

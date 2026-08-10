@@ -24,6 +24,7 @@ export interface Customer {
   last_purchase_date: string | null;
   created_at: string;
   updated_at: string;
+  segment: 'NEW' | 'REGULAR' | 'LOYAL' | 'VIP' | null;
 }
 
 export interface CustomerCreate {
@@ -200,6 +201,7 @@ export interface CustomerDetailedProfileResponse {
   favourite_category: { id: string; name: string } | null;
   favourite_product: { id: string; name: string; sku: string } | null;
   recent_activity: CustomerPurchaseHistory[];
+  segment: 'NEW' | 'REGULAR' | 'LOYAL' | 'VIP' | null;
 }
 
 export interface CustomerTimelineResponse {
@@ -216,6 +218,7 @@ export const getCustomers = async (params?: {
   search?: string;
   status?: string;
   customer_type?: string;
+  segment?: string;
   city?: string;
   state?: string;
   country?: string;

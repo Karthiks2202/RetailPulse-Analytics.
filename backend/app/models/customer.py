@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, Enum as SQLEnum, UniqueConstraint
+from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, Enum as SQLEnum, UniqueConstraint, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -41,6 +41,7 @@ class Customer(Base):
     status = Column(SQLEnum(CustomerStatus), nullable=False, default=CustomerStatus.ACTIVE, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
 
     __table_args__ = (
         UniqueConstraint('company_id', 'email', name='uq_customer_company_email'),

@@ -177,7 +177,7 @@ class CRUDSale:
         sales = list(result.scalars().all())
         return sales, total
 
-    async def create(self, db: AsyncSession, company_id: UUID, user_id: UUID, customer_name: Optional[str], sale_date: datetime, sales_channel: str, payment_method: str, items: list, request: Request, customer_id: Optional[UUID] = None) -> Sale:
+    async def create(self, db: AsyncSession, company_id: UUID, user_id: UUID, customer_name: Optional[str], sale_date: datetime, sales_channel: str, payment_method: str, items: list, request: Request, customer_id: Optional[UUID] = None, notes: Optional[str] = None) -> Sale:
         invoice_number = await self.get_invoice_number(db, company_id)
 
         # Auto-link customer by name if customer_id not provided
@@ -277,6 +277,7 @@ class CRUDSale:
                 payment_method=payment_method,
                 total_amount=float(total_amount),
                 created_by=user_id,
+                notes=notes,
                 items=sale_items,
             )
 
@@ -417,7 +418,7 @@ class CRUDSale:
 
             sale.total_amount = float(total_amount)
 
-        update_fields = ["customer_name", "sale_date", "sales_channel", "payment_method", "status"]
+        update_fields = ["customer_name", "sale_date", "sales_channel", "payment_method", "status", "notes"]
         for field in update_fields:
             if field in payload:
                 setattr(sale, field, payload[field])
@@ -511,6 +512,34 @@ class CRUDSale:
             "total_orders": total_orders,
             "average_order_value": avg_order_value,
         }
+
+    async def export_sales(self, db: AsyncSession, company_id: UUID) -> list[dict]:
+        result = await db.execute(
+            select(Sale)
+            .where(Sale.company_id == company_id)
+            .options(selectinload(Sale.items).selectinload(SaleItem.product))
+            .order_by(Sale.sale_date.desc())
+        )
+        sales = list(result.scalars().all())
+        rows = []
+        for sale in sales:
+            for item in sale.items or []:
+                rows.append({
+                    "invoice_number": sale.invoice_number,
+                    "sale_date": sale.sale_date.isoformat() if sale.sale_date else "",
+                    "customer_name": sale.customer_name or "",
+                    "payment_method": sale.payment_method.value if sale.payment_method else "",
+                    "status": sale.status.value if sale.status else "",
+                    "product_name": item.product.name if item.product else "",
+                    "sku": item.product.sku if item.product else "",
+                    "quantity": item.quantity,
+                    "unit_price": float(item.unit_price),
+                    "discount": float(item.discount),
+                    "tax": float(item.tax),
+                    "line_total": float(item.total),
+                    "total_amount": float(sale.total_amount),
+                })
+        return rows
 
 
 sale = CRUDSale()

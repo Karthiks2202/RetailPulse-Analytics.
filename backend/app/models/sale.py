@@ -42,6 +42,7 @@ class Sale(Base):
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    notes = Column(String, nullable=True)
 
     __table_args__ = (UniqueConstraint('company_id', 'invoice_number', name='uq_sale_company_invoice'),)
 
