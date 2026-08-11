@@ -69,7 +69,7 @@ async def list_sales(
     payment_method: str | None = Query(None),
     payment_status: str | None = Query(None),
     category_id: UUID | None = Query(None),
-    sort_by: str = Query("created_at", pattern="^(created_at|invoice_number|total_amount|sale_date)$"),
+    sort_by: str = Query("created_at", pattern="^(created_at|invoice_number|total_amount|sale_date|customer_name)$"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),

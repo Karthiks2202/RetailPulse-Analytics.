@@ -77,6 +77,25 @@ const StatusBadge: React.FC<{ status: 'ACTIVE' | 'INACTIVE' }> = ({ status }) =>
   </span>
 );
 
+const SegmentBadge: React.FC<{ segment?: string }> = ({ segment }) => {
+  const key = (segment || '').toUpperCase();
+  const cls =
+    key === 'NEW'
+      ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/30'
+      : key === 'REGULAR'
+      ? 'bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-900/30'
+      : key === 'LOYAL'
+      ? 'bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-900/30'
+      : key === 'VIP'
+      ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/30'
+      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700';
+  return (
+    <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold capitalize tracking-wide ${cls}`}>
+      {key || '—'}
+    </span>
+  );
+};
+
 const AnalyticsCard: React.FC<{ title: string; value: string | number; subtitle?: string; color: string }> = ({ title, value, subtitle, color }) => (
   <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{title}</p>
@@ -701,7 +720,7 @@ const Customers: React.FC = () => {
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{cust.email || '—'}</td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{cust.phone || '—'}</td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-300">
-                      <div className="font-semibold capitalize">{(cust as any).segment?.toLowerCase() || '—'}</div>
+                      <SegmentBadge segment={(cust as any).segment} />
                     </td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{cust.total_purchases}</td>
                     <td className="px-6 py-4 font-semibold text-slate-800 dark:text-slate-100">{formatCurrency(cust.total_spent)}</td>
@@ -784,22 +803,22 @@ const Customers: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">First Name</label>
-                  <input {...register('first_name')} className={`${inputClass} w-full`} placeholder="First name" />
+                  <input {...register('first_name', { required: 'First name is required' })} className={`${inputClass} w-full`} placeholder="First name" />
                   {errors.first_name && <p className="text-red-500 text-[10px] mt-1">{errors.first_name.message}</p>}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Last Name</label>
-                  <input {...register('last_name')} className={`${inputClass} w-full`} placeholder="Last name" />
+                  <input {...register('last_name', { required: 'Last name is required' })} className={`${inputClass} w-full`} placeholder="Last name" />
                   {errors.last_name && <p className="text-red-500 text-[10px] mt-1">{errors.last_name.message}</p>}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Email</label>
-                  <input type="email" {...register('email')} className={`${inputClass} w-full`} placeholder="email@example.com" />
+                  <input type="email" {...register('email', { required: 'Email is required', pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Invalid email format' } })} className={`${inputClass} w-full`} placeholder="email@example.com" />
                   {errors.email && <p className="text-red-500 text-[10px] mt-1">{errors.email.message}</p>}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Phone</label>
-                  <input {...register('phone')} className={`${inputClass} w-full`} placeholder="+1 234 567 8900" />
+                  <input {...register('phone', { required: 'Phone is required', pattern: { value: /^[+]?[\d\s()-]{7,15}$/, message: 'Invalid phone number' } })} className={`${inputClass} w-full`} placeholder="+1 234 567 8900" />
                   {errors.phone && <p className="text-red-500 text-[10px] mt-1">{errors.phone.message}</p>}
                 </div>
                 <div>
@@ -820,27 +839,27 @@ const Customers: React.FC = () => {
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Address</label>
-                  <input {...register('address')} className={`${inputClass} w-full`} placeholder="Street address" />
+                  <input {...register('address', { required: 'Address is required' })} className={`${inputClass} w-full`} placeholder="Street address" />
                   {errors.address && <p className="text-red-500 text-[10px] mt-1">{errors.address.message}</p>}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">City</label>
-                  <input {...register('city')} className={`${inputClass} w-full`} placeholder="City" />
+                  <input {...register('city', { required: 'City is required' })} className={`${inputClass} w-full`} placeholder="City" />
                   {errors.city && <p className="text-red-500 text-[10px] mt-1">{errors.city.message}</p>}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">State</label>
-                  <input {...register('state')} className={`${inputClass} w-full`} placeholder="State" />
+                  <input {...register('state', { required: 'State is required' })} className={`${inputClass} w-full`} placeholder="State" />
                   {errors.state && <p className="text-red-500 text-[10px] mt-1">{errors.state.message}</p>}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Postal Code</label>
-                  <input {...register('postal_code')} className={`${inputClass} w-full`} placeholder="Postal code" />
+                  <input {...register('postal_code', { required: 'Postal code is required' })} className={`${inputClass} w-full`} placeholder="Postal code" />
                   {errors.postal_code && <p className="text-red-500 text-[10px] mt-1">{errors.postal_code.message}</p>}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Country</label>
-                  <input {...register('country')} className={`${inputClass} w-full`} placeholder="Country" />
+                  <input {...register('country', { required: 'Country is required' })} className={`${inputClass} w-full`} placeholder="Country" />
                   {errors.country && <p className="text-red-500 text-[10px] mt-1">{errors.country.message}</p>}
                 </div>
                 <div>

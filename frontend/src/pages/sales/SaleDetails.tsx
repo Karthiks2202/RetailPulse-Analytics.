@@ -89,7 +89,7 @@ export const SaleDetails: React.FC = () => {
         headStyles: { fillColor: [79, 70, 229] },
       });
       const finalY = (doc as any).lastAutoTable.finalY || 52;
-      const subtotal = sale.items.reduce((sum, it) => sum + (it.quantity * it.unit_price - it.discount), 0);
+      const subtotal = sale.items.reduce((sum, it) => sum + (it.quantity * it.unit_price), 0);
       const totalDiscount = sale.items.reduce((sum, it) => sum + it.discount, 0);
       const totalTax = sale.items.reduce((sum, it) => sum + it.tax, 0);
       const grandTotal = subtotal - totalDiscount + totalTax;
@@ -258,7 +258,7 @@ export const SaleDetails: React.FC = () => {
         <div className="p-6 space-y-3">
           <div className="flex justify-between text-sm text-slate-600 dark:text-slate-300">
             <span>Subtotal</span>
-            <span className="font-mono">{currency(sale.items.reduce((sum, it) => sum + (it.quantity * it.unit_price - it.discount), 0))}</span>
+            <span className="font-mono">{currency(sale.items.reduce((sum, it) => sum + (it.quantity * it.unit_price), 0))}</span>
           </div>
           <div className="flex justify-between text-sm text-slate-600 dark:text-slate-300">
             <span>Discount Applied</span>

@@ -84,7 +84,7 @@ export const Sales: React.FC = () => {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [sortBy, setSortBy] = useState<'created_at' | 'invoice_number' | 'total_amount' | 'sale_date'>('created_at');
+  const [sortBy, setSortBy] = useState<'created_at' | 'invoice_number' | 'total_amount' | 'sale_date' | 'customer_name'>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -623,6 +623,8 @@ export const Sales: React.FC = () => {
             <option value="total_amount-asc">Amount (Low-High)</option>
             <option value="sale_date-desc">Date (Newest)</option>
             <option value="sale_date-asc">Date (Oldest)</option>
+            <option value="customer_name-asc">Customer Name (A-Z)</option>
+            <option value="customer_name-desc">Customer Name (Z-A)</option>
           </select>
         </div>
 
