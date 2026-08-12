@@ -104,7 +104,7 @@ import {
   PieChart,
   Pie,
 } from 'recharts';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const INTERVALS = [
@@ -484,7 +484,7 @@ const queryOptions: { refetchInterval: number | false } = {
         ]);
       }
 
-      autoTable(doc, {
+      (doc as any).autoTable({
         startY: 38,
         head: head,
         body: body,

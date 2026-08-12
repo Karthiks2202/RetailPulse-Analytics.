@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, desc, asc
 from sqlalchemy.orm import selectinload
-from app.models.customer import Customer, CustomerStatus, CustomerType
+from app.models.customer import Customer, CustomerStatus, CustomerType, CustomerSegment
 from app.models.sale import Sale, SaleItem, SaleStatus
 from app.models.product import Product
 from app.models.category import Category
@@ -216,13 +216,20 @@ class CRUDCustomer:
         orders = int(row.total_orders) if row else 0
         spent = float(row.total_spent or 0) if row else 0.0
 
-        if orders >= 10 and spent >= 5000:
+        if orders >= 10 or spent >= 25000:
             return "VIP"
-        if orders >= 5 and spent >= 1000:
+        if 5 <= orders <= 9:
             return "LOYAL"
-        if orders >= 2:
+        if 2 <= orders <= 4:
             return "REGULAR"
         return "NEW"
+
+    async def recalculate_segment(self, db: AsyncSession, customer_id: UUID) -> None:
+        segment = await self.get_segment(db, customer_id)
+        customer = await self.get(db, customer_id)
+        if customer and customer.segment != segment:
+            customer.segment = CustomerSegment[segment]
+            await db.commit()
 
     async def get_purchase_summary(self, db: AsyncSession, customer_id: UUID) -> dict:
         result = await db.execute(
@@ -800,11 +807,11 @@ class CRUDCustomer:
             first = row.first_purchase
             days_since_first = (now - first).days if first else 9999
 
-            if orders >= 10 and spent >= 5000:
+            if orders >= 10 or spent >= 25000:
                 segments["VIP"] += 1
-            elif orders >= 5 and spent >= 1000:
+            elif 5 <= orders <= 9:
                 segments["LOYAL"] += 1
-            elif orders >= 2:
+            elif 2 <= orders <= 4:
                 segments["REGULAR"] += 1
             else:
                 segments["NEW"] += 1

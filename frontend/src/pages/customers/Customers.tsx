@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { formatCurrency } from '../../utils/currency';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
@@ -325,7 +325,7 @@ const Customers: React.FC = () => {
     try {
       const res = await exportCustomersPDF({ status: statusFilter || undefined, customer_type: customerTypeFilter || undefined, search: search || undefined });
       
-      const doc = new jsPDF();
+      const doc = new jsPDF('landscape');
       doc.setFontSize(16);
       doc.text('Customers Report', 14, 15);
       
@@ -336,17 +336,18 @@ const Customers: React.FC = () => {
         return;
       }
       
-      // Extract headers from the first row keys
-      const headers = Object.keys(data[0]);
+      // Extract headers from the first row keys, excluding 'id' to save space
+      const headers = Object.keys(data[0]).filter(k => k !== 'id');
+      const displayHeaders = headers.map(h => h.replace(/_/g, ' ').toUpperCase());
       
       // Map data to array of arrays for autotable
       const body = data.map((row: any) => headers.map(key => String(row[key] !== null && row[key] !== undefined ? row[key] : '')));
       
-      autoTable(doc, {
-        head: [headers],
+      (doc as any).autoTable({
+        head: [displayHeaders],
         body: body,
         startY: 20,
-        styles: { fontSize: 8, cellPadding: 2 },
+        styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
         headStyles: { fillColor: [16, 185, 129] } // Emerald 500
       });
       

@@ -3,7 +3,7 @@ import { formatCurrency } from '../../utils/currency';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getSale } from '../../api/saleApi';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
   ArrowBack as ArrowBackIcon,
@@ -81,7 +81,7 @@ export const SaleDetails: React.FC = () => {
         formatCurrency(item.tax),
         formatCurrency(item.total),
       ]);
-      autoTable(doc, {
+      (doc as any).autoTable({
         head: [['Product', 'SKU', 'Category', 'Qty', 'Unit Price', 'Discount', 'Tax', 'Total']],
         body: tableRows,
         startY: 52,

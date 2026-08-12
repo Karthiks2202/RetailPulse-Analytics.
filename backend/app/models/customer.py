@@ -18,6 +18,13 @@ class CustomerType(str, enum.Enum):
     CORPORATE = "CORPORATE"
 
 
+class CustomerSegment(str, enum.Enum):
+    NEW = "NEW"
+    REGULAR = "REGULAR"
+    LOYAL = "LOYAL"
+    VIP = "VIP"
+
+
 class Customer(Base):
     __tablename__ = "customers"
 
@@ -39,6 +46,7 @@ class Customer(Base):
     notes = Column(String, nullable=True)
     customer_since = Column(DateTime, default=datetime.utcnow, index=True)
     status = Column(SQLEnum(CustomerStatus), nullable=False, default=CustomerStatus.ACTIVE, index=True)
+    segment = Column(SQLEnum(CustomerSegment), nullable=False, default=CustomerSegment.NEW, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_deleted = Column(Boolean, default=False, nullable=False, index=True)

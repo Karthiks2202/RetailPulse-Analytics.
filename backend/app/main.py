@@ -60,6 +60,7 @@ def create_app() -> FastAPI:
             await conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE"))
             await conn.execute(text("ALTER TABLE sales ADD COLUMN IF NOT EXISTS notes TEXT NULL"))
             await conn.execute(text("ALTER TABLE sales ADD COLUMN IF NOT EXISTS payment_status VARCHAR NULL DEFAULT 'PAID'"))
+            await conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS segment VARCHAR NULL DEFAULT 'NEW'"))
 
     return application
 

@@ -13,6 +13,7 @@ from app.models.inventory import StockMovement, MovementType
 from app.crud.audit_log import audit_log as audit_log_crud
 from app.crud.notification import notification as notification_crud
 from app.crud.inventory import inventory as inventory_crud
+from app.crud.customer import customer as customer_crud
 from fastapi import Request
 from uuid import UUID
 from datetime import datetime
@@ -336,10 +337,13 @@ class CRUDSale:
                     product_id=product_id,
                     previous_quantity=initial_qty,
                     updated_quantity=initial_qty - qty,
-                    quantity_changed=-qty,
-                    user_id=user_id,
-                    reason=f"Sale {invoice_number}",
-                )
+                     quantity_changed=-qty,
+                     user_id=user_id,
+                     reason=f"Sale {invoice_number}",
+                 )
+
+        if customer_id:
+            await customer_crud.recalculate_segment(db, customer_id)
 
         return sale
 
@@ -463,6 +467,9 @@ class CRUDSale:
 
         for item in sale.items:
             await db.refresh(item)
+
+        if sale.customer_id:
+            await customer_crud.recalculate_segment(db, sale.customer_id)
 
         return sale
 

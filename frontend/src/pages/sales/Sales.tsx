@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { formatCurrency } from '../../utils/currency';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
@@ -477,16 +477,21 @@ export const Sales: React.FC = () => {
         showNotification('No data to export', 'error');
         return;
       }
-      const doc = new jsPDF();
+      const doc = new jsPDF('landscape');
       doc.setFontSize(16);
       doc.text('Sales Report', 14, 15);
-      const headers = Object.keys(rows[0]);
+      
+      const excludedKeys = ['invoice_number']; // Exclude long identifiers to save space
+      const headers = Object.keys(rows[0]).filter(k => !excludedKeys.includes(k));
+      const displayHeaders = headers.map(h => h.replace(/_/g, ' ').toUpperCase());
+      
       const body = rows.map((row: any) => headers.map(key => String(row[key] !== null && row[key] !== undefined ? row[key] : '')));
-      autoTable(doc, {
-        head: [headers],
+      
+      (doc as any).autoTable({
+        head: [displayHeaders],
         body: body,
         startY: 20,
-        styles: { fontSize: 8, cellPadding: 2 },
+        styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
         headStyles: { fillColor: [220, 38, 38] }
       });
       doc.save(result.filename || 'sales.pdf');
