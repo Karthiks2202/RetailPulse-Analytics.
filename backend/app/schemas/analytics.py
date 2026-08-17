@@ -27,6 +27,8 @@ class KPIDashboardResponse(BaseModel):
     total_orders: int
     total_products_sold: int
     average_order_value: float
+    total_discount: float
+    total_tax: float
     total_inventory_value: float
     low_stock_products: int
     out_of_stock_products: int

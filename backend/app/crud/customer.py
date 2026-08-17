@@ -274,21 +274,24 @@ class CRUDCustomer:
         result = await db.execute(query)
         return list(result.scalars().all()), total
 
-    async def get_top_customers(self, db: AsyncSession, company_id: UUID, limit: int = 10) -> list[dict]:
+    async def get_top_customers(self, db: AsyncSession, company_id: UUID, limit: int = 10, date_from: datetime | None = None, date_to: datetime | None = None) -> list[dict]:
         query = (
             select(
                 Sale.customer_id.label("customer_id"),
                 func.count(Sale.id).label("total_purchases"),
                 func.coalesce(func.sum(Sale.total_amount), 0).label("total_spent"),
+                func.avg(Sale.total_amount).label("average_order_value"),
                 func.max(Sale.sale_date).label("last_purchase_date"),
             )
             .where(Sale.company_id == company_id)
             .where(Sale.status == SaleStatus.COMPLETED)
             .where(Sale.customer_id.is_not(None))
-            .group_by(Sale.customer_id)
-            .order_by(func.sum(Sale.total_amount).desc())
-            .limit(limit)
         )
+        if date_from:
+            query = query.where(Sale.sale_date >= date_from)
+        if date_to:
+            query = query.where(Sale.sale_date <= date_to)
+        query = query.group_by(Sale.customer_id).order_by(func.sum(Sale.total_amount).desc()).limit(limit)
         result = await db.execute(query)
         rows = result.all()
         customer_ids = [row.customer_id for row in rows]
@@ -309,6 +312,7 @@ class CRUDCustomer:
                 "email": customers[row.customer_id].email if row.customer_id in customers else None,
                 "total_purchases": int(row.total_purchases),
                 "total_spent": float(row.total_spent),
+                "average_order_value": float(row.average_order_value or 0),
                 "last_purchase_date": row.last_purchase_date,
             }
             for row in rows

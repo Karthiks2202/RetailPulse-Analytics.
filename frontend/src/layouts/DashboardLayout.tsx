@@ -19,6 +19,7 @@ import {
   Refresh as RefreshIcon,
   People as PeopleIcon,
   Timeline as TimelineIcon,
+  TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { NotificationBell } from './NotificationBell';
 import { useQueryClient } from '@tanstack/react-query';
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', Icon: DashIcon, adminOnly: false },
   { to: '/profile',   label: 'My Profile', Icon: ProfileIcon, adminOnly: false },
   { to: '/analytics', label: 'Analytics', Icon: AnalyticsIcon, adminOnly: true },
+  { to: '/analytics/sales', label: 'Sales Analytics', Icon: TrendingUpIcon, adminOnly: true },
   { to: '/forecast',  label: 'Forecast', Icon: TimelineIcon, adminOnly: true },
   { to: '/products',  label: 'Products',   Icon: InventoryIcon, adminOnly: true },
   { to: '/inventory', label: 'Inventory',  Icon: ShowChartIcon, adminOnly: true },

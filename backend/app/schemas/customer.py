@@ -131,6 +131,7 @@ class TopCustomerResponse(BaseModel):
     email: Optional[str] = None
     total_purchases: int
     total_spent: float
+    average_order_value: float
     last_purchase_date: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

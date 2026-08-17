@@ -322,8 +322,13 @@ async def get_top_customers(
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
     limit: int = Query(10, ge=1, le=50),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
 ):
-    top = await customer_crud.get_top_customers(db, current_user.company_id, limit)
+    from datetime import datetime as dt
+    parsed_from = dt.fromisoformat(date_from) if date_from else None
+    parsed_to = dt.fromisoformat(date_to) if date_to else None
+    top = await customer_crud.get_top_customers(db, current_user.company_id, limit, parsed_from, parsed_to)
     return [TopCustomerResponse(**item) for item in top]
 
 

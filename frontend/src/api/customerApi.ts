@@ -119,6 +119,7 @@ export interface TopCustomerResponse {
   email: string | null;
   total_purchases: number;
   total_spent: number;
+  average_order_value: number;
   last_purchase_date: string | null;
 }
 
@@ -331,8 +332,8 @@ export const getMonthlyCustomerAcquisition = async (months = 12): Promise<Monthl
   return data;
 };
 
-export const getTopCustomers = async (limit = 10): Promise<TopCustomerResponse[]> => {
-  const { data } = await axiosInstance.get('/customers/analytics/top', { params: { limit } });
+export const getTopCustomers = async (limit = 10, params?: { date_from?: string; date_to?: string }): Promise<TopCustomerResponse[]> => {
+  const { data } = await axiosInstance.get('/customers/analytics/top', { params: { limit, ...params } });
   return data;
 };
 

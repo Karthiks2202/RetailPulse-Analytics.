@@ -77,6 +77,18 @@ class AnalyticsService:
         )
         total_products_sold = total_products_sold_result.scalar() or 0
 
+        total_discount_result = await db.execute(
+            select(func.coalesce(func.sum(SaleItem.discount), 0))
+            .join(sub, SaleItem.sale_id == sub.c.id)
+        )
+        total_discount = float(total_discount_result.scalar() or 0)
+
+        total_tax_result = await db.execute(
+            select(func.coalesce(func.sum(SaleItem.tax), 0))
+            .join(sub, SaleItem.sale_id == sub.c.id)
+        )
+        total_tax = float(total_tax_result.scalar() or 0)
+
         average_order_value = total_revenue / total_orders if total_orders > 0 else 0.0
 
         products_query = select(Product).where(Product.company_id == company_id)
@@ -116,6 +128,8 @@ class AnalyticsService:
             "total_orders": total_orders,
             "total_products_sold": int(total_products_sold),
             "average_order_value": average_order_value,
+            "total_discount": total_discount,
+            "total_tax": total_tax,
             "total_inventory_value": total_inventory_value,
             "low_stock_products": low_stock_products,
             "out_of_stock_products": out_of_stock_products,
@@ -132,23 +146,29 @@ class AnalyticsService:
             return []
 
         if interval == "weekly":
-            buckets = {}
+            revenue_buckets = {}
+            order_buckets = {}
             for s in sales:
                 key = s.sale_date.strftime("%Y-W%W")
-                buckets[key] = buckets.get(key, 0) + float(s.total_amount)
-            return [{"period": k, "revenue": v, "orders": 0} for k, v in sorted(buckets.items())]
+                revenue_buckets[key] = revenue_buckets.get(key, 0) + float(s.total_amount)
+                order_buckets[key] = order_buckets.get(key, 0) + 1
+            return [{"period": k, "revenue": revenue_buckets.get(k, 0), "orders": order_buckets.get(k, 0)} for k in sorted(revenue_buckets.keys())]
         elif interval == "monthly":
-            buckets = {}
+            revenue_buckets = {}
+            order_buckets = {}
             for s in sales:
                 key = s.sale_date.strftime("%Y-%m")
-                buckets[key] = buckets.get(key, 0) + float(s.total_amount)
-            return [{"period": k, "revenue": v, "orders": 0} for k, v in sorted(buckets.items())]
+                revenue_buckets[key] = revenue_buckets.get(key, 0) + float(s.total_amount)
+                order_buckets[key] = order_buckets.get(key, 0) + 1
+            return [{"period": k, "revenue": revenue_buckets.get(k, 0), "orders": order_buckets.get(k, 0)} for k in sorted(revenue_buckets.keys())]
         else:
-            buckets = {}
+            revenue_buckets = {}
+            order_buckets = {}
             for s in sales:
                 key = s.sale_date.strftime("%Y-%m-%d")
-                buckets[key] = buckets.get(key, 0) + float(s.total_amount)
-            return [{"period": k, "revenue": v, "orders": 0} for k, v in sorted(buckets.items())]
+                revenue_buckets[key] = revenue_buckets.get(key, 0) + float(s.total_amount)
+                order_buckets[key] = order_buckets.get(key, 0) + 1
+            return [{"period": k, "revenue": revenue_buckets.get(k, 0), "orders": order_buckets.get(k, 0)} for k in sorted(revenue_buckets.keys())]
 
     async def get_sales_trend(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, interval: str = "daily") -> List[dict]:
         query = select(Sale, SaleItem).join(SaleItem, Sale.id == SaleItem.sale_id).where(Sale.company_id == company_id)
