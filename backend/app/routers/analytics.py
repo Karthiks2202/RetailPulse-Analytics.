@@ -4,8 +4,13 @@ import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Path
+from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
 from app.database import get_db
 from app.models.user import UserRole
 from app.schemas.analytics import (
@@ -30,6 +35,7 @@ from app.schemas.analytics import (
     ExportRequest,
     RefreshResponse,
 )
+from app.schemas.customer import TopCustomerResponse
 from app.utils.dependencies import get_current_active_user
 from app.services.analytics import analytics_service
 
@@ -49,6 +55,7 @@ def _parse_filters(
     brand: Optional[str] = Query(None),
     sales_channel: Optional[str] = Query(None),
     payment_method: Optional[str] = Query(None),
+    customer_id: Optional[str] = Query(None),
 ) -> dict:
     from datetime import datetime
 
@@ -79,6 +86,11 @@ def _parse_filters(
         filters["sales_channel"] = sales_channel
     if payment_method:
         filters["payment_method"] = payment_method
+    if customer_id:
+        try:
+            filters["customer_id"] = UUID(customer_id)
+        except ValueError:
+            pass
     return filters if filters else None
 
 
@@ -121,30 +133,46 @@ async def get_sales_trend(
     return [SalesTrendPoint(**item) for item in data]
 
 
-@router.get("/top-products", response_model=list[TopProductResponse])
+@router.get("/top-products", response_model=dict)
 async def get_top_products(
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
-    limit: int = Query(10, ge=1, le=50),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
     filters: dict = Depends(_parse_filters),
 ):
     if not is_admin_or_analyst(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
-    data = await analytics_service.get_top_products(db, current_user.company_id, filters, limit)
-    return [TopProductResponse(**item) for item in data]
+    data = await analytics_service.get_top_products(db, current_user.company_id, filters, page=page, page_size=page_size)
+    return data
 
 
-@router.get("/top-categories", response_model=list[TopCategoryResponse])
+@router.get("/top-categories", response_model=dict)
 async def get_top_categories(
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
-    limit: int = Query(10, ge=1, le=50),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
     filters: dict = Depends(_parse_filters),
 ):
     if not is_admin_or_analyst(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
-    data = await analytics_service.get_top_categories(db, current_user.company_id, filters, limit)
-    return [TopCategoryResponse(**item) for item in data]
+    data = await analytics_service.get_top_categories(db, current_user.company_id, filters, page=page, page_size=page_size)
+    return data
+
+
+@router.get("/top-customers", response_model=dict)
+async def get_top_customers(
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
+    filters: dict = Depends(_parse_filters),
+):
+    if not is_admin_or_analyst(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    data = await analytics_service.get_top_customers(db, current_user.company_id, filters, page=page, page_size=page_size)
+    return data
 
 
 @router.get("/payment-methods", response_model=list[PaymentMethodBreakdown])
@@ -335,23 +363,27 @@ async def export_analytics(
 
     filters_dict = None
     if payload.filters:
-        filters_dict = payload.filters.model_dump() if hasattr(payload.filters, 'model_dump') else payload.filters.dict()
+        filters_dict = payload.filters.model_dump() if hasattr(payload.filters, "model_dump") else payload.filters.dict()
 
-    data = []
     filename = f"{payload.report_type}_report"
 
     if payload.report_type == "kpis":
-        kpi_data = await analytics_service.get_kpi_dashboard(db, current_user.company_id, filters_dict)
-        data = [kpi_data]
+        data = await analytics_service.get_kpi_dashboard(db, current_user.company_id, filters_dict)
+        rows = [data] if data else []
     elif payload.report_type == "sales":
         data = await analytics_service.get_sales_trend(db, current_user.company_id, filters_dict, "daily")
+        rows = data if data else []
         filename += "_sales_trend"
     elif payload.report_type == "inventory":
         data = await analytics_service.get_inventory_distribution(db, current_user.company_id, filters_dict)
+        rows = data if data else []
         filename += "_inventory"
     elif payload.report_type == "transactions":
         data = await analytics_service.drill_down_transactions(db, current_user.company_id, filters_dict)
+        rows = data if data else []
         filename += "_transactions"
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported report type")
 
     await analytics_service.log_analytics_event(
         db, current_user.company_id, current_user.id, "Report Exported", request,
@@ -361,17 +393,52 @@ async def export_analytics(
     )
 
     if payload.export_type == "csv":
-        if not data:
-            return {"content": "", "filename": f"{filename}.csv", "content_type": "text/csv"}
         output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=data[0].keys())
+        writer = csv.DictWriter(output, fieldnames=rows[0].keys() if rows else [])
         writer.writeheader()
-        for row in data:
+        for row in rows:
             writer.writerow(row)
         csv_content = output.getvalue()
-        return {"content": csv_content, "filename": f"{filename}.csv", "content_type": "text/csv"}
+        return StreamingResponse(
+            io.StringIO(csv_content),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}.csv"},
+        )
 
     if payload.export_type == "pdf":
-        return {"content": data, "filename": f"{filename}.pdf", "content_type": "application/json", "message": "PDF data generated. Use frontend PDF library to render."}
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        styles = getSampleStyleSheet()
+        story = []
+        story.append(Paragraph(f"{current_user.company or 'RetailPulse Analytics'} - Analytics Report", styles["Title"]))
+        story.append(Spacer(1, 12))
+        story.append(Paragraph(f"Report Type: {payload.report_type.upper()}", styles["Normal"]))
+        story.append(Spacer(1, 12))
+
+        if rows:
+            table_data = [list(rows[0].keys())]
+            for row in rows:
+                table_data.append([str(v) for v in row.values()])
+            table = Table(table_data)
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4f46e5")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#f8fafc")),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("FONTSIZE", (0, 1), (-1, -1), 9),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ]))
+            story.append(table)
+        else:
+            story.append(Paragraph("No data available for the selected filters.", styles["Normal"]))
+
+        doc.build(story)
+        pdf_bytes = buffer.getvalue()
+        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename={filename}.pdf"})
 
     raise HTTPException(status_code=400, detail="Unsupported export type")

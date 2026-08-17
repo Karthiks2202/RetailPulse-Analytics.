@@ -7,6 +7,7 @@ import {
   getSalesTrend,
   getTopProducts,
   getTopCategories,
+  getTopCustomers,
   getPaymentMethods,
   getSalesChannels,
   getStockStatus,
@@ -31,6 +32,7 @@ import {
   type SalesTrendPoint,
   type TopProductResponse,
   type TopCategoryResponse,
+  type TopCustomerResponse,
   type PaymentMethodBreakdown,
   type SalesChannelBreakdown,
   type StockStatusSummary,
@@ -52,9 +54,10 @@ import {
   getCustomerSegmentation,
   getMonthlyCustomerAcquisition,
   getNewVsReturning,
-  getTopCustomers,
   getRecentCustomers,
   getCustomerRevenueContribution,
+  getCustomers,
+  type Customer,
   type CustomerGrowthPoint,
   type RevenueByTypePoint,
   type LocationDistributionPoint,
@@ -104,8 +107,11 @@ import {
   PieChart,
   Pie,
 } from 'recharts';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import FilterBar from './components/FilterBar';
+import KPICard, { type KPIItem } from './components/KPICard';
+import ChartCard from './components/ChartCard';
+import ExportMenu from './components/ExportMenu';
+import { Pagination } from '../../components/Pagination';
 
 const INTERVALS = [
   { label: 'Daily', value: 'daily' },
@@ -192,6 +198,12 @@ const queryOptions: { refetchInterval: number | false } = {
   });
   const brands = (rawBrands || []) as string[];
 
+  const { data: rawCustomers } = useQuery({
+    queryKey: ['analytics', 'customers'],
+    queryFn: () => getCustomers({ status: 'ACTIVE' }),
+  });
+  const customers = (rawCustomers || []) as Customer[];
+
   const { data: kpis, isLoading: kpisLoading } = useQuery({
     queryKey: ['analytics', 'kpis', filters],
     queryFn: () => getKPIDashboard(filters),
@@ -217,14 +229,14 @@ const queryOptions: { refetchInterval: number | false } = {
     queryFn: () => getTopProducts(10, filters),
     ...queryOptions,
   });
-  const topProducts = (topProductsData || []) as TopProductResponse[];
+  const topProducts = (topProductsData?.items || []) as TopProductResponse[];
 
   const { data: topCategoriesData, isLoading: topCategoriesLoading } = useQuery({
     queryKey: ['analytics', 'top-categories', filters],
     queryFn: () => getTopCategories(10, filters),
     ...queryOptions,
   });
-  const topCategories = (topCategoriesData || []) as TopCategoryResponse[];
+  const topCategories = (topCategoriesData?.items || []) as TopCategoryResponse[];
 
   const { data: paymentMethodsData, isLoading: paymentMethodsLoading } = useQuery({
     queryKey: ['analytics', 'payment-methods', filters],
@@ -325,11 +337,12 @@ const queryOptions: { refetchInterval: number | false } = {
   const monthlyAcquisition = (monthlyAcquisitionData || []) as MonthlyAcquisitionPoint[];
 
   const { data: topCustomersData, isLoading: topCustomersLoading } = useQuery({
-    queryKey: ['analytics', 'top-customers'],
-    queryFn: () => getTopCustomers(10),
+    queryKey: ['analytics', 'top-customers', filters, topCustomersPage],
+    queryFn: () => getTopCustomers(10, filters, topCustomersPage, PAGE_SIZE),
     ...queryOptions,
   });
-  const topCustomers = (topCustomersData || []) as Array<{ id: string; first_name: string; last_name: string; email: string | null; total_purchases: number; total_spent: number; last_purchase_date: string | null; }>;
+  const topCustomers = (topCustomersData?.items || []) as TopCustomerResponse[];
+  const topCustomersTotal = topCustomersData?.total || 0;
 
   const { data: recentCustomersData, isLoading: recentCustomersLoading } = useQuery({
     queryKey: ['analytics', 'recent-customers'],
@@ -402,21 +415,27 @@ const queryOptions: { refetchInterval: number | false } = {
     }
   };
 
-  // Export handlers
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const getExportFilename = (reportType: string, exportType: string) => {
+    const company = user?.company?.replace(/\s+/g, '_') || 'RetailPulse_Analytics';
+    return `${company}_${reportType}_report.${exportType}`;
+  };
+
   const handleExportCSV = async (reportType: 'kpis' | 'sales' | 'inventory' | 'transactions') => {
     setExportingType(`csv-${reportType}`);
     try {
-      const res = await exportAnalytics({ export_type: 'csv', report_type: reportType, filters });
-      if (res && res.content !== undefined) {
-        const blob = new Blob([res.content], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', res.filename || `${reportType}_report.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
+      const blob = await exportAnalytics({ export_type: 'csv', report_type: reportType, filters });
+      downloadBlob(blob, getExportFilename(reportType, 'csv'));
     } catch (err) {
       console.error('CSV Export Error:', err);
     } finally {
@@ -427,73 +446,8 @@ const queryOptions: { refetchInterval: number | false } = {
   const handleExportPDF = async (reportType: 'kpis' | 'sales' | 'inventory' | 'transactions') => {
     setExportingType(`pdf-${reportType}`);
     try {
-      await logAnalyticsEvent({
-        action: 'Report Exported',
-        entity_name: reportType,
-        export_type: 'pdf',
-        details: `Generated PDF report for ${reportType}`,
-      });
-
-      const doc = new jsPDF();
-      const companyName = user?.company || 'RetailPulse Analytics';
-      const timestamp = new Date().toLocaleString();
-
-      doc.setFillColor(79, 70, 229);
-      doc.rect(0, 0, 210, 24, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.setTextColor(255, 255, 255);
-      doc.text(`${companyName} - Analytics Report`, 14, 16);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`Report Type: ${reportType.toUpperCase()} | Date: ${timestamp}`, 14, 32);
-
-      let head: string[][] = [];
-      let body: (string | number)[][] = [];
-
-      if (reportType === 'kpis' && kpis) {
-        head = [['KPI Metric', 'Value']];
-        body = [
-          ['Total Revenue', formatCurrency(kpis.total_revenue || 0)],
-          ['Total Orders', (kpis.total_orders || 0).toLocaleString()],
-          ['Products Sold', (kpis.total_products_sold || 0).toLocaleString()],
-          ['Average Order Value', formatCurrency(kpis.average_order_value || 0)],
-          ['Inventory Value', formatCurrency(kpis.total_inventory_value || 0)],
-          ['Low Stock Products', (kpis.low_stock_products || 0).toLocaleString()],
-          ['Out of Stock Products', (kpis.out_of_stock_products || 0).toLocaleString()],
-          ['Total Categories', (kpis.total_categories || 0).toLocaleString()],
-        ];
-       } else if (reportType === 'sales' && revenueTrend) {
-         head = [['Period', 'Revenue', 'Orders']];
-         body = revenueTrend.map((r) => [r.period, formatCurrency(r.revenue), r.orders || 0]);
-       } else if (reportType === 'inventory' && inventoryValue) {
-         head = [['Category', 'Products', 'Total Stock', 'Cost Value', 'Retail Value']];
-         body = inventoryValue.map((i) => [i.category_name, i.total_products, i.total_stock, formatCurrency(i.total_cost_value), formatCurrency(i.total_retail_value)]);
-       } else if (reportType === 'transactions') {
-        const txs = await getDrillDownTransactions(filters);
-        head = [['Invoice #', 'Date', 'Customer', 'Channel', 'Payment Method', 'Total Amount']];
-        body = txs.map((t) => [
-          t.invoice_number,
-          new Date(t.sale_date).toLocaleDateString(),
-          t.customer_name || 'N/A',
-          t.sales_channel,
-          t.payment_method,
-          formatCurrency(t.total_amount),
-        ]);
-      }
-
-      (doc as any).autoTable({
-        startY: 38,
-        head: head,
-        body: body,
-        theme: 'striped',
-        headStyles: { fillColor: [79, 70, 229] },
-        styles: { fontSize: 9 },
-      });
-
-      doc.save(`${companyName}_${reportType}_report.pdf`);
+      const blob = await exportAnalytics({ export_type: 'pdf', report_type: reportType, filters });
+      downloadBlob(blob, getExportFilename(reportType, 'pdf'));
     } catch (err) {
       console.error('PDF Export Error:', err);
     } finally {
@@ -680,6 +634,16 @@ const queryOptions: { refetchInterval: number | false } = {
             <option value="">All Payments</option>
             {PAYMENT_METHODS.map((pm) => (
               <option key={pm.value} value={pm.value}>{pm.label}</option>
+            ))}
+          </select>
+          <select
+            value={filters.customer_id || ''}
+            onChange={(e) => updateFilter('customer_id', e.target.value)}
+            className={`${inputClass} lg:w-44`}
+          >
+            <option value="">All Customers</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
             ))}
           </select>
           {hasActiveFilters && (
@@ -1425,7 +1389,7 @@ const queryOptions: { refetchInterval: number | false } = {
                     <div key={c.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-xs font-bold">
-                          #{idx + 1}
+                          #{idx + 1 + (topCustomersPage - 1) * PAGE_SIZE}
                         </div>
                         <div>
                           <div className="text-xs font-bold text-slate-800 dark:text-slate-100">{c.first_name} {c.last_name}</div>
@@ -1445,6 +1409,9 @@ const queryOptions: { refetchInterval: number | false } = {
                   <span className="text-xs font-semibold">No customer data available</span>
                 </div>
               )}
+            </div>
+            <div className="px-4 pb-3">
+              <Pagination page={topCustomersPage} pageSize={PAGE_SIZE} total={topCustomersTotal} onPageChange={setTopCustomersPage} />
             </div>
           </ChartCard>
 

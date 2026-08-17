@@ -201,18 +201,26 @@ class CRUDDemandForecast:
 
         total_predicted_demand = sum(f.predicted_demand for f in forecasts)
         products_expected_to_run_out = sum(1 for f in forecasts if f.recommendation in (RecommendationType.REORDER_SOON, RecommendationType.IMMEDIATE_RESTOCK_REQUIRED))
-        high_growth_products = 0  # will be calculated from history if needed
+        high_growth_products = 0
         slow_moving_products = 0
 
-        accuracies = [float(f.confidence_score) for f in forecasts if f.confidence_score is not None]
-        forecast_accuracy = sum(accuracies) / len(accuracies) if accuracies else 0.0
+        accuracies = []
+        for f in forecasts:
+            history_result = await db.execute(
+                select(ForecastHistory).where(ForecastHistory.forecast_id == f.id).order_by(ForecastHistory.created_at.desc()).limit(1)
+            )
+            last_history = history_result.scalar_one_or_none()
+            if last_history and last_history.accuracy is not None:
+                accuracies.append(float(last_history.accuracy))
+
+        forecast_accuracy = round(sum(accuracies) / len(accuracies), 2) if accuracies else 0.0
 
         return {
             "total_predicted_demand": total_predicted_demand,
             "products_expected_to_run_out": products_expected_to_run_out,
             "high_growth_products": high_growth_products,
             "slow_moving_products": slow_moving_products,
-            "forecast_accuracy": round(forecast_accuracy, 2),
+            "forecast_accuracy": forecast_accuracy,
         }
 
     async def create(self, db: AsyncSession, company_id: UUID, **kwargs) -> DemandForecast:

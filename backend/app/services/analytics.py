@@ -8,6 +8,7 @@ from typing import Optional, List
 from app.models.sale import Sale, SaleItem, SaleStatus, SalesChannel, PaymentMethod
 from app.models.product import Product, ProductStatus
 from app.models.category import Category
+from app.models.customer import Customer
 from app.models.inventory import StockMovement, MovementType
 from app.models.audit_log import AuditLog
 from app.crud.audit_log import audit_log as audit_log_crud
@@ -35,6 +36,7 @@ class AnalyticsService:
         brand = filters.get("brand")
         sales_channel = filters.get("sales_channel")
         payment_method = filters.get("payment_method")
+        customer_id = filters.get("customer_id")
 
         if date_from:
             query = query.where(Sale.sale_date >= date_from)
@@ -44,6 +46,8 @@ class AnalyticsService:
             query = query.where(Sale.sales_channel == sales_channel)
         if payment_method:
             query = query.where(Sale.payment_method == payment_method)
+        if customer_id:
+            query = query.where(Sale.customer_id == customer_id)
 
         if product_id or category_id or brand:
             query = query.join(SaleItem, Sale.id == SaleItem.sale_id)
@@ -137,74 +141,127 @@ class AnalyticsService:
         }
 
     async def get_revenue_trend(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, interval: str = "daily") -> List[dict]:
-        query = select(Sale).where(Sale.company_id == company_id)
-        query = self._apply_sale_filters(query, company_id, filters)
+        trunc_map = {"daily": "day", "weekly": "week", "monthly": "month"}
+        fmt_map = {"daily": "YYYY-MM-DD", "weekly": "YYYY-MM-DD", "monthly": "YYYY-MM"}
+        trunc = trunc_map.get(interval, "day")
+        fmt = fmt_map.get(interval, "YYYY-MM-DD")
+
+        query = (
+            select(
+                func.to_char(func.date_trunc(trunc, Sale.sale_date), fmt).label("period"),
+                func.coalesce(func.sum(Sale.total_amount), 0).label("revenue"),
+                func.count(Sale.id).label("orders"),
+            )
+            .where(Sale.company_id == company_id)
+        )
+
+        if filters:
+            date_from = filters.get("date_from")
+            date_to = filters.get("date_to")
+            sales_channel = filters.get("sales_channel")
+            payment_method = filters.get("payment_method")
+            customer_id = filters.get("customer_id")
+            product_id = filters.get("product_id")
+            category_id = filters.get("category_id")
+            brand = filters.get("brand")
+
+            if date_from:
+                query = query.where(Sale.sale_date >= date_from)
+            if date_to:
+                query = query.where(Sale.sale_date <= date_to)
+            if sales_channel:
+                query = query.where(Sale.sales_channel == sales_channel)
+            if payment_method:
+                query = query.where(Sale.payment_method == payment_method)
+            if customer_id:
+                query = query.where(Sale.customer_id == customer_id)
+
+            if product_id or category_id or brand:
+                exists_q = select(SaleItem.id).where(SaleItem.sale_id == Sale.id)
+                if product_id:
+                    exists_q = exists_q.where(SaleItem.product_id == product_id)
+                if category_id:
+                    exists_q = exists_q.where(SaleItem.category_id == category_id)
+                if brand:
+                    exists_q = exists_q.join(Product, SaleItem.product_id == Product.id).where(Product.brand.ilike(f"%{brand}%"))
+                query = query.where(exists_q.exists())
+
+        query = query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
         result = await db.execute(query)
-        sales = list(result.scalars().all())
-
-        if not sales:
-            return []
-
-        if interval == "weekly":
-            revenue_buckets = {}
-            order_buckets = {}
-            for s in sales:
-                key = s.sale_date.strftime("%Y-W%W")
-                revenue_buckets[key] = revenue_buckets.get(key, 0) + float(s.total_amount)
-                order_buckets[key] = order_buckets.get(key, 0) + 1
-            return [{"period": k, "revenue": revenue_buckets.get(k, 0), "orders": order_buckets.get(k, 0)} for k in sorted(revenue_buckets.keys())]
-        elif interval == "monthly":
-            revenue_buckets = {}
-            order_buckets = {}
-            for s in sales:
-                key = s.sale_date.strftime("%Y-%m")
-                revenue_buckets[key] = revenue_buckets.get(key, 0) + float(s.total_amount)
-                order_buckets[key] = order_buckets.get(key, 0) + 1
-            return [{"period": k, "revenue": revenue_buckets.get(k, 0), "orders": order_buckets.get(k, 0)} for k in sorted(revenue_buckets.keys())]
-        else:
-            revenue_buckets = {}
-            order_buckets = {}
-            for s in sales:
-                key = s.sale_date.strftime("%Y-%m-%d")
-                revenue_buckets[key] = revenue_buckets.get(key, 0) + float(s.total_amount)
-                order_buckets[key] = order_buckets.get(key, 0) + 1
-            return [{"period": k, "revenue": revenue_buckets.get(k, 0), "orders": order_buckets.get(k, 0)} for k in sorted(revenue_buckets.keys())]
+        rows = result.all()
+        return [{"period": r.period, "revenue": float(r.revenue or 0), "orders": int(r.orders or 0)} for r in rows]
 
     async def get_sales_trend(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, interval: str = "daily") -> List[dict]:
-        query = select(Sale, SaleItem).join(SaleItem, Sale.id == SaleItem.sale_id).where(Sale.company_id == company_id)
-        query = self._apply_sale_filters(query, company_id, filters)
-        result = await db.execute(query)
-        rows = list(result.all())
+        trunc_map = {"daily": "day", "weekly": "week", "monthly": "month"}
+        fmt_map = {"daily": "YYYY-MM-DD", "weekly": "YYYY-MM-DD", "monthly": "YYYY-MM"}
+        trunc = trunc_map.get(interval, "day")
+        fmt = fmt_map.get(interval, "YYYY-MM-DD")
 
-        if not rows:
-            return []
+        rev_query = (
+            select(
+                func.to_char(func.date_trunc(trunc, Sale.sale_date), fmt).label("period"),
+                func.coalesce(func.sum(Sale.total_amount), 0).label("sales"),
+            )
+            .where(Sale.company_id == company_id)
+        )
 
-        if interval == "weekly":
-            buckets = {}
-            for sale, item in rows:
-                key = sale.sale_date.strftime("%Y-W%W")
-                entry = buckets.setdefault(key, {"sales": 0.0, "quantity": 0})
-                entry["sales"] += float(sale.total_amount)
-                entry["quantity"] += item.quantity
-            return [{"period": k, **v} for k, v in sorted(buckets.items())]
-        elif interval == "monthly":
-            buckets = {}
-            for sale, item in rows:
-                key = sale.sale_date.strftime("%Y-%m")
-                entry = buckets.setdefault(key, {"sales": 0.0, "quantity": 0})
-                entry["sales"] += float(sale.total_amount)
-                entry["quantity"] += item.quantity
-            return [{"period": k, **v} for k, v in sorted(buckets.items())]
-        else:
-            buckets = {}
-            for sale, item in rows:
-                key = sale.sale_date.strftime("%Y-%m-%d")
-                entry = buckets.setdefault(key, {"sales": 0.0, "quantity": 0})
-                entry["sales"] += float(sale.total_amount)
-                entry["quantity"] += item.quantity
-            return [{"period": k, **v} for k, v in sorted(buckets.items())]
+        qty_query = (
+            select(
+                func.to_char(func.date_trunc(trunc, Sale.sale_date), fmt).label("period"),
+                func.coalesce(func.sum(SaleItem.quantity), 0).label("quantity"),
+            )
+            .join(Sale, SaleItem.sale_id == Sale.id)
+            .where(Sale.company_id == company_id)
+        )
 
-    async def get_top_products(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, limit: int = 10) -> List[dict]:
+        if filters:
+            date_from = filters.get("date_from")
+            date_to = filters.get("date_to")
+            sales_channel = filters.get("sales_channel")
+            payment_method = filters.get("payment_method")
+            customer_id = filters.get("customer_id")
+            product_id = filters.get("product_id")
+            category_id = filters.get("category_id")
+            brand = filters.get("brand")
+
+            for q in (rev_query, qty_query):
+                if date_from:
+                    q = q.where(Sale.sale_date >= date_from)
+                if date_to:
+                    q = q.where(Sale.sale_date <= date_to)
+                if sales_channel:
+                    q = q.where(Sale.sales_channel == sales_channel)
+                if payment_method:
+                    q = q.where(Sale.payment_method == payment_method)
+                if customer_id:
+                    q = q.where(Sale.customer_id == customer_id)
+
+            if product_id or category_id or brand:
+                rev_query = rev_query.join(SaleItem, Sale.id == SaleItem.sale_id)
+                qty_query = qty_query.join(SaleItem, SaleItem.sale_id == Sale.id)
+                if product_id:
+                    rev_query = rev_query.where(SaleItem.product_id == product_id)
+                    qty_query = qty_query.where(SaleItem.product_id == product_id)
+                if category_id:
+                    rev_query = rev_query.where(SaleItem.category_id == category_id)
+                    qty_query = qty_query.where(SaleItem.category_id == category_id)
+                if brand:
+                    rev_query = rev_query.join(Product, SaleItem.product_id == Product.id).where(Product.brand.ilike(f"%{brand}%"))
+                    qty_query = qty_query.join(Product, SaleItem.product_id == Product.id).where(Product.brand.ilike(f"%{brand}%"))
+
+        rev_query = rev_query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
+        qty_query = qty_query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
+
+        rev_result = await db.execute(rev_query)
+        qty_result = await db.execute(qty_query)
+
+        rev_map = {r.period: float(r.sales or 0) for r in rev_result.all()}
+        qty_map = {r.period: int(r.quantity or 0) for r in qty_result.all()}
+
+        all_periods = sorted(set(rev_map.keys()) | set(qty_map.keys()))
+        return [{"period": p, "sales": rev_map.get(p, 0), "quantity": qty_map.get(p, 0)} for p in all_periods]
+
+    async def get_top_products(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, page: int = 1, page_size: int = 10) -> dict:
         query = (
             select(
                 Product.id,
@@ -223,13 +280,13 @@ class AnalyticsService:
             .where(Sale.status == SaleStatus.COMPLETED)
             .group_by(Product.id, Category.name)
             .order_by(func.sum(SaleItem.quantity).desc())
-            .limit(limit)
         )
         if filters:
             date_from = filters.get("date_from")
             date_to = filters.get("date_to")
             sales_channel = filters.get("sales_channel")
             payment_method = filters.get("payment_method")
+            customer_id = filters.get("customer_id")
             category_id = filters.get("category_id")
             brand = filters.get("brand")
             if date_from:
@@ -240,26 +297,39 @@ class AnalyticsService:
                 query = query.where(Sale.sales_channel == sales_channel)
             if payment_method:
                 query = query.where(Sale.payment_method == payment_method)
+            if customer_id:
+                query = query.where(Sale.customer_id == customer_id)
             if category_id:
                 query = query.where(SaleItem.category_id == category_id)
             if brand:
                 query = query.where(Product.brand.ilike(f"%{brand}%"))
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        query = query.offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(query)
         rows = result.all()
-        return [
-            {
-                "product_id": r.id,
-                "product_name": r.name,
-                "sku": r.sku,
-                "category_name": r.category_name,
-                "brand": r.brand,
-                "total_quantity": int(r.total_quantity or 0),
-                "total_revenue": float(r.total_revenue or 0),
-            }
-            for r in rows
-        ]
+        return {
+            "items": [
+                {
+                    "product_id": r.id,
+                    "product_name": r.name,
+                    "sku": r.sku,
+                    "category_name": r.category_name,
+                    "brand": r.brand,
+                    "total_quantity": int(r.total_quantity or 0),
+                    "total_revenue": float(r.total_revenue or 0),
+                }
+                for r in rows
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
 
-    async def get_top_categories(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, limit: int = 10) -> List[dict]:
+    async def get_top_categories(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, page: int = 1, page_size: int = 10) -> dict:
         query = (
             select(
                 Category.id,
@@ -275,13 +345,13 @@ class AnalyticsService:
             .where(Sale.status == SaleStatus.COMPLETED)
             .group_by(Category.id, Category.name)
             .order_by(func.sum(SaleItem.quantity).desc())
-            .limit(limit)
         )
         if filters:
             date_from = filters.get("date_from")
             date_to = filters.get("date_to")
             sales_channel = filters.get("sales_channel")
             payment_method = filters.get("payment_method")
+            customer_id = filters.get("customer_id")
             brand = filters.get("brand")
             if date_from:
                 query = query.where(Sale.sale_date >= date_from)
@@ -291,20 +361,33 @@ class AnalyticsService:
                 query = query.where(Sale.sales_channel == sales_channel)
             if payment_method:
                 query = query.where(Sale.payment_method == payment_method)
+            if customer_id:
+                query = query.where(Sale.customer_id == customer_id)
             if brand:
                 query = query.where(Product.brand.ilike(f"%{brand}%"))
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        query = query.offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(query)
         rows = result.all()
-        return [
-            {
-                "category_id": r.id,
-                "category_name": r.name,
-                "total_quantity": int(r.total_quantity or 0),
-                "total_revenue": float(r.total_revenue or 0),
-                "product_count": int(r.product_count or 0),
-            }
-            for r in rows
-        ]
+        return {
+            "items": [
+                {
+                    "category_id": r.id,
+                    "category_name": r.name,
+                    "total_quantity": int(r.total_quantity or 0),
+                    "total_revenue": float(r.total_revenue or 0),
+                    "product_count": int(r.product_count or 0),
+                }
+                for r in rows
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
 
     async def get_payment_method_breakdown(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None) -> List[dict]:
         query = select(Sale.payment_method, func.count(Sale.id).label("orders"), func.sum(Sale.total_amount).label("revenue")).where(Sale.company_id == company_id).group_by(Sale.payment_method)
@@ -624,6 +707,7 @@ class AnalyticsService:
             date_to = filters.get("date_to")
             sales_channel = filters.get("sales_channel")
             payment_method = filters.get("payment_method")
+            customer_id = filters.get("customer_id")
             brand = filters.get("brand")
             if date_from:
                 query = query.where(Sale.sale_date >= date_from)
@@ -633,6 +717,8 @@ class AnalyticsService:
                 query = query.where(Sale.sales_channel == sales_channel)
             if payment_method:
                 query = query.where(Sale.payment_method == payment_method)
+            if customer_id:
+                query = query.where(Sale.customer_id == customer_id)
             if brand:
                 query = query.where(Product.brand.ilike(f"%{brand}%"))
 
@@ -677,6 +763,9 @@ class AnalyticsService:
             payment_method = filters.get("payment_method")
             if payment_method:
                 query = query.where(Sale.payment_method == payment_method)
+            customer_id = filters.get("customer_id")
+            if customer_id:
+                query = query.where(Sale.customer_id == customer_id)
 
         query = query.order_by(Sale.sale_date.desc())
         result = await db.execute(query)
@@ -718,6 +807,64 @@ class AnalyticsService:
             "products": products,
             "low_stock_products": low_stock,
             "out_of_stock_products": out_of_stock,
+        }
+
+    async def get_top_customers(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, page: int = 1, page_size: int = 10) -> dict:
+        base_query = (
+            select(Sale)
+            .where(Sale.company_id == company_id)
+            .where(Sale.status == SaleStatus.COMPLETED)
+            .where(Sale.customer_id.is_not(None))
+        )
+        base_query = self._apply_sale_filters(base_query, company_id, filters)
+        sub = base_query.subquery()
+
+        count_query = select(func.count(func.distinct(sub.c.customer_id)))
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        query = (
+            select(
+                sub.c.customer_id,
+                func.count(sub.c.id).label("total_purchases"),
+                func.coalesce(func.sum(sub.c.total_amount), 0).label("total_spent"),
+                func.avg(sub.c.total_amount).label("average_order_value"),
+                func.max(sub.c.sale_date).label("last_purchase_date"),
+            )
+            .group_by(sub.c.customer_id)
+            .order_by(func.sum(sub.c.total_amount).desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        result = await db.execute(query)
+        rows = result.all()
+        customer_ids = [row.customer_id for row in rows]
+
+        customers = {}
+        if customer_ids:
+            customers_result = await db.execute(
+                select(Customer).where(Customer.id.in_(customer_ids))
+            )
+            for c in customers_result.scalars().all():
+                customers[c.id] = c
+
+        return {
+            "items": [
+                {
+                    "id": row.customer_id,
+                    "first_name": customers[row.customer_id].first_name if row.customer_id in customers else "",
+                    "last_name": customers[row.customer_id].last_name if row.customer_id in customers else "",
+                    "email": customers[row.customer_id].email if row.customer_id in customers else None,
+                    "total_purchases": int(row.total_purchases),
+                    "total_spent": float(row.total_spent),
+                    "average_order_value": float(row.average_order_value or 0),
+                    "last_purchase_date": row.last_purchase_date,
+                }
+                for row in rows
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
         }
 
     async def log_analytics_event(self, db: AsyncSession, company_id: UUID, user_id: UUID, action: str, request, entity_name: str = "", details: Optional[str] = None, export_type: Optional[str] = None):

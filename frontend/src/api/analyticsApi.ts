@@ -1,4 +1,5 @@
 import axiosInstance from './axios';
+import type { TopCustomerResponse } from './customerApi';
 
 export interface AnalyticsFilters {
   date_from?: string;
@@ -8,6 +9,7 @@ export interface AnalyticsFilters {
   brand?: string;
   sales_channel?: string;
   payment_method?: string;
+  customer_id?: string;
 }
 
 export interface Product {
@@ -44,6 +46,8 @@ export interface KPIDashboardResponse {
   total_orders: number;
   total_products_sold: number;
   average_order_value: number;
+  total_discount: number;
+  total_tax: number;
   total_inventory_value: number;
   low_stock_products: number;
   out_of_stock_products: number;
@@ -78,6 +82,27 @@ export interface TopCategoryResponse {
   total_quantity: number;
   total_revenue: number;
   product_count: number;
+}
+
+export interface PaginatedTopProductsResponse {
+  items: TopProductResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PaginatedTopCategoriesResponse {
+  items: TopCategoryResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PaginatedTopCustomersResponse {
+  items: TopCustomerResponse[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 export interface PaymentMethodBreakdown {
@@ -231,13 +256,18 @@ export const getSalesTrend = async (interval = 'daily', filters?: AnalyticsFilte
   return data;
 };
 
-export const getTopProducts = async (limit = 10, filters?: AnalyticsFilters): Promise<TopProductResponse[]> => {
-  const { data } = await axiosInstance.get('/analytics/top-products', { params: { limit, ...filters } });
+export const getTopProducts = async (limit = 10, filters?: AnalyticsFilters, page = 1, page_size = 10): Promise<PaginatedTopProductsResponse> => {
+  const { data } = await axiosInstance.get('/analytics/top-products', { params: { limit, page, page_size, ...filters } });
   return data;
 };
 
-export const getTopCategories = async (limit = 10, filters?: AnalyticsFilters): Promise<TopCategoryResponse[]> => {
-  const { data } = await axiosInstance.get('/analytics/top-categories', { params: { limit, ...filters } });
+export const getTopCategories = async (limit = 10, filters?: AnalyticsFilters, page = 1, page_size = 10): Promise<PaginatedTopCategoriesResponse> => {
+  const { data } = await axiosInstance.get('/analytics/top-categories', { params: { limit, page, page_size, ...filters } });
+  return data;
+};
+
+export const getTopCustomers = async (limit = 10, filters?: AnalyticsFilters, page = 1, page_size = 10): Promise<PaginatedTopCustomersResponse> => {
+  const { data } = await axiosInstance.get('/analytics/top-customers', { params: { limit, page, page_size, ...filters } });
   return data;
 };
 
@@ -326,7 +356,7 @@ export const logAnalyticsEvent = async (payload: { action: string; entity_name?:
   return data;
 };
 
-export const exportAnalytics = async (payload: ExportRequest) => {
-  const { data } = await axiosInstance.post('/analytics/export', payload);
-  return data;
+export const exportAnalytics = async (payload: ExportRequest): Promise<Blob> => {
+  const response = await axiosInstance.post('/analytics/export', payload, { responseType: 'blob' });
+  return response.data;
 };

@@ -13,6 +13,7 @@ class AnalyticsFilters(BaseModel):
     brand: Optional[str] = None
     sales_channel: Optional[SalesChannel] = None
     payment_method: Optional[PaymentMethod] = None
+    customer_id: Optional[UUID] = None
 
 
 class KPICardResponse(BaseModel):

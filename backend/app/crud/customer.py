@@ -259,6 +259,31 @@ class CRUDCustomer:
             "last_purchase_date": last_purchase,
         }
 
+    async def get_customers_purchase_summaries(self, db: AsyncSession, company_id: UUID, customer_ids: list[UUID]) -> dict[UUID, dict]:
+        if not customer_ids:
+            return {}
+        result = await db.execute(
+            select(
+                Sale.customer_id.label("customer_id"),
+                func.count(Sale.id).label("total_purchases"),
+                func.coalesce(func.sum(Sale.total_amount), 0).label("total_spent"),
+                func.max(Sale.sale_date).label("last_purchase_date"),
+            )
+            .where(Sale.company_id == company_id)
+            .where(Sale.status == SaleStatus.COMPLETED)
+            .where(Sale.customer_id.in_(customer_ids))
+            .group_by(Sale.customer_id)
+        )
+        rows = result.all()
+        return {
+            row.customer_id: {
+                "total_purchases": int(row.total_purchases),
+                "total_spent": float(row.total_spent),
+                "last_purchase_date": row.last_purchase_date,
+            }
+            for row in rows
+        }
+
     async def get_purchase_history(self, db: AsyncSession, customer_id: UUID, skip: int = 0, limit: int = 50) -> tuple[list[Sale], int]:
         query = (
             select(Sale)
@@ -853,9 +878,13 @@ class CRUDCustomer:
         )
         result = await db.execute(query)
         customers = list(result.scalars().all())
+
+        customer_ids = [c.id for c in customers]
+        summaries = await self.get_customers_purchase_summaries(db, company_id, customer_ids) if customer_ids else {}
+
         output = []
         for cust in customers:
-            summary = await self.get_purchase_summary(db, cust.id)
+            summary = summaries.get(cust.id, {"total_purchases": 0, "total_spent": 0.0, "last_purchase_date": None})
             output.append({
                 "id": cust.id,
                 "first_name": cust.first_name,
@@ -908,9 +937,11 @@ class CRUDCustomer:
 
     async def export_customers(self, db: AsyncSession, company_id: UUID, status: CustomerStatus | None = None, customer_type: CustomerType | None = None) -> list[dict]:
         customers, _ = await self.list(db, company_id, skip=0, limit=500, status=status, customer_type=customer_type)
+        customer_ids = [c.id for c in customers]
+        summaries = await self.get_customers_purchase_summaries(db, company_id, customer_ids) if customer_ids else {}
         output = []
         for cust in customers:
-            summary = await self.get_purchase_summary(db, cust.id)
+            summary = summaries.get(cust.id, {"total_purchases": 0, "total_spent": 0.0, "last_purchase_date": None})
             output.append({
                 "id": str(cust.id),
                 "first_name": cust.first_name,

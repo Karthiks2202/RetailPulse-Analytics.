@@ -6,14 +6,17 @@ import {
   getRevenueTrend,
   getSalesTrend,
   getTopProducts,
+  getTopCustomers,
   getPaymentMethods,
+  exportAnalytics,
   type AnalyticsFilters,
   type RevenueTrendPoint,
   type SalesTrendPoint,
   type TopProductResponse,
+  type TopCustomerResponse,
   type PaymentMethodBreakdown,
 } from '../../api/analyticsApi';
-import { getTopCustomers as getTopCustomersFromCustomerApi, type TopCustomerResponse as CustomerTopCustomerResponse } from '../../api/customerApi';
+import { getCustomers, type Customer } from '../../api/customerApi';
 import { formatCurrency } from '../../utils/currency';
 import {
   AttachMoney as MoneyIcon,
@@ -48,7 +51,7 @@ import {
   Pie,
   Legend,
 } from 'recharts';
-import { jsPDF } from 'jspdf';
+import { Pagination } from '../../components/Pagination';
 
 const INTERVALS = [
   { label: 'Daily', value: 'daily' },
@@ -113,6 +116,14 @@ export const SalesAnalytics: React.FC = () => {
   const [productSortField, setProductSortField] = useState<SortField>('total_revenue');
   const [productSortDir, setProductSortDir] = useState<SortDir>('desc');
   const [exportingType, setExportingType] = useState<string | null>(null);
+  const [topCustomersPage, setTopCustomersPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  const { data: rawCustomers } = useQuery({
+    queryKey: ['sales-analytics', 'customers'],
+    queryFn: () => getCustomers({ status: 'ACTIVE' }),
+  });
+  const customers = (rawCustomers || []) as Customer[];
 
   const dateRange = useMemo(() => {
     if (datePreset === 'custom') {
@@ -168,10 +179,11 @@ export const SalesAnalytics: React.FC = () => {
   const topProducts = (topProductsData || []) as TopProductResponse[];
 
   const { data: topCustomersData, isLoading: topCustomersLoading } = useQuery({
-    queryKey: ['sales-analytics', 'top-customers', analyticsFilters],
-    queryFn: () => getTopCustomersFromCustomerApi(10, { date_from: analyticsFilters.date_from, date_to: analyticsFilters.date_to }),
+    queryKey: ['sales-analytics', 'top-customers', analyticsFilters, topCustomersPage],
+    queryFn: () => getTopCustomers(10, analyticsFilters, topCustomersPage, PAGE_SIZE),
   });
-  const topCustomers = (topCustomersData || []) as CustomerTopCustomerResponse[];
+  const topCustomers = (topCustomersData?.items || []) as TopCustomerResponse[];
+  const topCustomersTotal = topCustomersData?.total || 0;
 
   const { data: paymentMethodsData, isLoading: paymentMethodsLoading } = useQuery({
     queryKey: ['sales-analytics', 'payment-methods', analyticsFilters],
@@ -201,48 +213,27 @@ export const SalesAnalytics: React.FC = () => {
     }
   };
 
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const getExportFilename = (reportType: string, exportType: string) => {
+    const company = user?.company?.replace(/\s+/g, '_') || 'RetailPulse_Analytics';
+    return `${company}_sales_analytics_report.${exportType}`;
+  };
+
   const handleExportCSV = async () => {
     setExportingType('csv');
     try {
-      const kpiData = kpis || {};
-      const rows = [
-        { Metric: 'Total Revenue', Value: formatCurrency(kpiData.total_revenue || 0) },
-        { Metric: 'Total Orders', Value: (kpiData.total_orders || 0).toLocaleString() },
-        { Metric: 'Average Order Value', Value: formatCurrency(kpiData.average_order_value || 0) },
-        { Metric: 'Total Items Sold', Value: (kpiData.total_products_sold || 0).toLocaleString() },
-        { Metric: 'Total Discount', Value: formatCurrency(kpiData.total_discount || 0) },
-        { Metric: 'Total Tax', Value: formatCurrency(kpiData.total_tax || 0) },
-      ];
-
-      let csvContent = 'Metric,Value\n';
-      rows.forEach((row) => {
-        csvContent += `${row.Metric},${row.Value}\n`;
-      });
-
-      if (topProducts.length > 0) {
-        csvContent += '\nTop Products\n';
-        csvContent += 'Product,Units Sold,Revenue\n';
-        topProducts.forEach((p) => {
-          csvContent += `${p.product_name},${p.total_quantity},${formatCurrency(p.total_revenue)}\n`;
-        });
-      }
-
-      if (topCustomers.length > 0) {
-        csvContent += '\nTop Customers\n';
-        csvContent += 'Customer,Orders,Total Spend,Avg Order Value\n';
-        topCustomers.forEach((c) => {
-          csvContent += `${c.first_name} ${c.last_name},${c.total_purchases},${formatCurrency(c.total_spent)},${formatCurrency(c.average_order_value || 0)}\n`;
-        });
-      }
-
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'sales_analytics_report.csv');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const blob = await exportAnalytics({ export_type: 'csv', report_type: 'kpis', filters: analyticsFilters });
+      downloadBlob(blob, getExportFilename('kpis', 'csv'));
     } catch (err) {
       console.error('CSV Export Error:', err);
     } finally {
@@ -253,90 +244,8 @@ export const SalesAnalytics: React.FC = () => {
   const handleExportPDF = async () => {
     setExportingType('pdf');
     try {
-      const doc = new jsPDF();
-      const companyName = user?.company || 'RetailPulse Analytics';
-      const timestamp = new Date().toLocaleString();
-
-      doc.setFillColor(79, 70, 229);
-      doc.rect(0, 0, 210, 24, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.setTextColor(255, 255, 255);
-      doc.text(`${companyName} - Sales Analytics Report`, 14, 16);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`Date: ${timestamp}`, 14, 32);
-
-      let yOffset = 38;
-
-      if (kpis) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(12);
-        doc.setTextColor(30, 41, 59);
-        doc.text('Key Performance Indicators', 14, yOffset);
-        yOffset += 4;
-
-        (doc as any).autoTable({
-          startY: yOffset,
-          head: [['KPI Metric', 'Value']],
-          body: [
-            ['Total Revenue', formatCurrency(kpis.total_revenue || 0)],
-            ['Total Orders', (kpis.total_orders || 0).toLocaleString()],
-            ['Average Order Value', formatCurrency(kpis.average_order_value || 0)],
-            ['Total Items Sold', (kpis.total_products_sold || 0).toLocaleString()],
-            ['Total Discount', formatCurrency(kpis.total_discount || 0)],
-            ['Total Tax', formatCurrency(kpis.total_tax || 0)],
-          ],
-          theme: 'striped',
-          headStyles: { fillColor: [79, 70, 229] },
-          styles: { fontSize: 9 },
-        });
-        yOffset = (doc as any).lastAutoTable.finalY + 10;
-      }
-
-      if (topProducts.length > 0) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(12);
-        doc.setTextColor(30, 41, 59);
-        doc.text('Top Performing Products', 14, yOffset);
-        yOffset += 4;
-
-        (doc as any).autoTable({
-          startY: yOffset,
-          head: [['Product', 'Units Sold', 'Revenue']],
-          body: topProducts.map((p) => [p.product_name, p.total_quantity, formatCurrency(p.total_revenue)]),
-          theme: 'striped',
-          headStyles: { fillColor: [79, 70, 229] },
-          styles: { fontSize: 9 },
-        });
-        yOffset = (doc as any).lastAutoTable.finalY + 10;
-      }
-
-      if (topCustomers.length > 0) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(12);
-        doc.setTextColor(30, 41, 59);
-        doc.text('Top Customers', 14, yOffset);
-        yOffset += 4;
-
-        (doc as any).autoTable({
-          startY: yOffset,
-          head: [['Customer', 'Orders', 'Total Spend', 'Avg Order Value']],
-          body: topCustomers.map((c) => [
-            `${c.first_name} ${c.last_name}`,
-            c.total_purchases,
-            formatCurrency(c.total_spent),
-            formatCurrency(c.average_order_value || 0),
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [79, 70, 229] },
-          styles: { fontSize: 9 },
-        });
-      }
-
-      doc.save(`${companyName}_sales_analytics_report.pdf`);
+      const blob = await exportAnalytics({ export_type: 'pdf', report_type: 'kpis', filters: analyticsFilters });
+      downloadBlob(blob, getExportFilename('kpis', 'pdf'));
     } catch (err) {
       console.error('PDF Export Error:', err);
     } finally {
@@ -445,6 +354,17 @@ export const SalesAnalytics: React.FC = () => {
             <option value="Card">Card</option>
             <option value="UPI">UPI</option>
             <option value="Bank Transfer">Bank Transfer</option>
+          </select>
+
+          <select
+            value={filters.customer_id || ''}
+            onChange={(e) => updateFilter('customer_id', e.target.value)}
+            className={`${inputClass} lg:w-44`}
+          >
+            <option value="">All Customers</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
+            ))}
           </select>
 
           {hasActiveFilters && (
@@ -686,29 +606,34 @@ export const SalesAnalytics: React.FC = () => {
                 ))}
               </div>
             ) : topCustomers && topCustomers.length > 0 ? (
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">
-                  <tr>
-                    <th className="p-3">Customer</th>
-                    <th className="p-3 text-center">Orders</th>
-                    <th className="p-3 text-right">Total Spend</th>
-                    <th className="p-3 text-right">Avg Order Value</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                  {topCustomers.map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="p-3">
-                        <div className="font-semibold text-slate-900 dark:text-slate-100">{c.first_name} {c.last_name}</div>
-                        <div className="text-[10px] text-slate-400">{c.email || '—'}</div>
-                      </td>
-                      <td className="p-3 text-center font-bold">{c.total_purchases}</td>
-                      <td className="p-3 text-right font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(c.total_spent)}</td>
-                      <td className="p-3 text-right font-mono text-indigo-600 dark:text-indigo-400">{formatCurrency(c.average_order_value || 0)}</td>
+              <>
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">
+                    <tr>
+                      <th className="p-3">#</th>
+                      <th className="p-3">Customer</th>
+                      <th className="p-3 text-center">Orders</th>
+                      <th className="p-3 text-right">Total Spend</th>
+                      <th className="p-3 text-right">Avg Order Value</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                    {topCustomers.map((c, idx) => (
+                      <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td className="p-3 text-slate-500 font-mono">{idx + 1 + (topCustomersPage - 1) * PAGE_SIZE}</td>
+                        <td className="p-3">
+                          <div className="font-semibold text-slate-900 dark:text-slate-100">{c.first_name} {c.last_name}</div>
+                          <div className="text-[10px] text-slate-400">{c.email || '—'}</div>
+                        </td>
+                        <td className="p-3 text-center font-bold">{c.total_purchases}</td>
+                        <td className="p-3 text-right font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(c.total_spent)}</td>
+                        <td className="p-3 text-right font-mono text-indigo-600 dark:text-indigo-400">{formatCurrency(c.average_order_value || 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <Pagination page={topCustomersPage} pageSize={PAGE_SIZE} total={topCustomersTotal} onPageChange={setTopCustomersPage} />
+              </>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400 space-y-2">
                 <PeopleIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />

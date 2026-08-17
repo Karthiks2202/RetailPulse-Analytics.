@@ -63,28 +63,71 @@ class ForecastService:
     async def _get_historical_sales(self, db: AsyncSession, company_id: UUID, product_id: UUID, days_back: int = 90) -> List[int]:
         cutoff = datetime.utcnow() - timedelta(days=days_back)
         result = await db.execute(
-            select(SaleItem.quantity)
-            .join(Sale, SaleItem.sale_id == Sale.id)
+            select(Sale.sale_date, func.sum(SaleItem.quantity).label("daily_qty"))
+            .join(SaleItem, SaleItem.sale_id == Sale.id)
             .where(Sale.company_id == company_id)
             .where(SaleItem.product_id == product_id)
             .where(Sale.sale_date >= cutoff)
             .where(Sale.status == SaleStatus.COMPLETED)
+            .group_by(Sale.sale_date)
             .order_by(Sale.sale_date.asc())
         )
-        return [row[0] for row in result.all()]
+        daily_sales = {row.sale_date.date(): int(row.daily_qty or 0) for row in result.all()}
+
+        days = []
+        current = cutoff.date()
+        end = datetime.utcnow().date()
+        while current <= end:
+            days.append(daily_sales.get(current, 0))
+            current += timedelta(days=1)
+
+        return days
 
     async def _get_category_sales(self, db: AsyncSession, company_id: UUID, category_id: UUID, days_back: int = 90) -> List[int]:
         cutoff = datetime.utcnow() - timedelta(days=days_back)
         result = await db.execute(
-            select(SaleItem.quantity)
-            .join(Sale, SaleItem.sale_id == Sale.id)
+            select(Sale.sale_date, func.sum(SaleItem.quantity).label("daily_qty"))
+            .join(SaleItem, SaleItem.sale_id == Sale.id)
             .where(Sale.company_id == company_id)
             .where(SaleItem.category_id == category_id)
             .where(Sale.sale_date >= cutoff)
             .where(Sale.status == SaleStatus.COMPLETED)
+            .group_by(Sale.sale_date)
             .order_by(Sale.sale_date.asc())
         )
-        return [row[0] for row in result.all()]
+        daily_sales = {row.sale_date.date(): int(row.daily_qty or 0) for row in result.all()}
+
+        days = []
+        current = cutoff.date()
+        end = datetime.utcnow().date()
+        while current <= end:
+            days.append(daily_sales.get(current, 0))
+            current += timedelta(days=1)
+
+        return days
+
+    async def _calculate_forecast_accuracy(self, db: AsyncSession, forecast_id: UUID, product_id: UUID, company_id: UUID) -> Optional[float]:
+        forecast = await forecast_crud.get(db, forecast_id)
+        if not forecast:
+            return None
+
+        actual_result = await db.execute(
+            select(func.sum(SaleItem.quantity))
+            .join(Sale, SaleItem.sale_id == Sale.id)
+            .where(Sale.company_id == company_id)
+            .where(SaleItem.product_id == product_id)
+            .where(Sale.sale_date >= forecast.forecast_start_date)
+            .where(Sale.sale_date <= forecast.forecast_end_date)
+            .where(Sale.status == SaleStatus.COMPLETED)
+        )
+        actual_sales = int(actual_result.scalar_one_or_none() or 0)
+
+        if forecast.predicted_demand == 0:
+            return 100.0 if actual_sales == 0 else 0.0
+
+        error_rate = abs(forecast.predicted_demand - actual_sales) / forecast.predicted_demand
+        accuracy = max(0.0, min(100.0, (1 - error_rate) * 100))
+        return round(accuracy, 2)
 
     async def generate_product_forecast(
         self,
@@ -117,19 +160,32 @@ class ForecastService:
         start_date = forecast_start_date or datetime.utcnow()
         end_date = forecast_end_date or (datetime.utcnow() + timedelta(days=days))
 
-        forecast = await forecast_crud.create(
-            db,
-            company_id=company_id,
-            product_id=product_id,
-            category_id=product.category_id,
-            forecast_period=forecast_period,
-            forecast_start_date=start_date,
-            forecast_end_date=end_date,
-            predicted_demand=predicted_demand,
-            confidence_score=Decimal(str(confidence)),
-            historical_sales=historical_sales,
-            recommendation=recommendation,
-        )
+        existing = await forecast_crud.get_by_product_period(db, company_id, product_id, forecast_period)
+        if existing:
+            forecast = await forecast_crud.update(
+                db,
+                existing,
+                forecast_start_date=start_date,
+                forecast_end_date=end_date,
+                predicted_demand=predicted_demand,
+                confidence_score=Decimal(str(confidence)),
+                historical_sales=historical_sales,
+                recommendation=recommendation,
+            )
+        else:
+            forecast = await forecast_crud.create(
+                db,
+                company_id=company_id,
+                product_id=product_id,
+                category_id=product.category_id,
+                forecast_period=forecast_period,
+                forecast_start_date=start_date,
+                forecast_end_date=end_date,
+                predicted_demand=predicted_demand,
+                confidence_score=Decimal(str(confidence)),
+                historical_sales=historical_sales,
+                recommendation=recommendation,
+            )
 
         await forecast_crud.create_history(
             db, forecast_id=forecast.id, historical_sales=historical_sales, prediction=predicted_demand, accuracy=confidence
@@ -146,9 +202,6 @@ class ForecastService:
         forecast_end_date: Optional[datetime] = None,
         custom_days: Optional[int] = None,
     ) -> List[DemandForecast]:
-        if await forecast_crud.count_by_period(db, company_id, forecast_period) > 0:
-            raise ValueError(f"Forecasts already generated for period: {forecast_period.value}")
-
         result = await db.execute(
             select(Product.id)
             .where(Product.company_id == company_id)
