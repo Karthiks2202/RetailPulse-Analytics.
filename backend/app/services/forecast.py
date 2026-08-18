@@ -63,16 +63,16 @@ class ForecastService:
     async def _get_historical_sales(self, db: AsyncSession, company_id: UUID, product_id: UUID, days_back: int = 90) -> List[int]:
         cutoff = datetime.utcnow() - timedelta(days=days_back)
         result = await db.execute(
-            select(Sale.sale_date, func.sum(SaleItem.quantity).label("daily_qty"))
+            select(func.date(Sale.sale_date).label("sale_day"), func.sum(SaleItem.quantity).label("daily_qty"))
             .join(SaleItem, SaleItem.sale_id == Sale.id)
             .where(Sale.company_id == company_id)
             .where(SaleItem.product_id == product_id)
             .where(Sale.sale_date >= cutoff)
             .where(Sale.status == SaleStatus.COMPLETED)
-            .group_by(Sale.sale_date)
-            .order_by(Sale.sale_date.asc())
+            .group_by(func.date(Sale.sale_date))
+            .order_by(func.date(Sale.sale_date).asc())
         )
-        daily_sales = {row.sale_date.date(): int(row.daily_qty or 0) for row in result.all()}
+        daily_sales = {row.sale_day: int(row.daily_qty or 0) for row in result.all()}
 
         days = []
         current = cutoff.date()
@@ -86,16 +86,16 @@ class ForecastService:
     async def _get_category_sales(self, db: AsyncSession, company_id: UUID, category_id: UUID, days_back: int = 90) -> List[int]:
         cutoff = datetime.utcnow() - timedelta(days=days_back)
         result = await db.execute(
-            select(Sale.sale_date, func.sum(SaleItem.quantity).label("daily_qty"))
+            select(func.date(Sale.sale_date).label("sale_day"), func.sum(SaleItem.quantity).label("daily_qty"))
             .join(SaleItem, SaleItem.sale_id == Sale.id)
             .where(Sale.company_id == company_id)
             .where(SaleItem.category_id == category_id)
             .where(Sale.sale_date >= cutoff)
             .where(Sale.status == SaleStatus.COMPLETED)
-            .group_by(Sale.sale_date)
-            .order_by(Sale.sale_date.asc())
+            .group_by(func.date(Sale.sale_date))
+            .order_by(func.date(Sale.sale_date).asc())
         )
-        daily_sales = {row.sale_date.date(): int(row.daily_qty or 0) for row in result.all()}
+        daily_sales = {row.sale_day: int(row.daily_qty or 0) for row in result.all()}
 
         days = []
         current = cutoff.date()
@@ -188,7 +188,7 @@ class ForecastService:
             )
 
         await forecast_crud.create_history(
-            db, forecast_id=forecast.id, historical_sales=historical_sales, prediction=predicted_demand, accuracy=confidence
+            db, forecast_id=forecast.id, historical_sales=historical_sales, prediction=predicted_demand
         )
 
         return forecast

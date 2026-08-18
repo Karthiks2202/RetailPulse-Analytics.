@@ -374,8 +374,6 @@ class CRUDSale:
                     if product:
                         initial_quantities[product.id] = product.stock_quantity
                         product.stock_quantity += old_item.quantity
-                        if product.status == ProductStatus.INACTIVE and product.stock_quantity > 0:
-                            product.status = ProductStatus.ACTIVE
                         product_updates.append(product)
 
             total_amount = Decimal("0")
@@ -494,8 +492,6 @@ class CRUDSale:
                 if product:
                     initial_quantities[product.id] = product.stock_quantity
                     product.stock_quantity += item.quantity
-                    if product.status == ProductStatus.INACTIVE and product.stock_quantity > 0:
-                        product.status = ProductStatus.ACTIVE
 
         invoice_number = sale.invoice_number
         await db.delete(sale)

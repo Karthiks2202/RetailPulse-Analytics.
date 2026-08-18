@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, extract, and_
 from sqlalchemy.orm import selectinload
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from decimal import Decimal
 from uuid import UUID
 from typing import Optional, List
@@ -140,6 +140,35 @@ class AnalyticsService:
             "total_categories": total_categories,
         }
 
+    def _generate_date_range(self, start: datetime, end: datetime, interval: str) -> List[datetime]:
+        dates = []
+        current = start.date() if isinstance(start, datetime) else start
+        end_date = end.date() if isinstance(end, datetime) else end
+        while current <= end_date:
+            dates.append(current)
+            if interval == "daily":
+                current += timedelta(days=1)
+            elif interval == "weekly":
+                current += timedelta(weeks=1)
+            elif interval == "monthly":
+                month = current.month - 1 + 1
+                year = current.year + month // 12
+                month = month % 12 + 1
+                day = min(current.day, [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
+                current = date(year, month, day)
+            else:
+                current += timedelta(days=1)
+        return dates
+
+    def _format_period(self, d: date, interval: str) -> str:
+        if interval == "daily":
+            return d.strftime("%Y-%m-%d")
+        elif interval == "weekly":
+            return d.strftime("%Y-%m-%d")
+        elif interval == "monthly":
+            return d.strftime("%Y-%m")
+        return d.strftime("%Y-%m-%d")
+
     async def get_revenue_trend(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, interval: str = "daily") -> List[dict]:
         trunc_map = {"daily": "day", "weekly": "week", "monthly": "month"}
         fmt_map = {"daily": "YYYY-MM-DD", "weekly": "YYYY-MM-DD", "monthly": "YYYY-MM"}
@@ -190,7 +219,22 @@ class AnalyticsService:
         query = query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
         result = await db.execute(query)
         rows = result.all()
-        return [{"period": r.period, "revenue": float(r.revenue or 0), "orders": int(r.orders or 0)} for r in rows]
+        data_map = {r.period: {"period": r.period, "revenue": float(r.revenue or 0), "orders": int(r.orders or 0)} for r in rows}
+
+        date_from = filters.get("date_from") if filters else None
+        date_to = filters.get("date_to") if filters else None
+        start = date_from or (datetime.utcnow() - timedelta(days=30))
+        end = date_to or datetime.utcnow()
+
+        all_periods = self._generate_date_range(start, end, interval)
+        result_list = []
+        for d in all_periods:
+            period_key = self._format_period(d, interval)
+            if period_key in data_map:
+                result_list.append(data_map[period_key])
+            else:
+                result_list.append({"period": period_key, "revenue": 0.0, "orders": 0})
+        return result_list
 
     async def get_sales_trend(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, interval: str = "daily") -> List[dict]:
         trunc_map = {"daily": "day", "weekly": "week", "monthly": "month"}
@@ -242,14 +286,22 @@ class AnalyticsService:
         query = query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
         result = await db.execute(query)
         rows = result.all()
-        return [
-            {
-                "period": r.period,
-                "sales": float(r.sales or 0),
-                "orders": int(r.orders or 0),
-            }
-            for r in rows
-        ]
+        data_map = {r.period: {"period": r.period, "sales": float(r.sales or 0), "orders": int(r.orders or 0)} for r in rows}
+
+        date_from = filters.get("date_from") if filters else None
+        date_to = filters.get("date_to") if filters else None
+        start = date_from or (datetime.utcnow() - timedelta(days=30))
+        end = date_to or datetime.utcnow()
+
+        all_periods = self._generate_date_range(start, end, interval)
+        result_list = []
+        for d in all_periods:
+            period_key = self._format_period(d, interval)
+            if period_key in data_map:
+                result_list.append(data_map[period_key])
+            else:
+                result_list.append({"period": period_key, "sales": 0.0, "orders": 0})
+        return result_list
 
     async def get_top_products(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, page: int = 1, page_size: int = 10, sort_by: Optional[str] = None, sort_order: Optional[str] = "desc") -> dict:
         sort_by = sort_by or "total_quantity"

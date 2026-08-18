@@ -64,22 +64,22 @@ def _parse_filters(
         try:
             filters["date_from"] = datetime.fromisoformat(date_from)
         except ValueError:
-            pass
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date_from format. Use YYYY-MM-DD.")
     if date_to:
         try:
             filters["date_to"] = datetime.combine(datetime.fromisoformat(date_to).date(), time.max)
         except ValueError:
-            pass
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date_to format. Use YYYY-MM-DD.")
     if product_id:
         try:
             filters["product_id"] = UUID(product_id)
         except ValueError:
-            pass
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid product_id format.")
     if category_id:
         try:
             filters["category_id"] = UUID(category_id)
         except ValueError:
-            pass
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid category_id format.")
     if brand:
         filters["brand"] = brand
     if sales_channel:
@@ -90,7 +90,7 @@ def _parse_filters(
         try:
             filters["customer_id"] = UUID(customer_id)
         except ValueError:
-            pass
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid customer_id format.")
     return filters if filters else None
 
 

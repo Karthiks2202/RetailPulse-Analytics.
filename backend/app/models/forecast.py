@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Numeric, Integer, DateTime, ForeignKey, Enum as SQLEnum, Text
+from sqlalchemy import Column, String, Numeric, Integer, DateTime, ForeignKey, Enum as SQLEnum, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -42,6 +42,8 @@ class DemandForecast(Base):
     product = relationship("Product", back_populates="demand_forecasts", lazy="raise_on_sql")
     category = relationship("Category", lazy="raise_on_sql")
     history = relationship("ForecastHistory", back_populates="forecast", cascade="all, delete-orphan", lazy="raise_on_sql")
+
+    __table_args__ = (UniqueConstraint("company_id", "product_id", "forecast_period", name="uq_company_product_period"),)
 
 
 class ForecastHistory(Base):
