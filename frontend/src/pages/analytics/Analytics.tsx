@@ -428,8 +428,9 @@ const queryOptions: { refetchInterval: number | false } = {
   };
 
   const getExportFilename = (reportType: string, exportType: string) => {
-    const company = user?.company?.replace(/\s+/g, '_') || 'RetailPulse_Analytics';
-    return `${company}_${reportType}_report.${exportType}`;
+    const company = user?.company?.replace(/\s+/g, '_') || 'RetailPulse';
+    const type = reportType.replace(/-/g, '_');
+    return `${company}_${type}_report.${exportType}`;
   };
 
   const handleExportCSV = async (reportType: ExportRequest['report_type']) => {

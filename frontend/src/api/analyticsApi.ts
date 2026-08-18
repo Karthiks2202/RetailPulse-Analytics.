@@ -63,7 +63,7 @@ export interface RevenueTrendPoint {
 export interface SalesTrendPoint {
   period: string;
   sales: number;
-  quantity: number;
+  orders: number;
 }
 
 export interface TopProductResponse {

@@ -37,8 +37,6 @@ import {
   Receipt as ReceiptIcon,
   PictureAsPdf as PdfIcon,
   TableChart as CsvIcon,
-  ArrowUpward as ArrowUpIcon,
-  ArrowDownward as ArrowDownIcon,
 } from '@mui/icons-material';
 import {
   AreaChart,
@@ -107,9 +105,6 @@ const getDateRange = (preset: string): { date_from?: string; date_to?: string } 
   return { date_from, date_to };
 };
 
-type SortField = 'total_revenue' | 'total_quantity';
-type SortDir = 'asc' | 'desc';
-
 export const SalesAnalytics: React.FC = () => {
   const { user } = useAuth();
 
@@ -118,8 +113,6 @@ export const SalesAnalytics: React.FC = () => {
   const [customDateFrom, setCustomDateFrom] = useState<string>('');
   const [customDateTo, setCustomDateTo] = useState<string>('');
   const [filters, setFilters] = useState<AnalyticsFilters>({});
-  const [productSortField, setProductSortField] = useState<SortField>('total_revenue');
-  const [productSortDir, setProductSortDir] = useState<SortDir>('desc');
   const [exportingType, setExportingType] = useState<string | null>(null);
   const [topCustomersPage, setTopCustomersPage] = useState(1);
   const PAGE_SIZE = 10;
@@ -197,8 +190,8 @@ export const SalesAnalytics: React.FC = () => {
   const salesTrend = (salesTrendData || []) as SalesTrendPoint[];
 
   const { data: topProductsData, isLoading: topProductsLoading } = useQuery({
-    queryKey: ['sales-analytics', 'top-products', analyticsFilters, productSortField, productSortDir],
-    queryFn: () => getTopProducts(10, analyticsFilters, 1, 10, productSortField, productSortDir),
+    queryKey: ['sales-analytics', 'top-products', analyticsFilters],
+    queryFn: () => getTopProducts(10, analyticsFilters, 1, 10, 'total_revenue', 'desc'),
   });
   const _topProducts = (topProductsData || []) as TopProductResponse[];
 
@@ -215,28 +208,6 @@ export const SalesAnalytics: React.FC = () => {
   });
   const paymentMethods = (paymentMethodsData || []) as PaymentMethodBreakdown[];
 
-  const sortedTopProducts = useMemo(() => {
-    const sorted = [...(topProductsData || [])];
-    sorted.sort((a, b) => {
-      const aVal = productSortField === 'total_revenue' ? a.total_revenue : a.total_quantity;
-      const bVal = productSortField === 'total_revenue' ? b.total_revenue : b.total_quantity;
-      if (productSortDir === 'asc') {
-        return aVal > bVal ? 1 : -1;
-      }
-      return aVal < bVal ? 1 : -1;
-    });
-    return sorted;
-  }, [topProductsData, productSortField, productSortDir]);
-
-  const toggleProductSort = (field: SortField) => {
-    if (productSortField === field) {
-      setProductSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setProductSortField(field);
-      setProductSortDir('desc');
-    }
-  };
-
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -249,8 +220,9 @@ export const SalesAnalytics: React.FC = () => {
   };
 
   const getExportFilename = (reportType: string, exportType: string) => {
-    const company = user?.company?.replace(/\s+/g, '_') || 'RetailPulse_Analytics';
-    return `${company}_sales_analytics_report.${exportType}`;
+    const company = user?.company?.replace(/\s+/g, '_') || 'RetailPulse';
+    const type = reportType.replace(/-/g, '_');
+    return `${company}_${type}_report.${exportType}`;
   };
 
   const handleExportCSV = async (reportType: ExportRequest['report_type'] = 'kpis') => {
@@ -577,7 +549,7 @@ export const SalesAnalytics: React.FC = () => {
                       <Cell key={`cell-${index}`} fill="#6366f1" fillOpacity={0.85} />
                     ))}
                   </Bar>
-                  <Line yAxisId="right" type="monotone" dataKey="quantity" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: '#10b981' }} />
+                  <Line yAxisId="right" type="monotone" dataKey="orders" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: '#10b981' }} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -592,34 +564,10 @@ export const SalesAnalytics: React.FC = () => {
 
       {/* Top Performing Products */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/30">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/30">
           <div className="flex items-center gap-2">
             <BagIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Top Performing Products</h2>
-          </div>
-          <div className="flex rounded-lg bg-slate-100 dark:bg-slate-950 p-1 border border-slate-200 dark:border-slate-800">
-            <button
-              onClick={() => toggleProductSort('total_revenue')}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 ${
-                productSortField === 'total_revenue'
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Revenue
-              {productSortField === 'total_revenue' && (productSortDir === 'asc' ? <ArrowUpIcon style={{ fontSize: 12 }} /> : <ArrowDownIcon style={{ fontSize: 12 }} />)}
-            </button>
-            <button
-              onClick={() => toggleProductSort('total_quantity')}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 ${
-                productSortField === 'total_quantity'
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Units Sold
-              {productSortField === 'total_quantity' && (productSortDir === 'asc' ? <ArrowUpIcon style={{ fontSize: 12 }} /> : <ArrowDownIcon style={{ fontSize: 12 }} />)}
-            </button>
           </div>
         </div>
         <div className="p-4 overflow-x-auto">
@@ -629,7 +577,7 @@ export const SalesAnalytics: React.FC = () => {
                 <div key={i} className="h-12 bg-slate-200 dark:bg-slate-800 rounded-lg" />
               ))}
             </div>
-          ) : sortedTopProducts && sortedTopProducts.length > 0 ? (
+          ) : _topProducts && _topProducts.length > 0 ? (
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">
                 <tr>
@@ -641,7 +589,7 @@ export const SalesAnalytics: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                {sortedTopProducts.map((p) => (
+                {_topProducts.map((p) => (
                   <tr key={p.product_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <td className="p-3 font-semibold text-slate-900 dark:text-slate-100">{p.product_name}</td>
                     <td className="p-3 font-mono text-slate-500">{p.sku}</td>

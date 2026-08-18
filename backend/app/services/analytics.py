@@ -210,7 +210,7 @@ class AnalyticsService:
         qty_query = (
             select(
                 func.to_char(func.date_trunc(trunc, Sale.sale_date), fmt).label("period"),
-                func.coalesce(func.sum(SaleItem.quantity), 0).label("quantity"),
+                func.coalesce(func.count(func.distinct(Sale.id)), 0).label("orders"),
             )
             .join(Sale, SaleItem.sale_id == Sale.id)
             .where(Sale.company_id == company_id)
@@ -263,10 +263,10 @@ class AnalyticsService:
         qty_result = await db.execute(qty_query)
 
         rev_map = {r.period: float(r.sales or 0) for r in rev_result.all()}
-        qty_map = {r.period: int(r.quantity or 0) for r in qty_result.all()}
+        orders_map = {r.period: int(r.orders or 0) for r in qty_result.all()}
 
-        all_periods = sorted(set(rev_map.keys()) | set(qty_map.keys()))
-        return [{"period": p, "sales": rev_map.get(p, 0), "quantity": qty_map.get(p, 0)} for p in all_periods]
+        all_periods = sorted(set(rev_map.keys()) | set(orders_map.keys()))
+        return [{"period": p, "sales": rev_map.get(p, 0), "orders": orders_map.get(p, 0)} for p in all_periods]
 
     async def get_top_products(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, page: int = 1, page_size: int = 10, sort_by: Optional[str] = None, sort_order: Optional[str] = "desc") -> dict:
         sort_by = sort_by or "total_quantity"
@@ -298,6 +298,7 @@ class AnalyticsService:
             sales_channel = filters.get("sales_channel")
             payment_method = filters.get("payment_method")
             customer_id = filters.get("customer_id")
+            product_id = filters.get("product_id")
             category_id = filters.get("category_id")
             brand = filters.get("brand")
             if date_from:
@@ -310,6 +311,8 @@ class AnalyticsService:
                 query = query.where(Sale.payment_method == payment_method)
             if customer_id:
                 query = query.where(Sale.customer_id == customer_id)
+            if product_id:
+                query = query.where(SaleItem.product_id == product_id)
             if category_id:
                 query = query.where(SaleItem.category_id == category_id)
             if brand:
