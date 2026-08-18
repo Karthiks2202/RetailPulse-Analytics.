@@ -179,23 +179,27 @@ export const SalesAnalytics: React.FC = () => {
   const { data: kpis, isLoading: kpisLoading, error: kpisError } = useQuery({
     queryKey: ['sales-analytics', 'kpis', analyticsFilters],
     queryFn: () => getKPIDashboard(analyticsFilters),
+    enabled: !dateError,
   });
 
   const { data: revenueTrendData, isLoading: revenueLoading } = useQuery({
     queryKey: ['sales-analytics', 'revenue-trend', interval, analyticsFilters],
     queryFn: () => getRevenueTrend(interval, analyticsFilters),
+    enabled: !dateError,
   });
   const revenueTrend = (revenueTrendData || []) as RevenueTrendPoint[];
 
   const { data: salesTrendData, isLoading: salesLoading } = useQuery({
     queryKey: ['sales-analytics', 'sales-trend', interval, analyticsFilters],
     queryFn: () => getSalesTrend(interval, analyticsFilters),
+    enabled: !dateError,
   });
   const salesTrend = (salesTrendData || []) as SalesTrendPoint[];
 
   const { data: topProductsData, isLoading: topProductsLoading } = useQuery({
     queryKey: ['sales-analytics', 'top-products', analyticsFilters, topProductsPage, topProductsSortBy],
     queryFn: () => getTopProducts(10, analyticsFilters, topProductsPage, PAGE_SIZE, topProductsSortBy, 'desc'),
+    enabled: !dateError,
   });
   const _topProducts = ((topProductsData as any)?.items || []) as TopProductResponse[];
   const topProductsTotal = (topProductsData as any)?.total || 0;
@@ -203,6 +207,7 @@ export const SalesAnalytics: React.FC = () => {
   const { data: topCustomersData, isLoading: topCustomersLoading } = useQuery({
     queryKey: ['sales-analytics', 'top-customers', analyticsFilters, topCustomersPage],
     queryFn: () => getTopCustomers(10, analyticsFilters, topCustomersPage, PAGE_SIZE),
+    enabled: !dateError,
   });
   const topCustomers = (topCustomersData?.items || []) as TopCustomerResponse[];
   const topCustomersTotal = topCustomersData?.total || 0;
@@ -210,6 +215,7 @@ export const SalesAnalytics: React.FC = () => {
   const { data: paymentMethodsData, isLoading: paymentMethodsLoading } = useQuery({
     queryKey: ['sales-analytics', 'payment-methods', analyticsFilters],
     queryFn: () => getPaymentMethods(analyticsFilters),
+    enabled: !dateError,
   });
   const paymentMethods = (paymentMethodsData || []) as PaymentMethodBreakdown[];
 

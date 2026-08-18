@@ -198,21 +198,12 @@ class AnalyticsService:
         trunc = trunc_map.get(interval, "day")
         fmt = fmt_map.get(interval, "YYYY-MM-DD")
 
-        rev_query = (
+        query = (
             select(
                 func.to_char(func.date_trunc(trunc, Sale.sale_date), fmt).label("period"),
                 func.coalesce(func.sum(Sale.total_amount), 0).label("sales"),
-            )
-            .where(Sale.company_id == company_id)
-            .where(Sale.status == SaleStatus.COMPLETED)
-        )
-
-        qty_query = (
-            select(
-                func.to_char(func.date_trunc(trunc, Sale.sale_date), fmt).label("period"),
                 func.coalesce(func.count(func.distinct(Sale.id)), 0).label("orders"),
             )
-            .join(Sale, SaleItem.sale_id == Sale.id)
             .where(Sale.company_id == company_id)
             .where(Sale.status == SaleStatus.COMPLETED)
         )
@@ -228,45 +219,37 @@ class AnalyticsService:
             brand = filters.get("brand")
 
             if date_from:
-                rev_query = rev_query.where(Sale.sale_date >= date_from)
-                qty_query = qty_query.where(Sale.sale_date >= date_from)
+                query = query.where(Sale.sale_date >= date_from)
             if date_to:
-                rev_query = rev_query.where(Sale.sale_date <= date_to)
-                qty_query = qty_query.where(Sale.sale_date <= date_to)
+                query = query.where(Sale.sale_date <= date_to)
             if sales_channel:
-                rev_query = rev_query.where(Sale.sales_channel == sales_channel)
-                qty_query = qty_query.where(Sale.sales_channel == sales_channel)
+                query = query.where(Sale.sales_channel == sales_channel)
             if payment_method:
-                rev_query = rev_query.where(Sale.payment_method == payment_method)
-                qty_query = qty_query.where(Sale.payment_method == payment_method)
+                query = query.where(Sale.payment_method == payment_method)
             if customer_id:
-                rev_query = rev_query.where(Sale.customer_id == customer_id)
-                qty_query = qty_query.where(Sale.customer_id == customer_id)
+                query = query.where(Sale.customer_id == customer_id)
 
             if product_id or category_id or brand:
-                rev_query = rev_query.join(SaleItem, Sale.id == SaleItem.sale_id)
-                qty_query = qty_query.join(SaleItem, SaleItem.sale_id == Sale.id)
+                exists_q = select(SaleItem.id).where(SaleItem.sale_id == Sale.id)
                 if product_id:
-                    rev_query = rev_query.where(SaleItem.product_id == product_id)
-                    qty_query = qty_query.where(SaleItem.product_id == product_id)
+                    exists_q = exists_q.where(SaleItem.product_id == product_id)
                 if category_id:
-                    rev_query = rev_query.where(SaleItem.category_id == category_id)
-                    qty_query = qty_query.where(SaleItem.category_id == category_id)
+                    exists_q = exists_q.where(SaleItem.category_id == category_id)
                 if brand:
-                    rev_query = rev_query.join(Product, SaleItem.product_id == Product.id).where(Product.brand.ilike(f"%{brand}%"))
-                    qty_query = qty_query.join(Product, SaleItem.product_id == Product.id).where(Product.brand.ilike(f"%{brand}%"))
+                    exists_q = exists_q.join(Product, SaleItem.product_id == Product.id).where(Product.brand.ilike(f"%{brand}%"))
+                query = query.where(exists_q.exists())
 
-        rev_query = rev_query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
-        qty_query = qty_query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
-
-        rev_result = await db.execute(rev_query)
-        qty_result = await db.execute(qty_query)
-
-        rev_map = {r.period: float(r.sales or 0) for r in rev_result.all()}
-        orders_map = {r.period: int(r.orders or 0) for r in qty_result.all()}
-
-        all_periods = sorted(set(rev_map.keys()) | set(orders_map.keys()))
-        return [{"period": p, "sales": rev_map.get(p, 0), "orders": orders_map.get(p, 0)} for p in all_periods]
+        query = query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
+        result = await db.execute(query)
+        rows = result.all()
+        return [
+            {
+                "period": r.period,
+                "sales": float(r.sales or 0),
+                "orders": int(r.orders or 0),
+            }
+            for r in rows
+        ]
 
     async def get_top_products(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, page: int = 1, page_size: int = 10, sort_by: Optional[str] = None, sort_order: Optional[str] = "desc") -> dict:
         sort_by = sort_by or "total_quantity"
