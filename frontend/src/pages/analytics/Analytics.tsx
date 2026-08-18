@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 import {
   getKPIDashboard,
   getRevenueTrend,
@@ -150,6 +151,7 @@ const inputClass =
 export const Analytics: React.FC = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { showNotification } = useNotification();
 
   const [interval, setInterval] = useState<string>('daily');
   const [filters, setFilters] = useState<AnalyticsFilters>({});
@@ -438,8 +440,10 @@ const queryOptions: { refetchInterval: number | false } = {
     try {
       const blob = await exportAnalytics({ export_type: 'csv', report_type: reportType, filters });
       downloadBlob(blob, getExportFilename(reportType, 'csv'));
+      showNotification('CSV report exported successfully', 'success');
     } catch (err) {
       console.error('CSV Export Error:', err);
+      showNotification('Failed to export CSV report. Please try again.', 'error');
     } finally {
       setExportingType(null);
     }
@@ -450,8 +454,10 @@ const queryOptions: { refetchInterval: number | false } = {
     try {
       const blob = await exportAnalytics({ export_type: 'pdf', report_type: reportType, filters });
       downloadBlob(blob, getExportFilename(reportType, 'pdf'));
+      showNotification('PDF report exported successfully', 'success');
     } catch (err) {
       console.error('PDF Export Error:', err);
+      showNotification('Failed to export PDF report. Please try again.', 'error');
     } finally {
       setExportingType(null);
     }

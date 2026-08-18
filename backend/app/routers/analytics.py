@@ -50,8 +50,8 @@ def is_admin_or_analyst(user):
 def _parse_filters(
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
-    filter_product_id: Optional[str] = Query(None),
-    filter_category_id: Optional[str] = Query(None),
+    product_id: Optional[str] = Query(None),
+    category_id: Optional[str] = Query(None),
     brand: Optional[str] = Query(None),
     sales_channel: Optional[str] = Query(None),
     payment_method: Optional[str] = Query(None),
@@ -70,14 +70,14 @@ def _parse_filters(
             filters["date_to"] = datetime.combine(datetime.fromisoformat(date_to).date(), time.max)
         except ValueError:
             pass
-    if filter_product_id:
+    if product_id:
         try:
-            filters["product_id"] = UUID(filter_product_id)
+            filters["product_id"] = UUID(product_id)
         except ValueError:
             pass
-    if filter_category_id:
+    if category_id:
         try:
-            filters["category_id"] = UUID(filter_category_id)
+            filters["category_id"] = UUID(category_id)
         except ValueError:
             pass
     if brand:

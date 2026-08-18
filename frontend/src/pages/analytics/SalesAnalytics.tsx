@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 import {
   getKPIDashboard,
   getRevenueTrend,
@@ -107,6 +108,7 @@ const getDateRange = (preset: string): { date_from?: string; date_to?: string } 
 
 export const SalesAnalytics: React.FC = () => {
   const { user } = useAuth();
+  const { showNotification } = useNotification();
 
   const [interval, setInterval] = useState<string>('daily');
   const [datePreset, setDatePreset] = useState<string>('last_30_days');
@@ -115,6 +117,8 @@ export const SalesAnalytics: React.FC = () => {
   const [filters, setFilters] = useState<AnalyticsFilters>({});
   const [exportingType, setExportingType] = useState<string | null>(null);
   const [topCustomersPage, setTopCustomersPage] = useState(1);
+  const [topProductsPage, setTopProductsPage] = useState(1);
+  const [topProductsSortBy, setTopProductsSortBy] = useState<'total_revenue' | 'total_quantity'>('total_revenue');
   const PAGE_SIZE = 10;
 
   const { data: rawCustomers } = useQuery({
@@ -190,10 +194,11 @@ export const SalesAnalytics: React.FC = () => {
   const salesTrend = (salesTrendData || []) as SalesTrendPoint[];
 
   const { data: topProductsData, isLoading: topProductsLoading } = useQuery({
-    queryKey: ['sales-analytics', 'top-products', analyticsFilters],
-    queryFn: () => getTopProducts(10, analyticsFilters, 1, 10, 'total_revenue', 'desc'),
+    queryKey: ['sales-analytics', 'top-products', analyticsFilters, topProductsPage, topProductsSortBy],
+    queryFn: () => getTopProducts(10, analyticsFilters, topProductsPage, PAGE_SIZE, topProductsSortBy, 'desc'),
   });
-  const _topProducts = (topProductsData || []) as TopProductResponse[];
+  const _topProducts = ((topProductsData as any)?.items || []) as TopProductResponse[];
+  const topProductsTotal = (topProductsData as any)?.total || 0;
 
   const { data: topCustomersData, isLoading: topCustomersLoading } = useQuery({
     queryKey: ['sales-analytics', 'top-customers', analyticsFilters, topCustomersPage],
@@ -230,8 +235,10 @@ export const SalesAnalytics: React.FC = () => {
     try {
       const blob = await exportAnalytics({ export_type: 'csv', report_type: reportType, filters: analyticsFilters });
       downloadBlob(blob, getExportFilename(reportType, 'csv'));
+      showNotification('CSV report exported successfully', 'success');
     } catch (err) {
       console.error('CSV Export Error:', err);
+      showNotification('Failed to export CSV report. Please try again.', 'error');
     } finally {
       setExportingType(null);
     }
@@ -242,8 +249,10 @@ export const SalesAnalytics: React.FC = () => {
     try {
       const blob = await exportAnalytics({ export_type: 'pdf', report_type: reportType, filters: analyticsFilters });
       downloadBlob(blob, getExportFilename(reportType, 'pdf'));
+      showNotification('PDF report exported successfully', 'success');
     } catch (err) {
       console.error('PDF Export Error:', err);
+      showNotification('Failed to export PDF report. Please try again.', 'error');
     } finally {
       setExportingType(null);
     }
@@ -569,6 +578,14 @@ export const SalesAnalytics: React.FC = () => {
             <BagIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Top Performing Products</h2>
           </div>
+          <select
+            value={topProductsSortBy}
+            onChange={(e) => { setTopProductsSortBy(e.target.value as 'total_revenue' | 'total_quantity'); setTopProductsPage(1); }}
+            className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="total_revenue">Sort by Revenue</option>
+            <option value="total_quantity">Sort by Units Sold</option>
+          </select>
         </div>
         <div className="p-4 overflow-x-auto">
           {topProductsLoading ? (
@@ -577,30 +594,33 @@ export const SalesAnalytics: React.FC = () => {
                 <div key={i} className="h-12 bg-slate-200 dark:bg-slate-800 rounded-lg" />
               ))}
             </div>
-          ) : _topProducts && _topProducts.length > 0 ? (
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">
-                <tr>
-                  <th className="p-3">Product</th>
-                  <th className="p-3">SKU</th>
-                  <th className="p-3">Category</th>
-                  <th className="p-3 text-right">Units Sold</th>
-                  <th className="p-3 text-right">Revenue</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                {_topProducts.map((p) => (
-                  <tr key={p.product_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="p-3 font-semibold text-slate-900 dark:text-slate-100">{p.product_name}</td>
-                    <td className="p-3 font-mono text-slate-500">{p.sku}</td>
-                    <td className="p-3">{p.category_name || 'Uncategorized'}</td>
-                    <td className="p-3 text-right font-bold text-indigo-600 dark:text-indigo-400">{p.total_quantity.toLocaleString()}</td>
-                    <td className="p-3 text-right font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(p.total_revenue)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
+            ) : _topProducts && _topProducts.length > 0 ? (
+              <>
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">
+                    <tr>
+                      <th className="p-3">Product</th>
+                      <th className="p-3">SKU</th>
+                      <th className="p-3">Category</th>
+                      <th className="p-3 text-right">Units Sold</th>
+                      <th className="p-3 text-right">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                    {_topProducts.map((p) => (
+                      <tr key={p.product_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td className="p-3 font-semibold text-slate-900 dark:text-slate-100">{p.product_name}</td>
+                        <td className="p-3 font-mono text-slate-500">{p.sku}</td>
+                        <td className="p-3">{p.category_name || 'Uncategorized'}</td>
+                        <td className="p-3 text-right font-bold text-indigo-600 dark:text-indigo-400">{p.total_quantity.toLocaleString()}</td>
+                        <td className="p-3 text-right font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(p.total_revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <Pagination page={topProductsPage} pageSize={PAGE_SIZE} total={topProductsTotal} onPageChange={setTopProductsPage} />
+              </>
+            ) : (
             <div className="flex flex-col items-center justify-center py-12 text-slate-400 space-y-2">
               <BagIcon style={{ fontSize: 36 }} className="text-slate-300 dark:text-slate-700" />
               <span className="text-xs font-semibold">No top products data available</span>
