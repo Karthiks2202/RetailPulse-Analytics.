@@ -186,7 +186,7 @@ class KPIDetailResponse(BaseModel):
 
 class ExportRequest(BaseModel):
     export_type: Literal["csv", "pdf"]
-    report_type: Literal["kpis", "sales", "inventory", "transactions"]
+    report_type: Literal["kpis", "sales", "inventory", "transactions", "top-products", "top-customers", "payment-methods"]
     filters: Optional[AnalyticsFilters] = None
 
 

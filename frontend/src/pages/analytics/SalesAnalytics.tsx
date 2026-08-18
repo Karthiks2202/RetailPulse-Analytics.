@@ -8,6 +8,8 @@ import {
   getTopProducts,
   getTopCustomers,
   getPaymentMethods,
+  getProducts,
+  getCategories,
   exportAnalytics,
   type AnalyticsFilters,
   type RevenueTrendPoint,
@@ -15,6 +17,9 @@ import {
   type TopProductResponse,
   type TopCustomerResponse,
   type PaymentMethodBreakdown,
+  type Product,
+  type Category,
+  type ExportRequest,
 } from '../../api/analyticsApi';
 import { getCustomers, type Customer } from '../../api/customerApi';
 import { formatCurrency } from '../../utils/currency';
@@ -83,10 +88,10 @@ const getDateRange = (preset: string): { date_from?: string; date_to?: string } 
       date_from = today.toISOString().split('T')[0];
       break;
     case 'last_7_days':
-      date_from = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      date_from = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       break;
     case 'last_30_days':
-      date_from = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      date_from = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       break;
     case 'this_month':
       date_from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
@@ -125,6 +130,18 @@ export const SalesAnalytics: React.FC = () => {
   });
   const customers = (rawCustomers || []) as Customer[];
 
+  const { data: rawProducts } = useQuery({
+    queryKey: ['sales-analytics', 'products'],
+    queryFn: () => getProducts({ status: 'ACTIVE' }),
+  });
+  const products = (rawProducts || []) as Product[];
+
+  const { data: rawCategories } = useQuery({
+    queryKey: ['sales-analytics', 'categories'],
+    queryFn: getCategories,
+  });
+  const categories = (rawCategories || []) as Category[];
+
   const dateRange = useMemo(() => {
     if (datePreset === 'custom') {
       return {
@@ -133,6 +150,13 @@ export const SalesAnalytics: React.FC = () => {
       };
     }
     return getDateRange(datePreset);
+  }, [datePreset, customDateFrom, customDateTo]);
+
+  const dateError = useMemo(() => {
+    if (datePreset === 'custom' && customDateFrom && customDateTo && customDateFrom > customDateTo) {
+      return 'Start date cannot be after end date';
+    }
+    return null;
   }, [datePreset, customDateFrom, customDateTo]);
 
   const analyticsFilters: AnalyticsFilters = useMemo(() => ({
@@ -173,10 +197,10 @@ export const SalesAnalytics: React.FC = () => {
   const salesTrend = (salesTrendData || []) as SalesTrendPoint[];
 
   const { data: topProductsData, isLoading: topProductsLoading } = useQuery({
-    queryKey: ['sales-analytics', 'top-products', analyticsFilters],
-    queryFn: () => getTopProducts(10, analyticsFilters),
+    queryKey: ['sales-analytics', 'top-products', analyticsFilters, productSortField, productSortDir],
+    queryFn: () => getTopProducts(10, analyticsFilters, 1, 10, productSortField, productSortDir),
   });
-  const topProducts = (topProductsData || []) as TopProductResponse[];
+  const _topProducts = (topProductsData || []) as TopProductResponse[];
 
   const { data: topCustomersData, isLoading: topCustomersLoading } = useQuery({
     queryKey: ['sales-analytics', 'top-customers', analyticsFilters, topCustomersPage],
@@ -229,11 +253,11 @@ export const SalesAnalytics: React.FC = () => {
     return `${company}_sales_analytics_report.${exportType}`;
   };
 
-  const handleExportCSV = async () => {
-    setExportingType('csv');
+  const handleExportCSV = async (reportType: ExportRequest['report_type'] = 'kpis') => {
+    setExportingType(`csv-${reportType}`);
     try {
-      const blob = await exportAnalytics({ export_type: 'csv', report_type: 'kpis', filters: analyticsFilters });
-      downloadBlob(blob, getExportFilename('kpis', 'csv'));
+      const blob = await exportAnalytics({ export_type: 'csv', report_type: reportType, filters: analyticsFilters });
+      downloadBlob(blob, getExportFilename(reportType, 'csv'));
     } catch (err) {
       console.error('CSV Export Error:', err);
     } finally {
@@ -241,11 +265,11 @@ export const SalesAnalytics: React.FC = () => {
     }
   };
 
-  const handleExportPDF = async () => {
-    setExportingType('pdf');
+  const handleExportPDF = async (reportType: ExportRequest['report_type'] = 'kpis') => {
+    setExportingType(`pdf-${reportType}`);
     try {
-      const blob = await exportAnalytics({ export_type: 'pdf', report_type: 'kpis', filters: analyticsFilters });
-      downloadBlob(blob, getExportFilename('kpis', 'pdf'));
+      const blob = await exportAnalytics({ export_type: 'pdf', report_type: reportType, filters: analyticsFilters });
+      downloadBlob(blob, getExportFilename(reportType, 'pdf'));
     } catch (err) {
       console.error('PDF Export Error:', err);
     } finally {
@@ -285,11 +309,35 @@ export const SalesAnalytics: React.FC = () => {
               <span>Export</span>
             </button>
             <div className="absolute right-0 top-full mt-1.5 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-30 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all p-2 space-y-1">
-              <button onClick={handleExportCSV} disabled={exportingType === 'csv'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
-                <CsvIcon fontSize="small" className="text-emerald-500" /> Export CSV
+              <button onClick={() => handleExportCSV('kpis')} disabled={exportingType === 'csv'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <CsvIcon fontSize="small" className="text-emerald-500" /> Export KPI CSV
               </button>
-              <button onClick={handleExportPDF} disabled={exportingType === 'pdf'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
-                <PdfIcon fontSize="small" className="text-rose-500" /> Export PDF
+              <button onClick={() => handleExportCSV('sales')} disabled={exportingType === 'csv'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <CsvIcon fontSize="small" className="text-emerald-500" /> Export Sales Trend CSV
+              </button>
+              <button onClick={() => handleExportCSV('top-products')} disabled={exportingType === 'csv'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <CsvIcon fontSize="small" className="text-emerald-500" /> Export Top Products CSV
+              </button>
+              <button onClick={() => handleExportCSV('top-customers')} disabled={exportingType === 'csv'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <CsvIcon fontSize="small" className="text-emerald-500" /> Export Top Customers CSV
+              </button>
+              <button onClick={() => handleExportCSV('payment-methods')} disabled={exportingType === 'csv'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <CsvIcon fontSize="small" className="text-emerald-500" /> Export Payment Methods CSV
+              </button>
+              <button onClick={() => handleExportPDF('kpis')} disabled={exportingType === 'pdf'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <PdfIcon fontSize="small" className="text-rose-500" /> Export KPI PDF
+              </button>
+              <button onClick={() => handleExportPDF('sales')} disabled={exportingType === 'pdf'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <PdfIcon fontSize="small" className="text-rose-500" /> Export Sales Trend PDF
+              </button>
+              <button onClick={() => handleExportPDF('top-products')} disabled={exportingType === 'pdf'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <PdfIcon fontSize="small" className="text-rose-500" /> Export Top Products PDF
+              </button>
+              <button onClick={() => handleExportPDF('top-customers')} disabled={exportingType === 'pdf'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <PdfIcon fontSize="small" className="text-rose-500" /> Export Top Customers PDF
+              </button>
+              <button onClick={() => handleExportPDF('payment-methods')} disabled={exportingType === 'pdf'} className="w-full text-left flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <PdfIcon fontSize="small" className="text-rose-500" /> Export Payment Methods PDF
               </button>
             </div>
           </div>
@@ -319,17 +367,18 @@ export const SalesAnalytics: React.FC = () => {
             <>
               <input
                 type="date"
-                className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={`text-xs border rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${dateError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-slate-200 dark:border-slate-700'}`}
                 onChange={(e) => setCustomDateFrom(e.target.value)}
                 value={customDateFrom}
               />
               <span className="text-slate-400 text-xs">to</span>
               <input
                 type="date"
-                className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={`text-xs border rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${dateError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-slate-200 dark:border-slate-700'}`}
                 onChange={(e) => setCustomDateTo(e.target.value)}
                 value={customDateTo}
               />
+              {dateError && <span className="text-[10px] font-semibold text-red-600 dark:text-red-400">{dateError}</span>}
             </>
           )}
 
@@ -354,6 +403,28 @@ export const SalesAnalytics: React.FC = () => {
             <option value="Card">Card</option>
             <option value="UPI">UPI</option>
             <option value="Bank Transfer">Bank Transfer</option>
+          </select>
+
+          <select
+            value={filters.product_id || ''}
+            onChange={(e) => updateFilter('product_id', e.target.value)}
+            className={`${inputClass} lg:w-44`}
+          >
+            <option value="">All Products</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+
+          <select
+            value={filters.category_id || ''}
+            onChange={(e) => updateFilter('category_id', e.target.value)}
+            className={`${inputClass} lg:w-40`}
+          >
+            <option value="">All Categories</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
           </select>
 
           <select

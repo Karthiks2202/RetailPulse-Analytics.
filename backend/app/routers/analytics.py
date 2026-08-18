@@ -57,7 +57,7 @@ def _parse_filters(
     payment_method: Optional[str] = Query(None),
     customer_id: Optional[str] = Query(None),
 ) -> dict:
-    from datetime import datetime
+    from datetime import datetime, time
 
     filters = {}
     if date_from:
@@ -67,7 +67,7 @@ def _parse_filters(
             pass
     if date_to:
         try:
-            filters["date_to"] = datetime.fromisoformat(date_to)
+            filters["date_to"] = datetime.combine(datetime.fromisoformat(date_to).date(), time.max)
         except ValueError:
             pass
     if filter_product_id:
@@ -139,11 +139,13 @@ async def get_top_products(
     db: AsyncSession = Depends(get_db),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
+    sort_by: str = Query("total_quantity", pattern="^(total_quantity|total_revenue)$"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     filters: dict = Depends(_parse_filters),
 ):
     if not is_admin_or_analyst(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
-    data = await analytics_service.get_top_products(db, current_user.company_id, filters, page=page, page_size=page_size)
+    data = await analytics_service.get_top_products(db, current_user.company_id, filters, page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order)
     return data
 
 
@@ -382,6 +384,18 @@ async def export_analytics(
         data = await analytics_service.drill_down_transactions(db, current_user.company_id, filters_dict)
         rows = data if data else []
         filename += "_transactions"
+    elif payload.report_type == "top-products":
+        data = await analytics_service.get_top_products(db, current_user.company_id, filters_dict, page=1, page_size=50)
+        rows = data.get("items", []) if isinstance(data, dict) else data
+        filename += "_top_products"
+    elif payload.report_type == "top-customers":
+        data = await analytics_service.get_top_customers(db, current_user.company_id, filters_dict, page=1, page_size=50)
+        rows = data.get("items", []) if isinstance(data, dict) else data
+        filename += "_top_customers"
+    elif payload.report_type == "payment-methods":
+        data = await analytics_service.get_payment_method_breakdown(db, current_user.company_id, filters_dict)
+        rows = data if data else []
+        filename += "_payment_methods"
     else:
         raise HTTPException(status_code=400, detail="Unsupported report type")
 

@@ -44,6 +44,7 @@ import {
   type DrillDownProductResponse,
   type DrillDownCategoryProductResponse,
   type DrillDownProductTransactionResponse,
+  type ExportRequest,
 } from '../../api/analyticsApi';
 import {
   getCustomerGrowth,
@@ -431,7 +432,7 @@ const queryOptions: { refetchInterval: number | false } = {
     return `${company}_${reportType}_report.${exportType}`;
   };
 
-  const handleExportCSV = async (reportType: 'kpis' | 'sales' | 'inventory' | 'transactions') => {
+  const handleExportCSV = async (reportType: ExportRequest['report_type']) => {
     setExportingType(`csv-${reportType}`);
     try {
       const blob = await exportAnalytics({ export_type: 'csv', report_type: reportType, filters });
@@ -443,7 +444,7 @@ const queryOptions: { refetchInterval: number | false } = {
     }
   };
 
-  const handleExportPDF = async (reportType: 'kpis' | 'sales' | 'inventory' | 'transactions') => {
+  const handleExportPDF = async (reportType: ExportRequest['report_type']) => {
     setExportingType(`pdf-${reportType}`);
     try {
       const blob = await exportAnalytics({ export_type: 'pdf', report_type: reportType, filters });

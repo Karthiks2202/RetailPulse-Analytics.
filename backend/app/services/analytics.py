@@ -25,7 +25,7 @@ class AnalyticsService:
         return "IN_STOCK"
 
     def _apply_sale_filters(self, query, company_id: UUID, filters: Optional[dict]):
-        query = query.where(Sale.company_id == company_id)
+        query = query.where(Sale.company_id == company_id).where(Sale.status == SaleStatus.COMPLETED)
         if not filters:
             return query
 
@@ -153,6 +153,7 @@ class AnalyticsService:
                 func.count(Sale.id).label("orders"),
             )
             .where(Sale.company_id == company_id)
+            .where(Sale.status == SaleStatus.COMPLETED)
         )
 
         if filters:
@@ -203,6 +204,7 @@ class AnalyticsService:
                 func.coalesce(func.sum(Sale.total_amount), 0).label("sales"),
             )
             .where(Sale.company_id == company_id)
+            .where(Sale.status == SaleStatus.COMPLETED)
         )
 
         qty_query = (
@@ -212,6 +214,7 @@ class AnalyticsService:
             )
             .join(Sale, SaleItem.sale_id == Sale.id)
             .where(Sale.company_id == company_id)
+            .where(Sale.status == SaleStatus.COMPLETED)
         )
 
         if filters:
@@ -224,17 +227,21 @@ class AnalyticsService:
             category_id = filters.get("category_id")
             brand = filters.get("brand")
 
-            for q in (rev_query, qty_query):
-                if date_from:
-                    q = q.where(Sale.sale_date >= date_from)
-                if date_to:
-                    q = q.where(Sale.sale_date <= date_to)
-                if sales_channel:
-                    q = q.where(Sale.sales_channel == sales_channel)
-                if payment_method:
-                    q = q.where(Sale.payment_method == payment_method)
-                if customer_id:
-                    q = q.where(Sale.customer_id == customer_id)
+            if date_from:
+                rev_query = rev_query.where(Sale.sale_date >= date_from)
+                qty_query = qty_query.where(Sale.sale_date >= date_from)
+            if date_to:
+                rev_query = rev_query.where(Sale.sale_date <= date_to)
+                qty_query = qty_query.where(Sale.sale_date <= date_to)
+            if sales_channel:
+                rev_query = rev_query.where(Sale.sales_channel == sales_channel)
+                qty_query = qty_query.where(Sale.sales_channel == sales_channel)
+            if payment_method:
+                rev_query = rev_query.where(Sale.payment_method == payment_method)
+                qty_query = qty_query.where(Sale.payment_method == payment_method)
+            if customer_id:
+                rev_query = rev_query.where(Sale.customer_id == customer_id)
+                qty_query = qty_query.where(Sale.customer_id == customer_id)
 
             if product_id or category_id or brand:
                 rev_query = rev_query.join(SaleItem, Sale.id == SaleItem.sale_id)
@@ -261,7 +268,11 @@ class AnalyticsService:
         all_periods = sorted(set(rev_map.keys()) | set(qty_map.keys()))
         return [{"period": p, "sales": rev_map.get(p, 0), "quantity": qty_map.get(p, 0)} for p in all_periods]
 
-    async def get_top_products(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, page: int = 1, page_size: int = 10) -> dict:
+    async def get_top_products(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, page: int = 1, page_size: int = 10, sort_by: Optional[str] = None, sort_order: Optional[str] = "desc") -> dict:
+        sort_by = sort_by or "total_quantity"
+        sort_order = sort_order or "desc"
+        sort_column = func.sum(SaleItem.total) if sort_by == "total_revenue" else func.sum(SaleItem.quantity)
+
         query = (
             select(
                 Product.id,
@@ -279,7 +290,7 @@ class AnalyticsService:
             .where(Sale.company_id == company_id)
             .where(Sale.status == SaleStatus.COMPLETED)
             .group_by(Product.id, Category.name)
-            .order_by(func.sum(SaleItem.quantity).desc())
+            .order_by(sort_column.desc() if sort_order == "desc" else sort_column.asc())
         )
         if filters:
             date_from = filters.get("date_from")
@@ -748,6 +759,7 @@ class AnalyticsService:
             select(Sale, SaleItem)
             .join(SaleItem, Sale.id == SaleItem.sale_id)
             .where(Sale.company_id == company_id)
+            .where(Sale.status == SaleStatus.COMPLETED)
             .where(SaleItem.product_id == product_id)
         )
         if filters:

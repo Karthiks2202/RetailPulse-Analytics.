@@ -237,7 +237,7 @@ export interface KPIDetailResponse {
 
 export interface ExportRequest {
   export_type: 'csv' | 'pdf';
-  report_type: 'kpis' | 'sales' | 'inventory' | 'transactions';
+  report_type: 'kpis' | 'sales' | 'inventory' | 'transactions' | 'top-products' | 'top-customers' | 'payment-methods';
   filters?: AnalyticsFilters;
 }
 
@@ -256,8 +256,8 @@ export const getSalesTrend = async (interval = 'daily', filters?: AnalyticsFilte
   return data;
 };
 
-export const getTopProducts = async (limit = 10, filters?: AnalyticsFilters, page = 1, page_size = 10): Promise<PaginatedTopProductsResponse> => {
-  const { data } = await axiosInstance.get('/analytics/top-products', { params: { limit, page, page_size, ...filters } });
+export const getTopProducts = async (limit = 10, filters?: AnalyticsFilters, page = 1, page_size = 10, sort_by?: string, sort_order?: string): Promise<PaginatedTopProductsResponse> => {
+  const { data } = await axiosInstance.get('/analytics/top-products', { params: { limit, page, page_size, sort_by, sort_order, ...filters } });
   return data;
 };
 

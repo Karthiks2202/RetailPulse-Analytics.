@@ -6,8 +6,8 @@ import {
 } from '@mui/icons-material';
 
 interface ExportMenuProps {
-  onExportCSV: (reportType: 'kpis' | 'sales' | 'inventory' | 'transactions') => void;
-  onExportPDF: (reportType: 'kpis' | 'sales' | 'inventory' | 'transactions') => void;
+  onExportCSV: (reportType: ExportRequest['report_type']) => void;
+  onExportPDF: (reportType: ExportRequest['report_type']) => void;
   exportingType: string | null;
   setExportingType: (type: string | null) => void;
 }
@@ -37,6 +37,18 @@ const ExportMenu: React.FC<ExportMenuProps> = ({ onExportCSV, onExportPDF, expor
           <span className="flex items-center gap-1.5"><CsvIcon fontSize="small" className="text-emerald-500" /> Sales Transactions</span>
           <span className="text-[10px] text-slate-400">CSV</span>
         </button>
+        <button onClick={() => onExportCSV('top-products')} className="w-full text-left flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+          <span className="flex items-center gap-1.5"><CsvIcon fontSize="small" className="text-emerald-500" /> Top Products</span>
+          <span className="text-[10px] text-slate-400">CSV</span>
+        </button>
+        <button onClick={() => onExportCSV('top-customers')} className="w-full text-left flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+          <span className="flex items-center gap-1.5"><CsvIcon fontSize="small" className="text-emerald-500" /> Top Customers</span>
+          <span className="text-[10px] text-slate-400">CSV</span>
+        </button>
+        <button onClick={() => onExportCSV('payment-methods')} className="w-full text-left flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+          <span className="flex items-center gap-1.5"><CsvIcon fontSize="small" className="text-emerald-500" /> Payment Methods</span>
+          <span className="text-[10px] text-slate-400">CSV</span>
+        </button>
 
         <div className="border-t border-slate-100 dark:border-slate-800 my-1"></div>
         <div className="px-2 py-1 text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">PDF Reports</div>
@@ -54,6 +66,18 @@ const ExportMenu: React.FC<ExportMenuProps> = ({ onExportCSV, onExportPDF, expor
         </button>
         <button onClick={() => onExportPDF('transactions')} className="w-full text-left flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
           <span className="flex items-center gap-1.5"><PdfIcon fontSize="small" className="text-rose-500" /> Sales Transactions</span>
+          <span className="text-[10px] text-slate-400">PDF</span>
+        </button>
+        <button onClick={() => onExportPDF('top-products')} className="w-full text-left flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+          <span className="flex items-center gap-1.5"><PdfIcon fontSize="small" className="text-rose-500" /> Top Products</span>
+          <span className="text-[10px] text-slate-400">PDF</span>
+        </button>
+        <button onClick={() => onExportPDF('top-customers')} className="w-full text-left flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+          <span className="flex items-center gap-1.5"><PdfIcon fontSize="small" className="text-rose-500" /> Top Customers</span>
+          <span className="text-[10px] text-slate-400">PDF</span>
+        </button>
+        <button onClick={() => onExportPDF('payment-methods')} className="w-full text-left flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300">
+          <span className="flex items-center gap-1.5"><PdfIcon fontSize="small" className="text-rose-500" /> Payment Methods</span>
           <span className="text-[10px] text-slate-400">PDF</span>
         </button>
       </div>
