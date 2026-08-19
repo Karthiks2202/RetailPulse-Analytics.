@@ -182,163 +182,163 @@ const queryOptions: { refetchInterval: number | false } = {
   refetchInterval: autoRefreshInterval > 0 ? autoRefreshInterval : false,
 };
 
-  const { data: rawProducts } = useQuery({
+  const { data: rawProducts, error: _rawProductsError } = useQuery({
     queryKey: ['analytics', 'products'],
     queryFn: () => getProducts({ status: 'ACTIVE' }),
   });
   const products = (rawProducts || []) as Product[];
 
-  const { data: rawCategories } = useQuery({
+  const { data: rawCategories, error: _rawCategoriesError } = useQuery({
     queryKey: ['analytics', 'categories'],
     queryFn: getCategories,
   });
   const categories = (rawCategories || []) as Category[];
 
-  const { data: rawBrands } = useQuery({
+  const { data: rawBrands, error: _rawBrandsError } = useQuery({
     queryKey: ['analytics', 'brands'],
     queryFn: getBrands,
   });
   const brands = (rawBrands || []) as string[];
 
-  const { data: rawCustomers } = useQuery({
+  const { data: rawCustomers, error: _rawCustomersError } = useQuery({
     queryKey: ['analytics', 'customers'],
     queryFn: () => getCustomers({ status: 'ACTIVE' }),
   });
   const customers = (rawCustomers || []) as Customer[];
 
-  const { data: kpis, isLoading: kpisLoading } = useQuery({
+  const { data: kpis, isLoading: kpisLoading, error: kpisError } = useQuery({
     queryKey: ['analytics', 'kpis', filters],
     queryFn: () => getKPIDashboard(filters),
     ...queryOptions,
   });
 
-  const { data: revenueTrendData, isLoading: revenueLoading } = useQuery({
+  const { data: revenueTrendData, isLoading: revenueLoading, error: revenueError } = useQuery({
     queryKey: ['analytics', 'revenue-trend', interval, filters],
     queryFn: () => getRevenueTrend(interval, filters),
     ...queryOptions,
   });
   const revenueTrend = (revenueTrendData || []) as RevenueTrendPoint[];
 
-  const { data: salesTrendData, isLoading: salesLoading } = useQuery({
+  const { data: salesTrendData, isLoading: salesLoading, error: salesError } = useQuery({
     queryKey: ['analytics', 'sales-trend', interval, filters],
     queryFn: () => getSalesTrend(interval, filters),
     ...queryOptions,
   });
   const salesTrend = (salesTrendData || []) as SalesTrendPoint[];
 
-  const { data: topProductsData, isLoading: topProductsLoading } = useQuery({
+  const { data: topProductsData, isLoading: topProductsLoading, error: topProductsError } = useQuery({
     queryKey: ['analytics', 'top-products', filters],
     queryFn: () => getTopProducts(10, filters),
     ...queryOptions,
   });
   const topProducts = (topProductsData?.items || []) as TopProductResponse[];
 
-  const { data: topCategoriesData, isLoading: topCategoriesLoading } = useQuery({
+  const { data: topCategoriesData, isLoading: topCategoriesLoading, error: topCategoriesError } = useQuery({
     queryKey: ['analytics', 'top-categories', filters],
     queryFn: () => getTopCategories(10, filters),
     ...queryOptions,
   });
   const topCategories = (topCategoriesData?.items || []) as TopCategoryResponse[];
 
-  const { data: paymentMethodsData, isLoading: paymentMethodsLoading } = useQuery({
+  const { data: paymentMethodsData, isLoading: paymentMethodsLoading, error: paymentMethodsError } = useQuery({
     queryKey: ['analytics', 'payment-methods', filters],
     queryFn: () => getPaymentMethods(filters),
     ...queryOptions,
   });
   const paymentMethods = (paymentMethodsData || []) as PaymentMethodBreakdown[];
 
-  const { data: salesChannelsData, isLoading: salesChannelsLoading } = useQuery({
+  const { data: salesChannelsData, isLoading: salesChannelsLoading, error: salesChannelsError } = useQuery({
     queryKey: ['analytics', 'sales-channels', filters],
     queryFn: () => getSalesChannels(filters),
     ...queryOptions,
   });
   const salesChannels = (salesChannelsData || []) as SalesChannelBreakdown[];
 
-  const { data: stockStatusData, isLoading: stockStatusLoading } = useQuery({
+  const { data: stockStatusData, isLoading: stockStatusLoading, error: stockStatusError } = useQuery({
     queryKey: ['analytics', 'stock-status', filters],
     queryFn: () => getStockStatus(filters),
     ...queryOptions,
   });
   const stockStatus = (stockStatusData || []) as StockStatusSummary[];
 
-  const { data: inventoryDistData, isLoading: inventoryDistLoading } = useQuery({
+  const { data: inventoryDistData, isLoading: inventoryDistLoading, error: inventoryDistError } = useQuery({
     queryKey: ['analytics', 'inventory-distribution', filters],
     queryFn: () => getInventoryDistribution(filters),
     ...queryOptions,
   });
   const inventoryDist = (inventoryDistData || []) as InventoryDistributionCategory[];
 
-  const { data: lowStockProductsData, isLoading: lowStockLoading } = useQuery({
+  const { data: lowStockProductsData, isLoading: lowStockLoading, error: lowStockError } = useQuery({
     queryKey: ['analytics', 'low-stock', filters],
     queryFn: () => getLowStockProducts(20, filters),
     ...queryOptions,
   });
   const lowStockProducts = (lowStockProductsData || []) as LowStockProductResponse[];
 
-  const { data: outOfStockProductsData, isLoading: outOfStockLoading } = useQuery({
+  const { data: outOfStockProductsData, isLoading: outOfStockLoading, error: outOfStockError } = useQuery({
     queryKey: ['analytics', 'out-of-stock', filters],
     queryFn: () => getOutOfStockProducts(50, filters),
     ...queryOptions,
   });
   const outOfStockProducts = (outOfStockProductsData || []) as OutOfStockProductResponse[];
 
-  const { data: inventoryValueData } = useQuery({
+  const { data: inventoryValueData, error: inventoryValueError } = useQuery({
     queryKey: ['analytics', 'inventory-value', filters],
     queryFn: () => getInventoryValue(filters),
     ...queryOptions,
   });
   const inventoryValue = (inventoryValueData || []) as InventoryValueByCategory[];
 
-  const { data: customerGrowthData, isLoading: customerGrowthLoading } = useQuery({
+  const { data: customerGrowthData, isLoading: customerGrowthLoading, error: customerGrowthError } = useQuery({
     queryKey: ['analytics', 'customer-growth'],
     queryFn: () => getCustomerGrowth(12),
     ...queryOptions,
   });
   const customerGrowth = (customerGrowthData || []) as CustomerGrowthPoint[];
 
-  const { data: revenueByTypeData, isLoading: revenueByTypeLoading } = useQuery({
+  const { data: revenueByTypeData, isLoading: revenueByTypeLoading, error: revenueByTypeError } = useQuery({
     queryKey: ['analytics', 'revenue-by-type'],
     queryFn: getRevenueByCustomerType,
     ...queryOptions,
   });
   const revenueByType = (revenueByTypeData || []) as RevenueByTypePoint[];
 
-  const { data: locationDistData, isLoading: locationDistLoading } = useQuery({
+  const { data: locationDistData, isLoading: locationDistLoading, error: locationDistError } = useQuery({
     queryKey: ['analytics', 'location-distribution'],
     queryFn: getLocationDistribution,
     ...queryOptions,
   });
   const locationDist = (locationDistData || []) as LocationDistributionPoint[];
 
-  const { data: spendingDistData, isLoading: spendingDistLoading } = useQuery({
+  const { data: spendingDistData, isLoading: spendingDistLoading, error: spendingDistError } = useQuery({
     queryKey: ['analytics', 'spending-distribution'],
     queryFn: getSpendingDistribution,
     ...queryOptions,
   });
   const spendingDist = (spendingDistData || null) as SpendingDistributionResponse | null;
 
-  const { data: purchaseFreqData, isLoading: purchaseFreqLoading } = useQuery({
+  const { data: purchaseFreqData, isLoading: purchaseFreqLoading, error: purchaseFreqError } = useQuery({
     queryKey: ['analytics', 'purchase-frequency'],
     queryFn: getPurchaseFrequencyDistribution,
     ...queryOptions,
   });
   const purchaseFreq = (purchaseFreqData || []) as PurchaseFrequencyPoint[];
 
-  const { data: segmentationData, isLoading: segmentationLoading } = useQuery({
+  const { data: segmentationData, isLoading: segmentationLoading, error: segmentationError } = useQuery({
     queryKey: ['analytics', 'segmentation'],
     queryFn: getCustomerSegmentation,
     ...queryOptions,
   });
   const segmentation = (segmentationData || null) as CustomerSegmentResponse | null;
 
-  const { data: monthlyAcquisitionData, isLoading: monthlyAcquisitionLoading } = useQuery({
+  const { data: monthlyAcquisitionData, isLoading: monthlyAcquisitionLoading, error: monthlyAcquisitionError } = useQuery({
     queryKey: ['analytics', 'monthly-acquisition'],
     queryFn: () => getMonthlyCustomerAcquisition(12),
     ...queryOptions,
   });
   const monthlyAcquisition = (monthlyAcquisitionData || []) as MonthlyAcquisitionPoint[];
 
-  const { data: topCustomersData, isLoading: topCustomersLoading } = useQuery({
+  const { data: topCustomersData, isLoading: topCustomersLoading, error: topCustomersError } = useQuery({
     queryKey: ['analytics', 'top-customers', filters, topCustomersPage],
     queryFn: () => getTopCustomers(10, filters, topCustomersPage, PAGE_SIZE),
     ...queryOptions,
@@ -346,14 +346,14 @@ const queryOptions: { refetchInterval: number | false } = {
   const topCustomers = (topCustomersData?.items || []) as TopCustomerResponse[];
   const topCustomersTotal = topCustomersData?.total || 0;
 
-  const { data: recentCustomersData, isLoading: recentCustomersLoading } = useQuery({
+  const { data: recentCustomersData, isLoading: recentCustomersLoading, error: recentCustomersError } = useQuery({
     queryKey: ['analytics', 'recent-customers'],
     queryFn: () => getRecentCustomers(10),
     ...queryOptions,
   });
   const recentCustomers = (recentCustomersData || []) as Array<{ id: string; first_name: string; last_name: string; email: string | null; phone: string | null; customer_type: string; status: string; total_purchases: number; total_spent: number; last_purchase_date: string | null; customer_since: string; created_at: string; }>;
 
-  const { data: revenueContributionData, isLoading: revenueContributionLoading } = useQuery({
+  const { data: revenueContributionData, isLoading: revenueContributionLoading, error: revenueContributionError } = useQuery({
     queryKey: ['analytics', 'revenue-contribution'],
     queryFn: () => getCustomerRevenueContribution(10),
     ...queryOptions,
@@ -361,28 +361,28 @@ const queryOptions: { refetchInterval: number | false } = {
   const revenueContribution = (revenueContributionData || []) as Array<{ id: string; first_name: string; last_name: string; email: string | null; revenue: number; }>;
 
   // Queries for drill-down details
-  const { data: drillTransactionsData, isLoading: drillTransactionsLoading } = useQuery({
+  const { data: drillTransactionsData, isLoading: drillTransactionsLoading, error: _drillTransactionsError } = useQuery({
     queryKey: ['analytics', 'drill-transactions', filters],
     queryFn: () => getDrillDownTransactions(filters),
     enabled: activeDrillDown === 'transactions',
   });
   const drillTransactions = (drillTransactionsData || []) as DrillDownTransactionResponse[];
 
-  const { data: drillProductsData, isLoading: drillProductsLoading } = useQuery({
+  const { data: drillProductsData, isLoading: drillProductsLoading, error: _drillProductsError } = useQuery({
     queryKey: ['analytics', 'drill-products', filters],
     queryFn: () => getDrillDownProducts(filters),
     enabled: activeDrillDown === 'products',
   });
   const drillProducts = (drillProductsData || []) as DrillDownProductResponse[];
 
-  const { data: drillCategoryProductsData, isLoading: drillCategoryProductsLoading } = useQuery({
+  const { data: drillCategoryProductsData, isLoading: drillCategoryProductsLoading, error: _drillCategoryProductsError } = useQuery({
     queryKey: ['analytics', 'drill-category-products', selectedCategoryForDrill?.id, filters],
     queryFn: () => (selectedCategoryForDrill ? getDrillDownCategoryProducts(selectedCategoryForDrill.id, filters) : []),
     enabled: !!selectedCategoryForDrill,
   });
   const drillCategoryProducts = (drillCategoryProductsData || []) as DrillDownCategoryProductResponse[];
 
-  const { data: drillProductTransactionsData, isLoading: drillProductTransactionsLoading } = useQuery({
+  const { data: drillProductTransactionsData, isLoading: drillProductTransactionsLoading, error: _drillProductTransactionsError } = useQuery({
     queryKey: ['analytics', 'drill-product-transactions', selectedProductForDrill?.id, filters],
     queryFn: () => (selectedProductForDrill ? getDrillDownProductTransactions(selectedProductForDrill.id, filters) : []),
     enabled: !!selectedProductForDrill,
@@ -667,7 +667,11 @@ const queryOptions: { refetchInterval: number | false } = {
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
-        {kpisLoading
+        {kpisError ? (
+          <div className="col-span-full rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-4 text-sm text-red-700 dark:text-red-400">
+            Failed to load KPI data. Please try refreshing the page.
+          </div>
+        ) : kpisLoading
           ? Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 md:p-5 bg-white dark:bg-slate-900 animate-pulse">
                 <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded mb-3" />
@@ -725,7 +729,12 @@ const queryOptions: { refetchInterval: number | false } = {
             </div>
           </div>
           <div className="p-4 h-72">
-            {revenueLoading ? (
+            {revenueError ? (
+              <div className="flex flex-col items-center justify-center h-full text-red-600 dark:text-red-400 space-y-2">
+                <ReceiptIcon style={{ fontSize: 36 }} className="text-red-300 dark:text-red-700" />
+                <span className="text-xs font-semibold">Failed to load revenue trend. Please retry.</span>
+              </div>
+            ) : revenueLoading ? (
               <div className="animate-pulse space-y-3">
                 <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
                 <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-lg h-full min-h-[180px]" />
@@ -766,7 +775,12 @@ const queryOptions: { refetchInterval: number | false } = {
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Sales Volume Trend</h2>
           </div>
           <div className="p-4 h-72">
-            {salesLoading ? (
+            {salesError ? (
+              <div className="flex flex-col items-center justify-center h-full text-red-600 dark:text-red-400 space-y-2">
+                <ReceiptIcon style={{ fontSize: 36 }} className="text-red-300 dark:text-red-700" />
+                <span className="text-xs font-semibold">Failed to load sales volume trend. Please retry.</span>
+              </div>
+            ) : salesLoading ? (
               <div className="animate-pulse space-y-3">
                 <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
                 <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-lg h-full min-h-[180px]" />
@@ -811,7 +825,12 @@ const queryOptions: { refetchInterval: number | false } = {
             <span className="text-[11px] text-slate-400">Click bar for product transactions</span>
           </div>
           <div className="p-4 h-80">
-            {topProductsLoading ? (
+            {topProductsError ? (
+              <div className="flex flex-col items-center justify-center h-full text-red-600 dark:text-red-400 space-y-2">
+                <BagIcon style={{ fontSize: 36 }} className="text-red-300 dark:text-red-700" />
+                <span className="text-xs font-semibold">Failed to load top products. Please retry.</span>
+              </div>
+            ) : topProductsLoading ? (
               <div className="animate-pulse space-y-3">
                 <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
                 <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-lg h-full min-h-[200px]" />
@@ -864,7 +883,12 @@ const queryOptions: { refetchInterval: number | false } = {
             <span className="text-[11px] text-slate-400">Click bar for category products</span>
           </div>
           <div className="p-4 h-80">
-            {topCategoriesLoading ? (
+            {topCategoriesError ? (
+              <div className="flex flex-col items-center justify-center h-full text-red-600 dark:text-red-400 space-y-2">
+                <CategoryIcon style={{ fontSize: 36 }} className="text-red-300 dark:text-red-700" />
+                <span className="text-xs font-semibold">Failed to load top categories. Please retry.</span>
+              </div>
+            ) : topCategoriesLoading ? (
               <div className="animate-pulse space-y-3">
                 <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
                 <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-lg h-full min-h-[200px]" />
@@ -917,7 +941,9 @@ const queryOptions: { refetchInterval: number | false } = {
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Sales by Payment Method</h2>
           </div>
           <div className="p-6 space-y-5">
-            {paymentMethodsLoading ? (
+            {paymentMethodsError ? (
+              <div className="text-sm text-red-600 dark:text-red-400 text-center py-8">Failed to load payment methods. Please retry.</div>
+            ) : paymentMethodsLoading ? (
               <div className="animate-pulse space-y-4">
                 <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
                 <div className="space-y-3">
@@ -953,7 +979,9 @@ const queryOptions: { refetchInterval: number | false } = {
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Sales by Sales Channel</h2>
           </div>
           <div className="p-6 space-y-5">
-            {salesChannelsLoading ? (
+            {salesChannelsError ? (
+              <div className="text-sm text-red-600 dark:text-red-400 text-center py-8">Failed to load sales channels. Please retry.</div>
+            ) : salesChannelsLoading ? (
               <div className="animate-pulse space-y-4">
                 <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
                 <div className="space-y-3">
@@ -992,7 +1020,9 @@ const queryOptions: { refetchInterval: number | false } = {
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Stock Status Summary</h2>
           </div>
           <div className="p-4 h-64">
-            {stockStatusLoading ? (
+            {stockStatusError ? (
+              <div className="flex h-full items-center justify-center text-sm text-red-600 dark:text-red-400">Failed to load stock status. Please retry.</div>
+            ) : stockStatusLoading ? (
               <div className="animate-pulse flex items-center justify-center">
                 <div className="w-full h-full bg-slate-200 dark:bg-slate-800 rounded-lg" />
               </div>
@@ -1035,7 +1065,9 @@ const queryOptions: { refetchInterval: number | false } = {
             <span className="text-[11px] text-slate-400">Click category bar for product items</span>
           </div>
           <div className="p-4 h-64">
-            {inventoryDistLoading ? (
+            {inventoryDistError ? (
+              <div className="flex h-full items-center justify-center text-sm text-red-600 dark:text-red-400">Failed to load inventory distribution. Please retry.</div>
+            ) : inventoryDistLoading ? (
               <div className="animate-pulse flex items-center justify-center">
                 <div className="w-full h-full bg-slate-200 dark:bg-slate-800 rounded-lg" />
               </div>
@@ -1092,7 +1124,12 @@ const queryOptions: { refetchInterval: number | false } = {
             </button>
           </div>
           <div className="p-4 h-72">
-            {lowStockLoading ? (
+            {lowStockError ? (
+              <div className="flex flex-col items-center justify-center h-full text-red-600 dark:text-red-400 space-y-2">
+                <WarningIcon className="text-red-300 dark:text-red-700" fontSize="large" />
+                <span className="text-xs font-semibold">Failed to load low stock data. Please retry.</span>
+              </div>
+            ) : lowStockLoading ? (
               <div className="animate-pulse space-y-3">
                 <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
                 <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-lg h-full min-h-[180px]" />
@@ -1150,7 +1187,12 @@ const queryOptions: { refetchInterval: number | false } = {
             </button>
           </div>
           <div className="p-4 h-72 overflow-y-auto">
-            {outOfStockLoading ? (
+            {outOfStockError ? (
+              <div className="flex flex-col items-center justify-center h-full text-red-600 dark:text-red-400 space-y-2">
+                <OutOfStockIcon className="text-red-300 dark:text-red-700" fontSize="large" />
+                <span className="text-xs font-semibold">Failed to load out of stock data. Please retry.</span>
+              </div>
+            ) : outOfStockLoading ? (
               <div className="animate-pulse space-y-2">
                 <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
                 <div className="space-y-2">
@@ -1196,7 +1238,7 @@ const queryOptions: { refetchInterval: number | false } = {
 
         {/* Row: Customer Growth + Monthly Acquisition */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
-          <ChartCard title="Customer Growth Trend" icon={<TrendingIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={customerGrowthLoading} isEmpty={!customerGrowth || customerGrowth.length === 0} emptyText="No customer growth data available">
+          <ChartCard title="Customer Growth Trend" icon={<TrendingIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={customerGrowthLoading} isEmpty={!customerGrowth || customerGrowth.length === 0} emptyText="No customer growth data available" error={customerGrowthError} errorText="Failed to load customer growth data. Please retry.">
             <div className="p-4 h-72">
               {customerGrowth && customerGrowth.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -1222,7 +1264,7 @@ const queryOptions: { refetchInterval: number | false } = {
               )}
             </div>
           </ChartCard>
-          <ChartCard title="Monthly Customer Acquisition" icon={<PeopleIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={monthlyAcquisitionLoading} isEmpty={!monthlyAcquisition || monthlyAcquisition.length === 0} emptyText="No acquisition data available">
+          <ChartCard title="Monthly Customer Acquisition" icon={<PeopleIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={monthlyAcquisitionLoading} isEmpty={!monthlyAcquisition || monthlyAcquisition.length === 0} emptyText="No acquisition data available" error={monthlyAcquisitionError} errorText="Failed to load monthly acquisition data. Please retry.">
             <div className="p-4 h-72">
               {monthlyAcquisition && monthlyAcquisition.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -1255,7 +1297,7 @@ const queryOptions: { refetchInterval: number | false } = {
               <NewVsReturningView />
             </div>
           </ChartCard>
-          <ChartCard title="Revenue by Customer Type" icon={<MuiBarChartIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={revenueByTypeLoading} isEmpty={!revenueByType || revenueByType.length === 0} emptyText="No revenue breakdown available">
+          <ChartCard title="Revenue by Customer Type" icon={<MuiBarChartIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={revenueByTypeLoading} isEmpty={!revenueByType || revenueByType.length === 0} emptyText="No revenue breakdown available" error={revenueByTypeError} errorText="Failed to load revenue by customer type. Please retry.">
             <div className="p-4 h-72">
               {revenueByType && revenueByType.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -1280,7 +1322,7 @@ const queryOptions: { refetchInterval: number | false } = {
 
         {/* Row: Segmentation + Purchase Frequency */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
-          <ChartCard title="Customer Segmentation" icon={<PeopleIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={segmentationLoading} isEmpty={!segmentation || segmentation.total_segmented === 0} emptyText="No segmentation data yet. Link sales to customers.">
+          <ChartCard title="Customer Segmentation" icon={<PeopleIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={segmentationLoading} isEmpty={!segmentation || segmentation.total_segmented === 0} emptyText="No segmentation data yet. Link sales to customers." error={segmentationError} errorText="Failed to load customer segmentation. Please retry.">
             <div className="p-4 h-72">
               {segmentation && segmentation.total_segmented > 0 ? (
                 <div className="space-y-4">
@@ -1308,7 +1350,7 @@ const queryOptions: { refetchInterval: number | false } = {
               )}
             </div>
           </ChartCard>
-          <ChartCard title="Purchase Frequency Distribution" icon={<ReceiptIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={purchaseFreqLoading} isEmpty={!purchaseFreq || purchaseFreq.length === 0} emptyText="No purchase frequency data available">
+          <ChartCard title="Purchase Frequency Distribution" icon={<ReceiptIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={purchaseFreqLoading} isEmpty={!purchaseFreq || purchaseFreq.length === 0} emptyText="No purchase frequency data available" error={purchaseFreqError} errorText="Failed to load purchase frequency data. Please retry.">
             <div className="p-4 h-72">
               {purchaseFreq && purchaseFreq.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -1336,7 +1378,7 @@ const queryOptions: { refetchInterval: number | false } = {
 
         {/* Row: Location Distribution + Spending Distribution */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
-          <ChartCard title="Customer Location Distribution" icon={<StoreIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={locationDistLoading} isEmpty={!locationDist || locationDist.length === 0} emptyText="No location data available">
+          <ChartCard title="Customer Location Distribution" icon={<StoreIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={locationDistLoading} isEmpty={!locationDist || locationDist.length === 0} emptyText="No location data available" error={locationDistError} errorText="Failed to load location distribution. Please retry.">
             <div className="p-4 h-72">
               {locationDist && locationDist.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -1360,7 +1402,7 @@ const queryOptions: { refetchInterval: number | false } = {
               )}
             </div>
           </ChartCard>
-          <ChartCard title="Customer Spending Distribution" icon={<MoneyIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={spendingDistLoading} isEmpty={!spendingDist || spendingDist.total_customers === 0} emptyText="No spending data available">
+          <ChartCard title="Customer Spending Distribution" icon={<MoneyIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={spendingDistLoading} isEmpty={!spendingDist || spendingDist.total_customers === 0} emptyText="No spending data available" error={spendingDistError} errorText="Failed to load spending distribution. Please retry.">
             <div className="p-4 h-72">
               {spendingDist && spendingDist.total_customers > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -1388,7 +1430,7 @@ const queryOptions: { refetchInterval: number | false } = {
 
         {/* Row: Top Customers + Recent Customers + Revenue Contribution */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
-          <ChartCard title="Top Customers" icon={<PeopleIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={topCustomersLoading} isEmpty={!topCustomers || topCustomers.length === 0} emptyText="No customer data available">
+          <ChartCard title="Top Customers" icon={<PeopleIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={topCustomersLoading} isEmpty={!topCustomers || topCustomers.length === 0} emptyText="No customer data available" error={topCustomersError} errorText="Failed to load top customers. Please retry.">
             <div className="p-4 h-72 overflow-y-auto">
               {topCustomers && topCustomers.length > 0 ? (
                 <div className="space-y-3">
@@ -1422,7 +1464,7 @@ const queryOptions: { refetchInterval: number | false } = {
             </div>
           </ChartCard>
 
-          <ChartCard title="Recent Customers" icon={<StoreIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={recentCustomersLoading} isEmpty={!recentCustomers || recentCustomers.length === 0} emptyText="No recent customers">
+          <ChartCard title="Recent Customers" icon={<StoreIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={recentCustomersLoading} isEmpty={!recentCustomers || recentCustomers.length === 0} emptyText="No recent customers" error={recentCustomersError} errorText="Failed to load recent customers. Please retry.">
             <div className="p-4 h-72 overflow-y-auto">
               {recentCustomers && recentCustomers.length > 0 ? (
                 <div className="space-y-3">
@@ -1453,7 +1495,7 @@ const queryOptions: { refetchInterval: number | false } = {
             </div>
           </ChartCard>
 
-          <ChartCard title="Revenue Contribution" icon={<MoneyIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={revenueContributionLoading} isEmpty={!revenueContribution || revenueContribution.length === 0} emptyText="No revenue data available">
+          <ChartCard title="Revenue Contribution" icon={<MoneyIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />} loading={revenueContributionLoading} isEmpty={!revenueContribution || revenueContribution.length === 0} emptyText="No revenue data available" error={revenueContributionError} errorText="Failed to load revenue contribution. Please retry.">
             <div className="p-4 h-72 overflow-y-auto">
               {revenueContribution && revenueContribution.length > 0 ? (
                 <div className="space-y-3">
@@ -1505,7 +1547,9 @@ const queryOptions: { refetchInterval: number | false } = {
           <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Inventory Value by Category</h2>
         </div>
         <div className="p-4 h-72">
-          {inventoryValue && inventoryValue.length > 0 ? (
+          {inventoryValueError ? (
+            <div className="flex h-full items-center justify-center text-sm text-red-600 dark:text-red-400">Failed to load inventory valuation. Please retry.</div>
+          ) : inventoryValue && inventoryValue.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={inventoryValue}

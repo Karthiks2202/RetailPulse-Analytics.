@@ -389,11 +389,11 @@ async def export_analytics(
         rows = data if data else []
         filename += "_transactions"
     elif payload.report_type == "top-products":
-        data = await analytics_service.get_top_products(db, current_user.company_id, filters_dict, page=1, page_size=50)
+        data = await analytics_service.get_top_products(db, current_user.company_id, filters_dict, page=1, page_size=0)
         rows = data.get("items", []) if isinstance(data, dict) else data
         filename += "_top_products"
     elif payload.report_type == "top-customers":
-        data = await analytics_service.get_top_customers(db, current_user.company_id, filters_dict, page=1, page_size=50)
+        data = await analytics_service.get_top_customers(db, current_user.company_id, filters_dict, page=1, page_size=0)
         rows = data.get("items", []) if isinstance(data, dict) else data
         filename += "_top_customers"
     elif payload.report_type == "payment-methods":

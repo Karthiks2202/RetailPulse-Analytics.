@@ -100,10 +100,18 @@ class AnalyticsService:
         sale_filters, item_filters = self._split_filters(filters)
         sale_query = self._apply_sale_level_filters(sale_query, sale_filters)
         sale_sub = sale_query.subquery()
+        has_item_filter = bool(item_filters)
 
-        total_orders_result = await db.execute(
-            select(func.count(sale_sub.c.id))
-        )
+        if has_item_filter:
+            order_query = (
+                select(func.count(func.distinct(SaleItem.sale_id)))
+                .join(sale_sub, SaleItem.sale_id == sale_sub.c.id)
+            )
+            order_query = self._apply_item_level_filters(order_query, item_filters)
+        else:
+            order_query = select(func.count(sale_sub.c.id))
+
+        total_orders_result = await db.execute(order_query)
         total_orders = total_orders_result.scalar() or 0
 
         item_agg = select(
@@ -366,7 +374,10 @@ class AnalyticsService:
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
 
-        query = query.offset((page - 1) * page_size).limit(page_size)
+        if page_size == 0:
+            query = query
+        else:
+            query = query.offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(query)
         rows = result.all()
         return {
@@ -943,33 +954,59 @@ class AnalyticsService:
             item_sub = self._apply_item_level_filters(item_sub, item_filters)
             item_sub = item_sub.subquery()
 
-            query = (
-                select(
-                    sale_sub.c.customer_id,
-                    func.count(func.distinct(item_sub.c.sale_id)).label("total_purchases"),
-                    func.coalesce(func.sum(item_sub.c.total), 0).label("total_spent"),
-                    func.max(sale_sub.c.sale_date).label("last_purchase_date"),
+            if page_size == 0:
+                query = (
+                    select(
+                        sale_sub.c.customer_id,
+                        func.count(func.distinct(item_sub.c.sale_id)).label("total_purchases"),
+                        func.coalesce(func.sum(item_sub.c.total), 0).label("total_spent"),
+                        func.max(sale_sub.c.sale_date).label("last_purchase_date"),
+                    )
+                    .join(item_sub, sale_sub.c.id == item_sub.c.sale_id)
+                    .group_by(sale_sub.c.customer_id)
+                    .order_by(func.sum(item_sub.c.total).desc())
                 )
-                .join(item_sub, sale_sub.c.id == item_sub.c.sale_id)
-                .group_by(sale_sub.c.customer_id)
-                .order_by(func.sum(item_sub.c.total).desc())
-                .offset((page - 1) * page_size)
-                .limit(page_size)
-            )
+            else:
+                query = (
+                    select(
+                        sale_sub.c.customer_id,
+                        func.count(func.distinct(item_sub.c.sale_id)).label("total_purchases"),
+                        func.coalesce(func.sum(item_sub.c.total), 0).label("total_spent"),
+                        func.max(sale_sub.c.sale_date).label("last_purchase_date"),
+                    )
+                    .join(item_sub, sale_sub.c.id == item_sub.c.sale_id)
+                    .group_by(sale_sub.c.customer_id)
+                    .order_by(func.sum(item_sub.c.total).desc())
+                    .offset((page - 1) * page_size)
+                    .limit(page_size)
+                )
         else:
-            query = (
-                select(
-                    sale_sub.c.customer_id,
-                    func.count(sale_sub.c.id).label("total_purchases"),
-                    func.coalesce(func.sum(sale_sub.c.total_amount), 0).label("total_spent"),
-                    func.avg(sale_sub.c.total_amount).label("average_order_value"),
-                    func.max(sale_sub.c.sale_date).label("last_purchase_date"),
+            if page_size == 0:
+                query = (
+                    select(
+                        sale_sub.c.customer_id,
+                        func.count(sale_sub.c.id).label("total_purchases"),
+                        func.coalesce(func.sum(sale_sub.c.total_amount), 0).label("total_spent"),
+                        func.avg(sale_sub.c.total_amount).label("average_order_value"),
+                        func.max(sale_sub.c.sale_date).label("last_purchase_date"),
+                    )
+                    .group_by(sale_sub.c.customer_id)
+                    .order_by(func.sum(sale_sub.c.total_amount).desc())
                 )
-                .group_by(sale_sub.c.customer_id)
-                .order_by(func.sum(sale_sub.c.total_amount).desc())
-                .offset((page - 1) * page_size)
-                .limit(page_size)
-            )
+            else:
+                query = (
+                    select(
+                        sale_sub.c.customer_id,
+                        func.count(sale_sub.c.id).label("total_purchases"),
+                        func.coalesce(func.sum(sale_sub.c.total_amount), 0).label("total_spent"),
+                        func.avg(sale_sub.c.total_amount).label("average_order_value"),
+                        func.max(sale_sub.c.sale_date).label("last_purchase_date"),
+                    )
+                    .group_by(sale_sub.c.customer_id)
+                    .order_by(func.sum(sale_sub.c.total_amount).desc())
+                    .offset((page - 1) * page_size)
+                    .limit(page_size)
+                )
 
         result = await db.execute(query)
         rows = result.all()

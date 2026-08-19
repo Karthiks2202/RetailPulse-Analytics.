@@ -122,20 +122,20 @@ A comprehensive retail analytics platform for managing products, inventory, sale
 ## Screenshots
 
 ### Dashboard
-- **Dashboard Overview** — `Screenshot/Task 2 - Product & Category Management/Dashboard overview.png`
-- **Dashboard Light Mode** — `Screenshot/Task 2 - Product & Category Management/Dashboard view lightmode.png`
-- **Dashboard Dark Mode** — `Screenshot/Task 2 - Product & Category Management/Dashboard darkmodeMobile view page.png`
+- **Dashboard Overview** — `docs/screenshots/Task 2 - Product & Category Management/Dashboard overview.png`
+- **Dashboard Light Mode** — `docs/screenshots/Task 2 - Product & Category Management/Dashboard view lightmode.png`
+- **Dashboard Dark Mode** — `docs/screenshots/Task 2 - Product & Category Management/Dashboard darkmodeMobile view page.png`
 
 ### Products & Categories
-- **Products Page** — `Screenshot/Task 2 - Product & Category Management/Products page.png`
-- **Categories Page** — `Screenshot/Task 2 - Product & Category Management/Category page.png`
-- **Edit Product** — `Screenshot/Task 2 - Product & Category Management/Edit Product page.png`
-- **Edit Category** — `Screenshot/Task 2 - Product & Category Management/Edit Category page.png`
+- **Products Page** — `docs/screenshots/Task 2 - Product & Category Management/Products page.png`
+- **Categories Page** — `docs/screenshots/Task 2 - Product & Category Management/Category page.png`
+- **Edit Product** — `docs/screenshots/Task 2 - Product & Category Management/Edit Product page.png`
+- **Edit Category** — `docs/screenshots/Task 2 - Product & Category Management/Edit Category page.png`
 
 ### Sales Management
-- **Sales Page** — `Screenshot/Task 3 - Sales Management & Sales Transactions/Sale page.png`
-- **New Sale** — `Screenshot/Task 3 - Sales Management & Sales Transactions/New Sale page.png`
-- **Sale by Invoice** — `Screenshot/Task 3 - Sales Management & Sales Transactions/sale search invoice number page.png`
+- **Sales Page** — `docs/screenshots/Task 3 - Sales Management & Sales Transactions/Sale page.png`
+- **New Sale** — `docs/screenshots/Task 3 - Sales Management & Sales Transactions/New Sale page.png`
+- **Sale by Invoice** — `docs/screenshots/Task 3 - Sales Management & Sales Transactions/sale search invoice number page.png`
 
 ## API Endpoints
 

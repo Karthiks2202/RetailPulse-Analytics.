@@ -97,6 +97,29 @@ class CRUDSale:
 
         return query
 
+    async def _paginate(
+        self,
+        db: AsyncSession,
+        query,
+        skip: int = 0,
+        limit: int = 100,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
+    ) -> tuple[list[Sale], int]:
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        sort_column = getattr(Sale, sort_by, Sale.created_at)
+        if sort_dir == "asc":
+            query = query.order_by(sort_column.asc())
+        else:
+            query = query.order_by(sort_column.desc())
+
+        query = query.offset(skip).limit(limit)
+        result = await db.execute(query)
+        return list(result.scalars().all()), total
+
     async def list(
         self,
         db: AsyncSession,
@@ -119,20 +142,7 @@ class CRUDSale:
             company_id, search, customer_name, product_name, date_from, date_to,
             sales_channel, payment_method, payment_status, category_id,
         )
-
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await db.execute(count_query)
-        total = total_result.scalar() or 0
-
-        sort_column = getattr(Sale, sort_by, Sale.created_at)
-        if sort_dir == "asc":
-            query = query.order_by(sort_column.asc())
-        else:
-            query = query.order_by(sort_column.desc())
-
-        query = query.offset(skip).limit(limit)
-        result = await db.execute(query)
-        return list(result.scalars().all()), total
+        return await self._paginate(db, query, skip, limit, sort_by, sort_dir)
 
     async def list_with_items(
         self,
@@ -156,48 +166,9 @@ class CRUDSale:
             company_id, search, customer_name, product_name, date_from, date_to,
             sales_channel, payment_method, payment_status, category_id,
         )
-
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await db.execute(count_query)
-        total = total_result.scalar() or 0
-
-        sort_column = getattr(Sale, sort_by, Sale.created_at)
-        if sort_dir == "asc":
-            query = query.order_by(sort_column.asc())
-        else:
-            query = query.order_by(sort_column.desc())
-
-        query = query.offset(skip).limit(limit)
-        result = await db.execute(query)
-        sales = list(result.scalars().all())
-        return sales, total
+        return await self._paginate(db, query, skip, limit, sort_by, sort_dir)
 
     async def create(self, db: AsyncSession, company_id: UUID, user_id: UUID, customer_name: Optional[str], sale_date: datetime, sales_channel: str, payment_method: str, items: list, request: Request, customer_id: Optional[UUID] = None, notes: Optional[str] = None) -> Sale:
-        # Auto-link customer by name if customer_id not provided
-        if not customer_id and customer_name:
-            from sqlalchemy import func as sa_func
-            name_parts = customer_name.strip().split()
-            if len(name_parts) >= 2:
-                first_name = name_parts[0]
-                last_name = " ".join(name_parts[1:])
-                res = await db.execute(
-                    select(Customer)
-                    .where(Customer.company_id == company_id)
-                    .where(sa_func.lower(Customer.first_name) == first_name.lower())
-                    .where(sa_func.lower(Customer.last_name) == last_name.lower())
-                    .where(Customer.is_deleted == False)
-                )
-            else:
-                res = await db.execute(
-                    select(Customer)
-                    .where(Customer.company_id == company_id)
-                    .where(sa_func.lower(Customer.first_name) == customer_name.strip().lower())
-                    .where(Customer.is_deleted == False)
-                )
-            matched = res.scalar_one_or_none()
-            if matched:
-                customer_id = matched.id
-
         if customer_id:
             customer = await db.get(Customer, customer_id)
             if not customer or customer.company_id != company_id:

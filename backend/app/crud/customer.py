@@ -258,6 +258,7 @@ class CRUDCustomer:
             select(
                 func.count(Sale.id).label("total_purchases"),
                 func.coalesce(func.sum(Sale.total_amount), 0).label("total_spent"),
+                func.max(Sale.sale_date).label("last_purchase_date"),
             )
             .where(Sale.customer_id == customer_id)
             .where(Sale.status == SaleStatus.COMPLETED)
@@ -265,15 +266,7 @@ class CRUDCustomer:
         row = result.one_or_none()
         total_purchases = int(row.total_purchases) if row else 0
         total_spent = float(row.total_spent) if row else 0.0
-
-        last_purchase_result = await db.execute(
-            select(Sale.sale_date)
-            .where(Sale.customer_id == customer_id)
-            .where(Sale.status == SaleStatus.COMPLETED)
-            .order_by(Sale.sale_date.desc())
-            .limit(1)
-        )
-        last_purchase = last_purchase_result.scalar_one_or_none()
+        last_purchase = row.last_purchase_date if row else None
 
         return {
             "total_purchases": total_purchases,
@@ -338,7 +331,10 @@ class CRUDCustomer:
             query = query.where(Sale.sale_date >= date_from)
         if date_to:
             query = query.where(Sale.sale_date <= date_to)
-        query = query.group_by(Sale.customer_id).order_by(func.sum(Sale.total_amount).desc()).limit(limit)
+        if limit == 0:
+            query = query.group_by(Sale.customer_id).order_by(func.sum(Sale.total_amount).desc())
+        else:
+            query = query.group_by(Sale.customer_id).order_by(func.sum(Sale.total_amount).desc()).limit(limit)
         result = await db.execute(query)
         rows = result.all()
         customer_ids = [row.customer_id for row in rows]

@@ -148,6 +148,8 @@ async def list_customers(
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
+    customer_ids = [c.id for c in customers]
+    summaries = await customer_crud.get_customers_purchase_summaries(db, current_user.company_id, customer_ids) if customer_ids else {}
     result = []
     for cust in customers:
         if city and (cust.city or '').lower() != city.lower():
@@ -160,7 +162,7 @@ async def list_customers(
             continue
         if parsed_to and cust.customer_since > parsed_to:
             continue
-        summary = await customer_crud.get_purchase_summary(db, cust.id)
+        summary = summaries.get(cust.id, {"total_purchases": 0, "total_spent": 0.0, "last_purchase_date": None})
         cust_segment = await customer_crud.get_segment(db, cust.id)
         if segment and cust_segment != segment:
             continue
@@ -465,7 +467,7 @@ async def export_top_customers_csv(
     db: AsyncSession = Depends(get_db),
     request: Request = None,
 ):
-    top = await customer_crud.get_top_customers(db, current_user.company_id)
+    top = await customer_crud.get_top_customers(db, current_user.company_id, limit=0)
     await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, entity_name="Top Customers", details=f"Exported top {len(top)} customers as CSV")
 
     output = io.StringIO()
@@ -484,7 +486,7 @@ async def export_top_customers_pdf(
     db: AsyncSession = Depends(get_db),
     request: Request = None,
 ):
-    top = await customer_crud.get_top_customers(db, current_user.company_id)
+    top = await customer_crud.get_top_customers(db, current_user.company_id, limit=0)
     await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, entity_name="Top Customers", details=f"Exported top {len(top)} customers as PDF")
     return {
         "content": top,
