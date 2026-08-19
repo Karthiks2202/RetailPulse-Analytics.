@@ -481,7 +481,7 @@ export const Sales: React.FC = () => {
       doc.setFontSize(16);
       doc.text('Sales Report', 14, 15);
       
-      const excludedKeys = ['invoice_number']; // Exclude long identifiers to save space
+      const excludedKeys: string[] = []; // Keep invoice_number and all key columns
       const headers = Object.keys(rows[0]).filter(k => !excludedKeys.includes(k));
       const displayHeaders = headers.map(h => h.replace(/_/g, ' ').toUpperCase());
       
@@ -652,23 +652,35 @@ export const Sales: React.FC = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
-                  <th className="px-6 py-3 font-bold">Invoice Number</th>
-                  <th className="px-6 py-3 font-bold">Customer Name</th>
-                  <th className="px-6 py-3 font-bold">Sale Date</th>
-                  <th className="px-6 py-3 font-bold">Number of Items</th>
-                  <th className="px-6 py-3 font-bold">Total Amount</th>
-                  <th className="px-6 py-3 font-bold">Payment Status</th>
+                  <th className="px-6 py-3 font-bold">Invoice</th>
+                  <th className="px-6 py-3 font-bold">Customer</th>
+                  <th className="px-6 py-3 font-bold">Date</th>
+                  <th className="px-6 py-3 font-bold">Channel</th>
+                  <th className="px-6 py-3 font-bold">Payment</th>
+                  <th className="px-6 py-3 font-bold">Items</th>
+                  <th className="px-6 py-3 font-bold">Amount</th>
+                  <th className="px-6 py-3 font-bold">Status</th>
                   {isAdmin && <th className="px-6 py-3 font-bold text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {sales.map((sale) => (
                   <tr key={sale.id} className="group border-b border-slate-100 dark:border-slate-800/60 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
-                    <td className="px-6 py-3.5 font-mono text-xs font-bold text-slate-800 dark:text-slate-100">{sale.invoice_number}</td>
-                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{sale.customer_name || '—'}</td>
+                    <td className="px-6 py-3.5 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">{sale.invoice_number}</td>
+                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300 font-medium">{sale.customer_name || '—'}</td>
                     <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{new Date(sale.sale_date).toLocaleDateString()}</td>
-                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{sale.item_count || 0}</td>
-                    <td className="px-6 py-3.5 font-semibold text-slate-800 dark:text-slate-100">{currency(sale.total_amount)}</td>
+                    <td className="px-6 py-3.5">
+                      <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {sale.sales_channel || '—'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3.5">
+                      <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400">
+                        {sale.payment_method || '—'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300 text-center">{sale.item_count || 0}</td>
+                    <td className="px-6 py-3.5 font-bold text-slate-800 dark:text-slate-100">{currency(sale.total_amount)}</td>
                     <td className="px-6 py-3.5">
                       <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold capitalize tracking-wide ${
                         sale.payment_status === 'PAID' ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/30' :

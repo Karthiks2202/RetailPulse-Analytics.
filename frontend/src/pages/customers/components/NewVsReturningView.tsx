@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getNewVsReturning } from '../../../api/customerApi';
+import { formatCurrency } from '../../../utils/currency';
 import {
   PieChart,
   Pie,
@@ -68,13 +69,13 @@ const NewVsReturningView: React.FC<NewVsReturningViewProps> = ({ dateFrom, dateT
         <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">New Revenue</p>
           <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-1">
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(data.new_customer_revenue || 0)}
+            {formatCurrency(data.new_customer_revenue || 0)}
           </p>
         </div>
         <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Returning Revenue</p>
           <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-1">
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(data.returning_customer_revenue || 0)}
+            {formatCurrency(data.returning_customer_revenue || 0)}
           </p>
         </div>
       </div>

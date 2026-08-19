@@ -293,6 +293,7 @@ async def export_forecast_pdf(
 
     fp = ForecastPeriodType(forecast_period) if forecast_period else None
     items, _ = await forecast_crud.list(db, current_user.company_id, limit=10000, forecast_period=fp)
+    cat_items, _ = await forecast_crud.list_category_forecasts(db, current_user.company_id, limit=10000, forecast_period=fp)
 
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter
@@ -307,6 +308,38 @@ async def export_forecast_pdf(
     elements.append(Paragraph("Demand Forecast Report", styles["Title"]))
     elements.append(Spacer(1, 12))
     elements.append(Paragraph(f"Period: {forecast_period or 'All'}", styles["Normal"]))
+    elements.append(Spacer(1, 12))
+
+    if cat_items:
+        elements.append(Paragraph("Category Forecasts", styles["Heading2"]))
+        elements.append(Spacer(1, 12))
+        
+        cat_data = [["Category", "Historical Sales", "Predicted Demand", "Expected Growth %"]]
+        for item in cat_items:
+            cat_data.append([
+                item.get("category_name", ""),
+                str(item.get("total_historical_sales", 0)),
+                str(item.get("predicted_demand", 0)),
+                f"{item.get('expected_growth_percentage', 0)}%",
+            ])
+            
+        cat_table = Table(cat_data)
+        cat_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4f46e5")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 12),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#f8fafc")),
+            ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 1), (-1, -1), 10),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        elements.append(cat_table)
+        elements.append(Spacer(1, 24))
+
+    elements.append(Paragraph("Product Forecasts", styles["Heading2"]))
     elements.append(Spacer(1, 12))
 
     data = [["Product", "SKU", "Category", "Predicted Demand", "Confidence", "Recommendation"]]

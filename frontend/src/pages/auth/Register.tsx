@@ -18,15 +18,15 @@ export const Register: React.FC = () => {
     setApiError(null);
     try {
       await registerCompany({
-        companyName: data.companyName,
+        company_name: data.companyName,
         industry: data.industry,
-        companyEmail: data.companyEmail,
-        companyAddress: data.companyAddress,
-        companyPhone: data.companyPhone,
-        ownerName: data.ownerName,
-        ownerEmail: data.ownerEmail,
+        company_email: data.companyEmail,
+        company_address: data.companyAddress,
+        company_phone: data.companyPhone,
+        owner_name: data.ownerName,
+        owner_email: data.ownerEmail,
         password: data.password,
-        confirmPassword: data.confirmPassword,
+        confirm_password: data.confirmPassword,
       });
       navigate('/login', { state: { registered: true } });
     } catch (err: any) {

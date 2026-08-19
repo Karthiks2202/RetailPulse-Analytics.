@@ -246,7 +246,7 @@ export const Dashboard: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-4">
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-450 font-medium">
-                  <span>Monthly Revenue Trend (USD)</span>
+                  <span>Monthly Revenue Trend</span>
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-650"></span> This Year</span>
                     <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-700"></span> Projections</span>
@@ -336,7 +336,7 @@ export const Dashboard: React.FC = () => {
                 <div>
                   <div className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Avg Transaction</div>
                   <div className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-                    {data?.total_revenue && data.team_count > 0 ? formatCurrency(data.total_revenue / data.team_count) : '$38.50'}
+                    {data?.total_revenue && data.team_count > 0 ? formatCurrency(data.total_revenue / data.team_count) : formatCurrency(38.50)}
                   </div>
                 </div>
                 <div>

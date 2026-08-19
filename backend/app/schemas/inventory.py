@@ -32,9 +32,9 @@ class StockMovementResponse(StockMovementBase):
 
 class InventoryAdjustmentBase(BaseModel):
     product_id: UUID
-    adjustment_type: AdjustmentType
+    adjustment_type: Optional[AdjustmentType] = None
     quantity: int
-    reason: str
+    reason: Optional[str] = None
     remarks: Optional[str] = None
 
 

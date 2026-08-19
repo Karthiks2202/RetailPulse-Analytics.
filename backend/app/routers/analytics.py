@@ -434,22 +434,36 @@ async def export_analytics(
         story.append(Spacer(1, 12))
 
         if rows:
-            table_data = [list(rows[0].keys())]
+            headers_list = [str(k).replace("_", " ").upper() for k in rows[0].keys()]
+            table_data = [headers_list]
             for row in rows:
-                table_data.append([str(v) for v in row.values()])
+                row_vals = []
+                for v in row.values():
+                    if isinstance(v, (dict, list)):
+                        val_str = str(v)
+                    elif v is None:
+                        val_str = "—"
+                    else:
+                        val_str = str(v)
+                    row_vals.append(Paragraph(val_str, styles["Normal"]))
+                table_data.append(row_vals)
+
+            header_paragraphs = [Paragraph(f"<b>{h}</b>", styles["Normal"]) for h in headers_list]
+            table_data[0] = header_paragraphs
+
             table = Table(table_data)
             table.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4f46e5")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, 0), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+                ("FONTSIZE", (0, 0), (-1, 0), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
                 ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#f8fafc")),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("FONTSIZE", (0, 1), (-1, -1), 9),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("FONTSIZE", (0, 1), (-1, -1), 8),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
             ]))
             story.append(table)
         else:

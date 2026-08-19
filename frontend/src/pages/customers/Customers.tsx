@@ -376,7 +376,73 @@ const Customers: React.FC = () => {
   const handleExportAnalyticsPDF = async () => {
     try {
       const res = await exportCustomerAnalyticsPDF();
-      showNotification(res.message || 'Customer analytics PDF generated', 'success');
+      const content = res.content || {};
+      const dashboard = content.dashboard || {};
+      const growth = content.growth || [];
+      const top = content.top || [];
+
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Customer Analytics Report', 14, 15);
+
+      // Section 1: KPI Summary
+      doc.setFontSize(12);
+      doc.text('Overview Metrics', 14, 25);
+      const kpiRows = [
+        ['Total Customers', String(dashboard.total_customers ?? 0)],
+        ['Active Customers', String(dashboard.active_customers ?? 0)],
+        ['New Customers', String(dashboard.new_customers ?? 0)],
+        ['Returning Customers', String(dashboard.returning_customers ?? 0)],
+        ['Total Revenue', formatCurrency(dashboard.total_revenue ?? 0)],
+        ['Avg Customer Spend', formatCurrency(dashboard.average_customer_spend ?? 0)],
+      ];
+      (doc as any).autoTable({
+        head: [['Metric', 'Value']],
+        body: kpiRows,
+        startY: 28,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [16, 185, 129] },
+      });
+
+      let currentY = (doc as any).lastAutoTable.finalY + 10;
+
+      // Section 2: Top Customers
+      if (top.length > 0) {
+        doc.setFontSize(12);
+        doc.text('Top Customers', 14, currentY);
+        const topRows = top.map((c: any) => [
+          `${c.first_name || ''} ${c.last_name || ''}`.trim() || '—',
+          c.email || '—',
+          String(c.total_purchases ?? 0),
+          formatCurrency(c.total_spent ?? 0),
+          c.last_purchase_date ? new Date(c.last_purchase_date).toLocaleDateString() : '—',
+        ]);
+        (doc as any).autoTable({
+          head: [['Customer', 'Email', 'Purchases', 'Total Spent', 'Last Purchase']],
+          body: topRows,
+          startY: currentY + 3,
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [16, 185, 129] },
+        });
+        currentY = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Section 3: Monthly Growth
+      if (growth.length > 0 && currentY < 250) {
+        doc.setFontSize(12);
+        doc.text('Monthly Customer Growth', 14, currentY);
+        const growthRows = growth.map((g: any) => [g.month || '—', String(g.new_customers ?? 0)]);
+        (doc as any).autoTable({
+          head: [['Month', 'New Customers']],
+          body: growthRows,
+          startY: currentY + 3,
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [16, 185, 129] },
+        });
+      }
+
+      doc.save(res.filename || 'customer_analytics_report.pdf');
+      showNotification('Customer analytics exported as PDF', 'success');
     } catch (err: any) {
       showNotification(err?.response?.data?.detail || 'Failed to export analytics PDF', 'error');
     }
@@ -402,7 +468,34 @@ const Customers: React.FC = () => {
   const handleExportTopCustomersPDF = async () => {
     try {
       const res = await exportTopCustomersPDF();
-      showNotification(res.message || 'Top customers PDF generated', 'success');
+      const top = Array.isArray(res.content) ? res.content : [];
+      if (top.length === 0) {
+        showNotification('No data to export', 'error');
+        return;
+      }
+
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Top Customers Report', 14, 15);
+
+      const topRows = top.map((c: any) => [
+        `${c.first_name || ''} ${c.last_name || ''}`.trim() || '—',
+        c.email || '—',
+        String(c.total_purchases ?? 0),
+        formatCurrency(c.total_spent ?? 0),
+        c.last_purchase_date ? new Date(c.last_purchase_date).toLocaleDateString() : '—',
+      ]);
+
+      (doc as any).autoTable({
+        head: [['Customer', 'Email', 'Total Purchases', 'Total Spent', 'Last Purchase Date']],
+        body: topRows,
+        startY: 20,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [16, 185, 129] },
+      });
+
+      doc.save(res.filename || 'top_customers_report.pdf');
+      showNotification('Top customers exported as PDF', 'success');
     } catch (err: any) {
       showNotification(err?.response?.data?.detail || 'Failed to export top customers PDF', 'error');
     }

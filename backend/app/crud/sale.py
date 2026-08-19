@@ -30,9 +30,25 @@ class CRUDSale:
     async def get_invoice_number(self, db: AsyncSession, company_id: UUID) -> str:
         year = datetime.utcnow().year
         prefix = f"INV-{year}-"
-        result = await db.execute(select(func.nextval('invoice_seq')))
-        next_seq = result.scalar_one()
-        return f"{prefix}{next_seq:06d}"
+        # Find the highest existing invoice number for this company in current year
+        result = await db.execute(
+            select(Sale.invoice_number)
+            .where(Sale.company_id == company_id)
+            .where(Sale.invoice_number.like(f"{prefix}%"))
+            .order_by(Sale.invoice_number.desc())
+            .limit(1)
+        )
+        last_invoice = result.scalar_one_or_none()
+        if last_invoice:
+            try:
+                last_num = int(last_invoice.replace(prefix, ""))
+            except ValueError:
+                last_num = 0
+        else:
+            last_num = 0
+        next_num = last_num + 1
+        return f"{prefix}{next_num:06d}"
+
 
     async def get(self, db: AsyncSession, sale_id: UUID) -> Sale | None:
         result = await db.execute(select(Sale).where(Sale.id == sale_id).options(selectinload(Sale.items)))
@@ -44,7 +60,7 @@ class CRUDSale:
         )
         return result.scalar_one_or_none()
 
-    async def _build_sale_query(
+    def _build_sale_query(
         self,
         company_id: UUID,
         search: str | None = None,

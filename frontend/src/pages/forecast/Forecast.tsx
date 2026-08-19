@@ -101,6 +101,19 @@ export const Forecast: React.FC = () => {
     enabled: tab === 'categories',
   });
 
+  // Also fetch category & product forecasts for the analytics dashboard view
+  const { data: analyticsCategoryForecasts, isLoading: analyticsCategoriesLoading } = useQuery({
+    queryKey: ['forecast', 'categories', { forecastPeriod, sortBy: 'predicted_demand', sortDir: 'desc', page: 1 }, 'analytics'],
+    queryFn: () => getCategoryForecasts({ forecast_period: forecastPeriod, sort_by: 'predicted_demand', sort_dir: 'desc', page: 1, limit: 20 }),
+    enabled: tab === 'analytics',
+  });
+
+  const { data: analyticsProductForecasts, isLoading: analyticsProductsLoading } = useQuery({
+    queryKey: ['forecast', 'products', { forecastPeriod, sortBy: 'predicted_demand', sortDir: 'desc', page: 1 }, 'analytics'],
+    queryFn: () => getProductForecasts({ forecast_period: forecastPeriod, sort_by: 'predicted_demand', sort_dir: 'desc', page: 1, limit: 10 }),
+    enabled: tab === 'analytics',
+  });
+
   const { data: topProductsChart } = useQuery({
     queryKey: ['forecast', 'charts', 'top-products', forecastPeriod],
     queryFn: () => getTopPredictedProducts(forecastPeriod),
@@ -548,6 +561,103 @@ export const Forecast: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Category Forecasts Table */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/30">
+              <CartIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />
+              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Category Forecasts</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Category</th>
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider text-right">Total Historical Sales</th>
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider text-right">Predicted Demand</th>
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider text-right">Expected Growth</th>
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Forecast Period</th>
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Generated</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {analyticsCategoriesLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <tr key={i}><td colSpan={6} className="px-4 py-4"><div className="h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" /></td></tr>
+                    ))
+                  ) : analyticsCategoryForecasts?.data?.length ? (
+                    analyticsCategoryForecasts.data.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors">
+                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">{item.category_name}</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-900 dark:text-slate-100">{item.total_historical_sales.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right font-mono text-indigo-600 dark:text-indigo-400 font-bold">{item.predicted_demand.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right font-mono">
+                          <span className={`${item.expected_growth_percentage >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {item.expected_growth_percentage >= 0 ? '+' : ''}{item.expected_growth_percentage.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{item.forecast_period.replace(/_/g, ' ')}</td>
+                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{new Date(item.generated_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-xs font-semibold">No category forecasts available. Generate forecasts first.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Top Product Forecasts Table */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/30">
+              <TrendingIcon className="text-indigo-600 dark:text-indigo-400" fontSize="small" />
+              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Top 10 Product Forecasts</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Product</th>
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Category</th>
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider text-right">Current Stock</th>
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider text-right">Historical Sales</th>
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider text-right">Predicted Demand</th>
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider text-right">Confidence</th>
+                    <th className="px-4 py-3 font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Recommendation</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {analyticsProductsLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i}><td colSpan={7} className="px-4 py-4"><div className="h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" /></td></tr>
+                    ))
+                  ) : analyticsProductForecasts?.data?.length ? (
+                    analyticsProductForecasts.data.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-900 dark:text-slate-100">{item.product_name}</div>
+                          <div className="text-[10px] text-slate-400">{item.product_sku}</div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{item.category_name || '-'}</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-900 dark:text-slate-100">{item.current_stock}</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-900 dark:text-slate-100">{item.historical_sales}</td>
+                        <td className="px-4 py-3 text-right font-mono text-indigo-600 dark:text-indigo-400 font-bold">{item.predicted_demand}</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-900 dark:text-slate-100">{item.confidence_score.toFixed(1)}%</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${REC_STYLES[item.recommendation || ''] || 'bg-slate-100 text-slate-600'}`}>
+                            {(item.recommendation || '').replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-xs font-semibold">No product forecasts available. Generate forecasts first.</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, extract, and_
+from sqlalchemy import select, func, extract, and_, literal_column
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta, date
 from decimal import Decimal
@@ -231,7 +231,7 @@ class AnalyticsService:
                 .join(SaleItem, SaleItem.sale_id == sale_sub.c.id)
             )
             query = self._apply_item_level_filters(query, item_filters)
-            query = query.group_by(func.date_trunc(trunc, sale_sub.c.sale_date)).order_by("period")
+            query = query.group_by(literal_column("period")).order_by("period")
         else:
             query = (
                 select(
@@ -243,7 +243,7 @@ class AnalyticsService:
                 .where(Sale.status == SaleStatus.COMPLETED)
             )
             query = self._apply_sale_level_filters(query, sale_filters)
-            query = query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
+            query = query.group_by(literal_column("period")).order_by("period")
 
         result = await db.execute(query)
         rows = result.all()
@@ -287,7 +287,7 @@ class AnalyticsService:
                 .join(SaleItem, SaleItem.sale_id == sale_sub.c.id)
             )
             query = self._apply_item_level_filters(query, item_filters)
-            query = query.group_by(func.date_trunc(trunc, sale_sub.c.sale_date)).order_by("period")
+            query = query.group_by(literal_column("period")).order_by("period")
         else:
             query = (
                 select(
@@ -299,7 +299,7 @@ class AnalyticsService:
                 .where(Sale.status == SaleStatus.COMPLETED)
             )
             query = self._apply_sale_level_filters(query, sale_filters)
-            query = query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
+            query = query.group_by(literal_column("period")).order_by("period")
 
         result = await db.execute(query)
         rows = result.all()
