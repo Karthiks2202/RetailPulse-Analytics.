@@ -33,7 +33,6 @@ import {
   type SalesTrendPoint,
   type TopProductResponse,
   type TopCategoryResponse,
-  type TopCustomerResponse,
   type PaymentMethodBreakdown,
   type SalesChannelBreakdown,
   type StockStatusSummary,
@@ -67,6 +66,7 @@ import {
   type PurchaseFrequencyPoint,
   type CustomerSegmentResponse,
   type MonthlyAcquisitionPoint,
+  type TopCustomerResponse,
 } from '../../api/customerApi';
 import { formatCurrency } from '../../utils/currency';
 import {
@@ -109,10 +109,6 @@ import {
   PieChart,
   Pie,
 } from 'recharts';
-import FilterBar from './components/FilterBar';
-import KPICard, { type KPIItem } from './components/KPICard';
-import ChartCard from './components/ChartCard';
-import ExportMenu from './components/ExportMenu';
 import { Pagination } from '../../components/Pagination';
 
 const INTERVALS = [
@@ -133,6 +129,8 @@ const PAYMENT_METHODS = [
   { value: 'UPI', label: 'UPI' },
   { value: 'Bank Transfer', label: 'Bank Transfer' },
 ] as const;
+
+const PAGE_SIZE = 10;
 
 const KPI_COLORS = [
   { bg: 'from-indigo-50 to-white', darkBg: 'dark:from-indigo-950/30 dark:to-slate-900', border: 'border-indigo-100 dark:border-indigo-900/40', accent: 'bg-indigo-600', text: 'text-indigo-700 dark:text-indigo-300', sub: 'text-indigo-500 dark:text-indigo-400' },
@@ -155,9 +153,10 @@ export const Analytics: React.FC = () => {
 
   const [interval, setInterval] = useState<string>('daily');
   const [filters, setFilters] = useState<AnalyticsFilters>({});
-  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(0); // 0 = off, 30000 = 30s, 60000 = 60s
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [, setExportingType] = useState<string | null>(null);
+  const [topCustomersPage, setTopCustomersPage] = useState(1);
 
   // Drill-down Modals state
   const [activeDrillDown, setActiveDrillDown] = useState<'transactions' | 'products' | 'low_stock' | 'out_of_stock' | 'categories' | null>(null);

@@ -1,15 +1,5 @@
 import React from 'react';
-import {
-  AttachMoney as MoneyIcon,
-  ShoppingCart as CartIcon,
-  ShoppingBag as BagIcon,
-  TrendingUp as TrendingIcon,
-  Inventory as InventoryIcon,
-  Warning as WarningIcon,
-  RemoveShoppingCart as OutOfStockIcon,
-  Category as CategoryIcon,
-  ChevronRight as ChevronRightIcon,
-} from '@mui/icons-material';
+import { ChevronRight as ChevronRightIcon } from '@mui/icons-material';
 
 export interface KPIItem {
   id: string;

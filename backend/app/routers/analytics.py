@@ -3,7 +3,7 @@ import io
 import json
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Path
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
@@ -287,28 +287,32 @@ async def drill_down_products(
     return [DrillDownProductResponse(**item) for item in data]
 
 
-@router.get("/drill-down/category-products/{category_id}", response_model=list[DrillDownCategoryProductResponse])
+@router.get("/drill-down/category-products", response_model=list[DrillDownCategoryProductResponse])
 async def drill_down_category_products(
-    category_id: str = Path(...),
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
+    category_id: Optional[str] = Query(None),
     filters: dict = Depends(_parse_filters),
 ):
     if not is_admin_or_analyst(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    if not category_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="category_id is required")
     data = await analytics_service.drill_down_category_products(db, current_user.company_id, UUID(category_id), filters)
     return [DrillDownCategoryProductResponse(**item) for item in data]
 
 
-@router.get("/drill-down/product-transactions/{product_id}", response_model=list[DrillDownProductTransactionResponse])
+@router.get("/drill-down/product-transactions", response_model=list[DrillDownProductTransactionResponse])
 async def drill_down_product_transactions(
-    product_id: str = Path(...),
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
+    product_id: Optional[str] = Query(None),
     filters: dict = Depends(_parse_filters),
 ):
     if not is_admin_or_analyst(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    if not product_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="product_id is required")
     data = await analytics_service.drill_down_product_transactions(db, current_user.company_id, UUID(product_id), filters)
     return [DrillDownProductTransactionResponse(**item) for item in data]
 

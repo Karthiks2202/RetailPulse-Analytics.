@@ -1,7 +1,7 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { Close as CloseIcon } from '@mui/icons-material';
-import { type Customer, type CustomerCreate } from '../../api/customerApi';
+import { type Customer } from '../../../api/customerApi';
 
 interface CustomerFormValues {
   first_name: string;

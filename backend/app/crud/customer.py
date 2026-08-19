@@ -224,12 +224,34 @@ class CRUDCustomer:
             return "REGULAR"
         return "NEW"
 
-    async def recalculate_segment(self, db: AsyncSession, customer_id: UUID) -> None:
-        segment = await self.get_segment(db, customer_id)
+    async def recalculate_segment(self, db: AsyncSession, customer_id: UUID, extra_orders: int = 0, extra_spent: float = 0.0) -> None:
+        result = await db.execute(
+            select(
+                func.count(Sale.id).label("total_orders"),
+                func.coalesce(func.sum(Sale.total_amount), 0).label("total_spent"),
+            )
+            .where(Sale.customer_id == customer_id)
+            .where(Sale.status == SaleStatus.COMPLETED)
+        )
+        row = result.one_or_none()
+        orders = int(row.total_orders) if row else 0
+        spent = float(row.total_spent or 0) if row else 0.0
+
+        orders += extra_orders
+        spent += extra_spent
+
+        if orders >= 10 or spent >= 25000:
+            segment = "VIP"
+        elif 5 <= orders <= 9:
+            segment = "LOYAL"
+        elif 2 <= orders <= 4:
+            segment = "REGULAR"
+        else:
+            segment = "NEW"
+
         customer = await self.get(db, customer_id)
         if customer and customer.segment != segment:
             customer.segment = CustomerSegment[segment]
-            await db.commit()
 
     async def get_purchase_summary(self, db: AsyncSession, customer_id: UUID) -> dict:
         result = await db.execute(

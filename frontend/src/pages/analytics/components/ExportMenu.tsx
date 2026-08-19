@@ -4,6 +4,7 @@ import {
   PictureAsPdf as PdfIcon,
   TableChart as CsvIcon,
 } from '@mui/icons-material';
+import type { ExportRequest } from '../../../api/analyticsApi';
 
 interface ExportMenuProps {
   onExportCSV: (reportType: ExportRequest['report_type']) => void;
@@ -12,7 +13,7 @@ interface ExportMenuProps {
   setExportingType: (type: string | null) => void;
 }
 
-const ExportMenu: React.FC<ExportMenuProps> = ({ onExportCSV, onExportPDF, exportingType, setExportingType }) => {
+const ExportMenu: React.FC<ExportMenuProps> = ({ onExportCSV, onExportPDF, exportingType: _exportingType, setExportingType: _setExportingType }) => {
   return (
     <div className="relative group">
       <button className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-md shadow-indigo-600/20">

@@ -7,10 +7,14 @@ from unittest.mock import patch, MagicMock
 
 from app.crud.sale import sale as sale_crud
 from app.crud.product import product as product_crud
+from app.crud.category import category as category_crud
 from app.crud.customer import customer as customer_crud
+from app.crud.forecast import demand_forecast as forecast_crud
 from app.services.forecast import forecast_service
+from app.services.analytics import analytics_service
 from app.models.sale import SaleStatus, PaymentStatus
 from app.models.product import ProductStatus
+from app.models.category import CategoryStatus
 from app.models.customer import CustomerStatus, CustomerSegment
 from app.models.inventory import MovementType
 from app.models.forecast import ForecastPeriodType
@@ -170,6 +174,65 @@ class TestForecast:
         assert forecast2.id == forecast1.id
 
 
+class TestForecastAccuracy:
+    @pytest.mark.asyncio
+    async def test_accuracy_calculated_after_forecast_period_ends(self, db_session: AsyncSession):
+        company_id = uuid4()
+        user_id = uuid4()
+
+        product = await product_crud.create(
+            db_session, company_id=company_id, name="Accuracy Product", sku="SKU-ACC-001",
+            category_id=None, brand="Test", description="", unit_price=100.0,
+            cost_price=50.0, stock_quantity=100, low_stock_threshold=5,
+            unit_of_measure="PCS", status=ProductStatus.ACTIVE,
+        )
+
+        for i in range(5):
+            sale_date = datetime.utcnow() - timedelta(days=i + 1)
+            with patch.object(sale_crud, 'get_invoice_number', side_effect=[f"INV-2026-000{190 + i}"]):
+                await sale_crud.create(
+                    db_session, company_id=company_id, user_id=user_id,
+                    customer_name="Customer", sale_date=sale_date,
+                    sales_channel="Retail Store", payment_method="Cash",
+                    items=[{"product_id": product.id, "quantity": 10, "unit_price": 100.0, "discount": 0.0, "tax": 0.0}],
+                    request=_make_request(),
+                )
+
+        start = datetime.utcnow() - timedelta(days=10)
+        end = datetime.utcnow() - timedelta(days=2)
+
+        forecast = await forecast_service.generate_product_forecast(
+            db_session, company_id, product.id,
+            forecast_period=ForecastPeriodType.CUSTOM,
+            forecast_start_date=start,
+            forecast_end_date=end,
+        )
+        assert forecast.id is not None
+        assert forecast.predicted_demand > 0
+
+        histories = await forecast_crud.get_history(db_session, forecast.id)
+        assert len(histories) == 1
+        assert histories[0].accuracy is None
+
+        sale_date = end - timedelta(days=1)
+        with patch.object(sale_crud, 'get_invoice_number', side_effect=["INV-2026-000200"]):
+            await sale_crud.create(
+                db_session, company_id=company_id, user_id=user_id,
+                customer_name="Customer", sale_date=sale_date,
+                sales_channel="Retail Store", payment_method="Cash",
+                items=[{"product_id": product.id, "quantity": 3, "unit_price": 100.0, "discount": 0.0, "tax": 0.0}],
+                request=_make_request(),
+            )
+
+        updated = await forecast_service.refresh_accuracy_for_expired_forecasts(db_session, company_id)
+        assert updated == 1
+
+        histories = await forecast_crud.get_history(db_session, forecast.id)
+        assert len(histories) == 1
+        assert histories[0].accuracy is not None
+        assert float(histories[0].accuracy) >= 0.0
+
+
 class TestCustomerSummary:
     @pytest.mark.asyncio
     async def test_batch_customer_summaries(self, db_session: AsyncSession):
@@ -197,3 +260,52 @@ class TestCustomerSummary:
         assert customer.id in summaries
         assert summaries[customer.id]["total_purchases"] == 3
         assert summaries[customer.id]["total_spent"] == 300.0
+
+
+class TestAnalyticsItemFilterAggregation:
+    @pytest.mark.asyncio
+    async def test_kpi_revenue_uses_filtered_items_not_sale_total(self, db_session: AsyncSession):
+        company_id = uuid4()
+        user_id = uuid4()
+
+        cat = await category_crud.create(db_session, company_id=company_id, name="Electronics", description="", status=CategoryStatus.ACTIVE)
+        laptop = await product_crud.create(
+            db_session, company_id=company_id, name="Laptop", sku="LP-1",
+            category_id=cat.id, brand="TechCo", description="", unit_price=80000.0,
+            cost_price=50000.0, stock_quantity=10, low_stock_threshold=2,
+            unit_of_measure="PCS", status=ProductStatus.ACTIVE,
+        )
+        keyboard = await product_crud.create(
+            db_session, company_id=company_id, name="Keyboard", sku="KB-1",
+            category_id=cat.id, brand="TechCo", description="", unit_price=2000.0,
+            cost_price=1000.0, stock_quantity=20, low_stock_threshold=5,
+            unit_of_measure="PCS", status=ProductStatus.ACTIVE,
+        )
+
+        with patch.object(sale_crud, 'get_invoice_number', side_effect=["INV-2026-000100", "INV-2026-000101"]):
+            await sale_crud.create(
+                db_session, company_id=company_id, user_id=user_id,
+                customer_name="Customer A", sale_date=datetime.utcnow(),
+                sales_channel="Retail Store", payment_method="Card",
+                items=[
+                    {"product_id": laptop.id, "quantity": 1, "unit_price": 80000.0, "discount": 0.0, "tax": 0.0},
+                    {"product_id": keyboard.id, "quantity": 1, "unit_price": 2000.0, "discount": 0.0, "tax": 0.0},
+                ],
+                request=_make_request(),
+            )
+            await sale_crud.create(
+                db_session, company_id=company_id, user_id=user_id,
+                customer_name="Customer B", sale_date=datetime.utcnow(),
+                sales_channel="Retail Store", payment_method="Card",
+                items=[
+                    {"product_id": laptop.id, "quantity": 1, "unit_price": 80000.0, "discount": 500.0, "tax": 2000.0},
+                ],
+                request=_make_request(),
+            )
+
+        kpi = await analytics_service.get_kpi_dashboard(db_session, company_id, {"product_id": laptop.id})
+        assert kpi["total_revenue"] == 161500.0
+        assert kpi["total_orders"] == 2
+        assert kpi["total_discount"] == 500.0
+        assert kpi["total_tax"] == 2000.0
+        assert kpi["average_order_value"] == 80750.0

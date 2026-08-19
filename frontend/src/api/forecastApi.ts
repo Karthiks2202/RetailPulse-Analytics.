@@ -1,5 +1,4 @@
 import axiosInstance from './axios';
-import type { Product, Category } from './analyticsApi';
 
 export interface ForecastFilters {
   product_id?: string;

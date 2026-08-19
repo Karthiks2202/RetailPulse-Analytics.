@@ -3,7 +3,7 @@ import { formatCurrency } from '../../utils/currency';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import _autoTable from 'jspdf-autotable';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 import {
@@ -17,7 +17,6 @@ import {
   getCustomerAnalyticsDashboard,
   getCustomerPurchaseDetail,
   getTopCustomers,
-  getNewVsReturning,
   exportCustomersCSV,
   exportCustomersPDF,
   exportCustomerAnalyticsCSV,
@@ -41,7 +40,6 @@ import {
   TrendingUp as TrendingUpIcon,
   People as PeopleIcon,
   BarChart as BarChartIcon,
-  Visibility as ViewIcon
 } from '@mui/icons-material';
 
 const inputClass =

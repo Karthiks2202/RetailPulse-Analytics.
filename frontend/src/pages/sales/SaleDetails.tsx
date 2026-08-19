@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getSale } from '../../api/saleApi';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import _autoTable from 'jspdf-autotable';
 import {
   ArrowBack as ArrowBackIcon,
   Print as PrintIcon,

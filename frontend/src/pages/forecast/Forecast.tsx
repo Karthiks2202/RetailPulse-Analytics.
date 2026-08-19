@@ -13,29 +13,17 @@ import {
   exportProductForecastCSV,
   exportCategoryForecastCSV,
   exportForecastPDF,
-  type DemandForecastListItem,
-  type CategoryForecastResponse,
-  type ForecastKPIsResponse,
 } from '../../api/forecastApi';
 import { getProducts } from '../../api/productApi';
 import { getCategories } from '../../api/categoryApi';
-import type { Product, Category } from '../../api/analyticsApi';
 import {
-  Search as SearchIcon,
-  Close as CloseIcon,
   TrendingUp as TrendingIcon,
-  Category as CategoryIcon,
-  Inventory as InventoryIcon,
-  Warning as WarningIcon,
   RemoveShoppingCart as OutOfStockIcon,
   ShowChart as ChartIcon,
-  History as HistoryIcon,
-  Tune as TuneIcon,
   AddCircle as AddCircleIcon,
   Refresh as RefreshIcon,
   FileDownload as ExportIcon,
   CheckCircle as CheckIcon,
-  Error as ErrorIcon,
   Warning as WarningAmberIcon,
   ShoppingCart as CartIcon,
   Timeline as TimelineIcon,
@@ -92,8 +80,8 @@ export const Forecast: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
 
-  const { data: products = [] } = useQuery({ queryKey: ['products', { status: 'ACTIVE' }], queryFn: () => getProducts({ status: 'ACTIVE' }) });
-  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: getCategories });
+  const { data: _products = [] } = useQuery({ queryKey: ['products', { status: 'ACTIVE' }], queryFn: () => getProducts({ status: 'ACTIVE' }) });
+  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => getCategories() });
 
   const { data: kpis, isLoading: kpisLoading } = useQuery({
     queryKey: ['forecast', 'kpis', forecastPeriod],
@@ -101,7 +89,7 @@ export const Forecast: React.FC = () => {
     enabled: tab === 'analytics',
   });
 
-  const { data: productForecasts, isLoading: productsLoading, refetch: refetchProducts } = useQuery({
+  const { data: productForecasts, isLoading: productsLoading } = useQuery({
     queryKey: ['forecast', 'products', { forecastPeriod, categoryFilter, search, sortBy, sortDir, page }],
     queryFn: () => getProductForecasts({ forecast_period: forecastPeriod, category_id: categoryFilter || undefined, search: search || undefined, sort_by: sortBy, sort_dir: sortDir, page, limit: 20 }),
     enabled: tab === 'products',
@@ -128,8 +116,8 @@ export const Forecast: React.FC = () => {
   const generateMutation = useMutation({
     mutationFn: () => generateForecasts({
       forecast_period: forecastPeriod,
-      forecast_start_date: customStart ? new Date(customStart) : undefined,
-      forecast_end_date: customEnd ? new Date(customEnd) : undefined,
+      forecast_start_date: customStart || undefined,
+      forecast_end_date: customEnd || undefined,
     }),
     onSuccess: () => {
       showNotification('Forecast generated successfully', 'success');
@@ -233,7 +221,7 @@ export const Forecast: React.FC = () => {
     ];
   }, [kpis]);
 
-  const topProductsData = useMemo(() => {
+  const topProductsData = useMemo<Array<{ name: string; predicted: number; historical: number }>>(() => {
     if (!topProductsChart || !topProductsChart.top_predicted_products) return [];
     return topProductsChart.top_predicted_products.map((name: string, idx: number) => ({
       name,

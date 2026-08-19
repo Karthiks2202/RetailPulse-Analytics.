@@ -336,6 +336,10 @@ class CRUDSale:
                             quantity_changed=-qty, reason=f"Sale {invoice_number}", user_id=user_id,
                         ))
 
+                if customer_id:
+                    from app.crud.customer import customer as customer_crud
+                    await customer_crud.recalculate_segment(db, customer_id)
+
                 await db.commit()
                 break
             except IntegrityError:
@@ -346,10 +350,6 @@ class CRUDSale:
         await db.refresh(sale, attribute_names=["items"])
         for item in sale.items:
             await db.refresh(item)
-
-        if customer_id:
-            from app.crud.customer import customer as customer_crud
-            await customer_crud.recalculate_segment(db, customer_id)
 
         return sale
 
@@ -364,6 +364,7 @@ class CRUDSale:
         items = payload.get("items")
         stock_movements = []
         initial_quantities: dict[UUID, int] = {}
+        original_total = float(sale.total_amount or 0)
 
         if items is not None:
             product_updates = []
@@ -466,14 +467,15 @@ class CRUDSale:
                         reason=f"Sale update - {sale.invoice_number}",
                     ))
 
-        await db.commit()
-        await db.refresh(sale, attribute_names=["items"])
-        for item in sale.items:
-            await db.refresh(item)
-
         if sale.customer_id:
             from app.crud.customer import customer as customer_crud
             await customer_crud.recalculate_segment(db, sale.customer_id)
+
+        await db.commit()
+
+        await db.refresh(sale, attribute_names=["items"])
+        for item in sale.items:
+            await db.refresh(item)
 
         return sale
 
@@ -485,6 +487,7 @@ class CRUDSale:
         await db.refresh(sale, attribute_names=["items"])
         initial_quantities = {}
         customer_id = sale.customer_id
+        sale_total = float(sale.total_amount or 0)
 
         for item in sale.items:
             if item.product_id:
@@ -518,11 +521,11 @@ class CRUDSale:
                         reason=f"Sale {invoice_number} deleted",
                     ))
 
-        await db.commit()
-
         if customer_id:
             from app.crud.customer import customer as customer_crud
             await customer_crud.recalculate_segment(db, customer_id)
+
+        await db.commit()
 
     async def get_summary(self, db: AsyncSession, company_id: UUID) -> dict:
         total_sales_result = await db.execute(

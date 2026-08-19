@@ -1,7 +1,8 @@
 # Dependencies
 node_modules/
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
 .Python
 env/
 venv/

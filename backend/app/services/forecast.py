@@ -72,7 +72,12 @@ class ForecastService:
             .group_by(func.date(Sale.sale_date))
             .order_by(func.date(Sale.sale_date).asc())
         )
-        daily_sales = {row.sale_day: int(row.daily_qty or 0) for row in result.all()}
+        daily_sales = {}
+        for row in result.all():
+            day = row.sale_day
+            if isinstance(day, str):
+                day = datetime.strptime(day, "%Y-%m-%d").date()
+            daily_sales[day] = int(row.daily_qty or 0)
 
         days = []
         current = cutoff.date()
@@ -95,7 +100,12 @@ class ForecastService:
             .group_by(func.date(Sale.sale_date))
             .order_by(func.date(Sale.sale_date).asc())
         )
-        daily_sales = {row.sale_day: int(row.daily_qty or 0) for row in result.all()}
+        daily_sales = {}
+        for row in result.all():
+            day = row.sale_day
+            if isinstance(day, str):
+                day = datetime.strptime(day, "%Y-%m-%d").date()
+            daily_sales[day] = int(row.daily_qty or 0)
 
         days = []
         current = cutoff.date()
@@ -365,6 +375,31 @@ class ForecastService:
             }
             for h in histories
         ]
+
+    async def refresh_accuracy_for_expired_forecasts(self, db: AsyncSession, company_id: UUID) -> int:
+        result = await db.execute(
+            select(DemandForecast)
+            .where(DemandForecast.company_id == company_id)
+            .where(DemandForecast.forecast_end_date < datetime.utcnow())
+        )
+        forecasts = result.scalars().all()
+        updated = 0
+        for forecast in forecasts:
+            accuracy = await self._calculate_forecast_accuracy(db, forecast.id, forecast.product_id, company_id)
+            if accuracy is not None:
+                history_result = await db.execute(
+                    select(ForecastHistory)
+                    .where(ForecastHistory.forecast_id == forecast.id)
+                    .order_by(ForecastHistory.created_at.desc())
+                    .limit(1)
+                )
+                history = history_result.scalar_one_or_none()
+                if history:
+                    history.accuracy = Decimal(str(accuracy))
+                    updated += 1
+        if updated:
+            await db.commit()
+        return updated
 
 
 forecast_service = ForecastService()

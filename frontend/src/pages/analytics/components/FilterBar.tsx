@@ -3,8 +3,9 @@ import {
   FilterList as FilterListIcon,
   Clear as ClearIcon,
 } from '@mui/icons-material';
-import { type AnalyticsFilters } from '../../api/analyticsApi';
-import { getProducts, getCategories, getBrands, getCustomers } from '../../api/analyticsApi';
+import { type AnalyticsFilters } from '../../../api/analyticsApi';
+import { getProducts, getCategories, getBrands } from '../../../api/analyticsApi';
+import { getCustomers } from '../../../api/customerApi';
 import { useQuery } from '@tanstack/react-query';
 
 const inputClass =

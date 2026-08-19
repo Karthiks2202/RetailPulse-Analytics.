@@ -45,7 +45,7 @@ class RevenueTrendPoint(BaseModel):
 class SalesTrendPoint(BaseModel):
     period: str
     sales: float
-    quantity: int
+    orders: int
 
 
 class TopProductResponse(BaseModel):

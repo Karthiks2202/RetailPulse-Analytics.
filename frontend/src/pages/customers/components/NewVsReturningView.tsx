@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getNewVsReturning } from '../../api/customerApi';
+import { getNewVsReturning } from '../../../api/customerApi';
 import {
   PieChart,
   Pie,
@@ -19,7 +19,7 @@ interface NewVsReturningViewProps {
 const NewVsReturningView: React.FC<NewVsReturningViewProps> = ({ dateFrom, dateTo }) => {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['new-vs-returning', dateFrom, dateTo],
-    queryFn: () => getNewVsReturning(dateFrom, dateTo),
+    queryFn: () => getNewVsReturning({ date_from: dateFrom, date_to: dateTo }),
   });
 
   if (isLoading) {

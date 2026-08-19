@@ -24,6 +24,40 @@ class AnalyticsService:
             return "LOW_STOCK"
         return "IN_STOCK"
 
+    def _split_filters(self, filters: Optional[dict]):
+        sale_filters = {}
+        item_filters = {}
+        if filters:
+            for key in ["date_from", "date_to", "sales_channel", "payment_method", "customer_id"]:
+                if filters.get(key):
+                    sale_filters[key] = filters[key]
+            for key in ["product_id", "category_id", "brand"]:
+                if filters.get(key):
+                    item_filters[key] = filters[key]
+        return sale_filters, item_filters
+
+    def _apply_sale_level_filters(self, query, sale_filters: dict):
+        if sale_filters.get("date_from"):
+            query = query.where(Sale.sale_date >= sale_filters["date_from"])
+        if sale_filters.get("date_to"):
+            query = query.where(Sale.sale_date <= sale_filters["date_to"])
+        if sale_filters.get("sales_channel"):
+            query = query.where(Sale.sales_channel == sale_filters["sales_channel"])
+        if sale_filters.get("payment_method"):
+            query = query.where(Sale.payment_method == sale_filters["payment_method"])
+        if sale_filters.get("customer_id"):
+            query = query.where(Sale.customer_id == sale_filters["customer_id"])
+        return query
+
+    def _apply_item_level_filters(self, query, item_filters: dict):
+        if item_filters.get("product_id"):
+            query = query.where(SaleItem.product_id == item_filters["product_id"])
+        if item_filters.get("category_id"):
+            query = query.where(SaleItem.category_id == item_filters["category_id"])
+        if item_filters.get("brand"):
+            query = query.join(Product, SaleItem.product_id == Product.id).where(Product.brand.ilike(f"%{item_filters['brand']}%"))
+        return query
+
     def _apply_sale_filters(self, query, company_id: UUID, filters: Optional[dict]):
         query = query.where(Sale.company_id == company_id).where(Sale.status == SaleStatus.COMPLETED)
         if not filters:
@@ -61,37 +95,32 @@ class AnalyticsService:
         return query.distinct()
 
     async def get_kpi_dashboard(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None) -> dict:
-        base_query = select(Sale).where(Sale.company_id == company_id)
-        base_query = self._apply_sale_filters(base_query, company_id, filters)
-        sub = base_query.subquery()
+        sale_query = select(Sale).where(Sale.company_id == company_id).where(Sale.status == SaleStatus.COMPLETED)
 
-        total_revenue_result = await db.execute(
-            select(func.coalesce(func.sum(sub.c.total_amount), 0))
-        )
-        total_revenue = float(total_revenue_result.scalar() or 0)
+        sale_filters, item_filters = self._split_filters(filters)
+        sale_query = self._apply_sale_level_filters(sale_query, sale_filters)
+        sale_sub = sale_query.subquery()
 
         total_orders_result = await db.execute(
-            select(func.count(sub.c.id))
+            select(func.count(sale_sub.c.id))
         )
         total_orders = total_orders_result.scalar() or 0
 
-        total_products_sold_result = await db.execute(
-            select(func.coalesce(func.sum(SaleItem.quantity), 0))
-            .join(sub, SaleItem.sale_id == sub.c.id)
-        )
-        total_products_sold = total_products_sold_result.scalar() or 0
+        item_agg = select(
+            func.coalesce(func.sum(SaleItem.total), 0).label("total_revenue"),
+            func.coalesce(func.sum(SaleItem.quantity), 0).label("total_quantity"),
+            func.coalesce(func.sum(SaleItem.discount), 0).label("total_discount"),
+            func.coalesce(func.sum(SaleItem.tax), 0).label("total_tax"),
+        ).join(sale_sub, SaleItem.sale_id == sale_sub.c.id)
 
-        total_discount_result = await db.execute(
-            select(func.coalesce(func.sum(SaleItem.discount), 0))
-            .join(sub, SaleItem.sale_id == sub.c.id)
-        )
-        total_discount = float(total_discount_result.scalar() or 0)
+        item_agg = self._apply_item_level_filters(item_agg, item_filters)
 
-        total_tax_result = await db.execute(
-            select(func.coalesce(func.sum(SaleItem.tax), 0))
-            .join(sub, SaleItem.sale_id == sub.c.id)
-        )
-        total_tax = float(total_tax_result.scalar() or 0)
+        result = await db.execute(item_agg)
+        row = result.one()
+        total_revenue = float(row.total_revenue or 0)
+        total_products_sold = int(row.total_quantity or 0)
+        total_discount = float(row.total_discount or 0)
+        total_tax = float(row.total_tax or 0)
 
         average_order_value = total_revenue / total_orders if total_orders > 0 else 0.0
 
@@ -144,6 +173,8 @@ class AnalyticsService:
         dates = []
         current = start.date() if isinstance(start, datetime) else start
         end_date = end.date() if isinstance(end, datetime) else end
+        if interval == "weekly":
+            current -= timedelta(days=current.weekday())
         while current <= end_date:
             dates.append(current)
             if interval == "daily":
@@ -175,48 +206,37 @@ class AnalyticsService:
         trunc = trunc_map.get(interval, "day")
         fmt = fmt_map.get(interval, "YYYY-MM-DD")
 
-        query = (
-            select(
-                func.to_char(func.date_trunc(trunc, Sale.sale_date), fmt).label("period"),
-                func.coalesce(func.sum(Sale.total_amount), 0).label("revenue"),
-                func.count(Sale.id).label("orders"),
+        sale_query = select(Sale).where(Sale.company_id == company_id).where(Sale.status == SaleStatus.COMPLETED)
+
+        sale_filters, item_filters = self._split_filters(filters)
+        sale_query = self._apply_sale_level_filters(sale_query, sale_filters)
+        sale_sub = sale_query.subquery()
+        has_item_filter = bool(item_filters)
+
+        if has_item_filter:
+            query = (
+                select(
+                    func.to_char(func.date_trunc(trunc, sale_sub.c.sale_date), fmt).label("period"),
+                    func.coalesce(func.sum(SaleItem.total), 0).label("revenue"),
+                    func.count(func.distinct(sale_sub.c.id)).label("orders"),
+                )
+                .join(SaleItem, SaleItem.sale_id == sale_sub.c.id)
             )
-            .where(Sale.company_id == company_id)
-            .where(Sale.status == SaleStatus.COMPLETED)
-        )
+            query = self._apply_item_level_filters(query, item_filters)
+            query = query.group_by(func.date_trunc(trunc, sale_sub.c.sale_date)).order_by("period")
+        else:
+            query = (
+                select(
+                    func.to_char(func.date_trunc(trunc, Sale.sale_date), fmt).label("period"),
+                    func.coalesce(func.sum(Sale.total_amount), 0).label("revenue"),
+                    func.count(Sale.id).label("orders"),
+                )
+                .where(Sale.company_id == company_id)
+                .where(Sale.status == SaleStatus.COMPLETED)
+            )
+            query = self._apply_sale_level_filters(query, sale_filters)
+            query = query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
 
-        if filters:
-            date_from = filters.get("date_from")
-            date_to = filters.get("date_to")
-            sales_channel = filters.get("sales_channel")
-            payment_method = filters.get("payment_method")
-            customer_id = filters.get("customer_id")
-            product_id = filters.get("product_id")
-            category_id = filters.get("category_id")
-            brand = filters.get("brand")
-
-            if date_from:
-                query = query.where(Sale.sale_date >= date_from)
-            if date_to:
-                query = query.where(Sale.sale_date <= date_to)
-            if sales_channel:
-                query = query.where(Sale.sales_channel == sales_channel)
-            if payment_method:
-                query = query.where(Sale.payment_method == payment_method)
-            if customer_id:
-                query = query.where(Sale.customer_id == customer_id)
-
-            if product_id or category_id or brand:
-                exists_q = select(SaleItem.id).where(SaleItem.sale_id == Sale.id)
-                if product_id:
-                    exists_q = exists_q.where(SaleItem.product_id == product_id)
-                if category_id:
-                    exists_q = exists_q.where(SaleItem.category_id == category_id)
-                if brand:
-                    exists_q = exists_q.join(Product, SaleItem.product_id == Product.id).where(Product.brand.ilike(f"%{brand}%"))
-                query = query.where(exists_q.exists())
-
-        query = query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
         result = await db.execute(query)
         rows = result.all()
         data_map = {r.period: {"period": r.period, "revenue": float(r.revenue or 0), "orders": int(r.orders or 0)} for r in rows}
@@ -242,48 +262,37 @@ class AnalyticsService:
         trunc = trunc_map.get(interval, "day")
         fmt = fmt_map.get(interval, "YYYY-MM-DD")
 
-        query = (
-            select(
-                func.to_char(func.date_trunc(trunc, Sale.sale_date), fmt).label("period"),
-                func.coalesce(func.sum(Sale.total_amount), 0).label("sales"),
-                func.coalesce(func.count(func.distinct(Sale.id)), 0).label("orders"),
+        sale_query = select(Sale).where(Sale.company_id == company_id).where(Sale.status == SaleStatus.COMPLETED)
+
+        sale_filters, item_filters = self._split_filters(filters)
+        sale_query = self._apply_sale_level_filters(sale_query, sale_filters)
+        sale_sub = sale_query.subquery()
+        has_item_filter = bool(item_filters)
+
+        if has_item_filter:
+            query = (
+                select(
+                    func.to_char(func.date_trunc(trunc, sale_sub.c.sale_date), fmt).label("period"),
+                    func.coalesce(func.sum(SaleItem.total), 0).label("sales"),
+                    func.count(func.distinct(sale_sub.c.id)).label("orders"),
+                )
+                .join(SaleItem, SaleItem.sale_id == sale_sub.c.id)
             )
-            .where(Sale.company_id == company_id)
-            .where(Sale.status == SaleStatus.COMPLETED)
-        )
+            query = self._apply_item_level_filters(query, item_filters)
+            query = query.group_by(func.date_trunc(trunc, sale_sub.c.sale_date)).order_by("period")
+        else:
+            query = (
+                select(
+                    func.to_char(func.date_trunc(trunc, Sale.sale_date), fmt).label("period"),
+                    func.coalesce(func.sum(Sale.total_amount), 0).label("sales"),
+                    func.coalesce(func.count(func.distinct(Sale.id)), 0).label("orders"),
+                )
+                .where(Sale.company_id == company_id)
+                .where(Sale.status == SaleStatus.COMPLETED)
+            )
+            query = self._apply_sale_level_filters(query, sale_filters)
+            query = query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
 
-        if filters:
-            date_from = filters.get("date_from")
-            date_to = filters.get("date_to")
-            sales_channel = filters.get("sales_channel")
-            payment_method = filters.get("payment_method")
-            customer_id = filters.get("customer_id")
-            product_id = filters.get("product_id")
-            category_id = filters.get("category_id")
-            brand = filters.get("brand")
-
-            if date_from:
-                query = query.where(Sale.sale_date >= date_from)
-            if date_to:
-                query = query.where(Sale.sale_date <= date_to)
-            if sales_channel:
-                query = query.where(Sale.sales_channel == sales_channel)
-            if payment_method:
-                query = query.where(Sale.payment_method == payment_method)
-            if customer_id:
-                query = query.where(Sale.customer_id == customer_id)
-
-            if product_id or category_id or brand:
-                exists_q = select(SaleItem.id).where(SaleItem.sale_id == Sale.id)
-                if product_id:
-                    exists_q = exists_q.where(SaleItem.product_id == product_id)
-                if category_id:
-                    exists_q = exists_q.where(SaleItem.category_id == category_id)
-                if brand:
-                    exists_q = exists_q.join(Product, SaleItem.product_id == Product.id).where(Product.brand.ilike(f"%{brand}%"))
-                query = query.where(exists_q.exists())
-
-        query = query.group_by(func.date_trunc(trunc, Sale.sale_date)).order_by("period")
         result = await db.execute(query)
         rows = result.all()
         data_map = {r.period: {"period": r.period, "sales": float(r.sales or 0), "orders": int(r.orders or 0)} for r in rows}
@@ -439,8 +448,33 @@ class AnalyticsService:
         }
 
     async def get_payment_method_breakdown(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None) -> List[dict]:
-        query = select(Sale.payment_method, func.count(Sale.id).label("orders"), func.sum(Sale.total_amount).label("revenue")).where(Sale.company_id == company_id).group_by(Sale.payment_method)
-        query = self._apply_sale_filters(query, company_id, filters)
+        sale_query = select(Sale).where(Sale.company_id == company_id).where(Sale.status == SaleStatus.COMPLETED)
+
+        sale_filters, item_filters = self._split_filters(filters)
+        sale_query = self._apply_sale_level_filters(sale_query, sale_filters)
+        sale_sub = sale_query.subquery()
+        has_item_filter = bool(item_filters)
+
+        if has_item_filter:
+            query = (
+                select(
+                    sale_sub.c.payment_method,
+                    func.count(func.distinct(sale_sub.c.id)).label("orders"),
+                    func.coalesce(func.sum(SaleItem.total), 0).label("revenue"),
+                )
+                .join(SaleItem, SaleItem.sale_id == sale_sub.c.id)
+                .group_by(sale_sub.c.payment_method)
+            )
+            query = self._apply_item_level_filters(query, item_filters)
+        else:
+            query = (
+                select(Sale.payment_method, func.count(Sale.id).label("orders"), func.sum(Sale.total_amount).label("revenue"))
+                .where(Sale.company_id == company_id)
+                .where(Sale.status == SaleStatus.COMPLETED)
+                .group_by(Sale.payment_method)
+            )
+            query = self._apply_sale_level_filters(query, sale_filters)
+
         result = await db.execute(query)
         rows = result.all()
         total = sum(float(r.revenue or 0) for r in rows) or 1
@@ -455,8 +489,33 @@ class AnalyticsService:
         ]
 
     async def get_sales_channel_breakdown(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None) -> List[dict]:
-        query = select(Sale.sales_channel, func.count(Sale.id).label("orders"), func.sum(Sale.total_amount).label("revenue")).where(Sale.company_id == company_id).group_by(Sale.sales_channel)
-        query = self._apply_sale_filters(query, company_id, filters)
+        sale_query = select(Sale).where(Sale.company_id == company_id).where(Sale.status == SaleStatus.COMPLETED)
+
+        sale_filters, item_filters = self._split_filters(filters)
+        sale_query = self._apply_sale_level_filters(sale_query, sale_filters)
+        sale_sub = sale_query.subquery()
+        has_item_filter = bool(item_filters)
+
+        if has_item_filter:
+            query = (
+                select(
+                    sale_sub.c.sales_channel,
+                    func.count(func.distinct(sale_sub.c.id)).label("orders"),
+                    func.coalesce(func.sum(SaleItem.total), 0).label("revenue"),
+                )
+                .join(SaleItem, SaleItem.sale_id == sale_sub.c.id)
+                .group_by(sale_sub.c.sales_channel)
+            )
+            query = self._apply_item_level_filters(query, item_filters)
+        else:
+            query = (
+                select(Sale.sales_channel, func.count(Sale.id).label("orders"), func.sum(Sale.total_amount).label("revenue"))
+                .where(Sale.company_id == company_id)
+                .where(Sale.status == SaleStatus.COMPLETED)
+                .group_by(Sale.sales_channel)
+            )
+            query = self._apply_sale_level_filters(query, sale_filters)
+
         result = await db.execute(query)
         rows = result.all()
         total = sum(float(r.revenue or 0) for r in rows) or 1
@@ -860,32 +919,58 @@ class AnalyticsService:
         }
 
     async def get_top_customers(self, db: AsyncSession, company_id: UUID, filters: Optional[dict] = None, page: int = 1, page_size: int = 10) -> dict:
-        base_query = (
+        sale_query = (
             select(Sale)
             .where(Sale.company_id == company_id)
             .where(Sale.status == SaleStatus.COMPLETED)
             .where(Sale.customer_id.is_not(None))
         )
-        base_query = self._apply_sale_filters(base_query, company_id, filters)
-        sub = base_query.subquery()
 
-        count_query = select(func.count(func.distinct(sub.c.customer_id)))
+        sale_filters, item_filters = self._split_filters(filters)
+        sale_query = self._apply_sale_level_filters(sale_query, sale_filters)
+        sale_sub = sale_query.subquery()
+        has_item_filter = bool(item_filters)
+
+        count_query = select(func.count(func.distinct(sale_sub.c.customer_id)))
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
 
-        query = (
-            select(
-                sub.c.customer_id,
-                func.count(sub.c.id).label("total_purchases"),
-                func.coalesce(func.sum(sub.c.total_amount), 0).label("total_spent"),
-                func.avg(sub.c.total_amount).label("average_order_value"),
-                func.max(sub.c.sale_date).label("last_purchase_date"),
+        if has_item_filter:
+            item_sub = select(
+                SaleItem.sale_id,
+                SaleItem.total,
+            ).join(sale_sub, SaleItem.sale_id == sale_sub.c.id)
+            item_sub = self._apply_item_level_filters(item_sub, item_filters)
+            item_sub = item_sub.subquery()
+
+            query = (
+                select(
+                    sale_sub.c.customer_id,
+                    func.count(func.distinct(item_sub.c.sale_id)).label("total_purchases"),
+                    func.coalesce(func.sum(item_sub.c.total), 0).label("total_spent"),
+                    func.max(sale_sub.c.sale_date).label("last_purchase_date"),
+                )
+                .join(item_sub, sale_sub.c.id == item_sub.c.sale_id)
+                .group_by(sale_sub.c.customer_id)
+                .order_by(func.sum(item_sub.c.total).desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
             )
-            .group_by(sub.c.customer_id)
-            .order_by(func.sum(sub.c.total_amount).desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        )
+        else:
+            query = (
+                select(
+                    sale_sub.c.customer_id,
+                    func.count(sale_sub.c.id).label("total_purchases"),
+                    func.coalesce(func.sum(sale_sub.c.total_amount), 0).label("total_spent"),
+                    func.avg(sale_sub.c.total_amount).label("average_order_value"),
+                    func.max(sale_sub.c.sale_date).label("last_purchase_date"),
+                )
+                .group_by(sale_sub.c.customer_id)
+                .order_by(func.sum(sale_sub.c.total_amount).desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+
         result = await db.execute(query)
         rows = result.all()
         customer_ids = [row.customer_id for row in rows]
@@ -898,20 +983,24 @@ class AnalyticsService:
             for c in customers_result.scalars().all():
                 customers[c.id] = c
 
+        items = []
+        for row in rows:
+            total_spent = float(row.total_spent or 0)
+            total_purchases = int(row.total_purchases or 0)
+            average_order_value = total_spent / total_purchases if total_purchases > 0 else 0.0
+            items.append({
+                "id": row.customer_id,
+                "first_name": customers[row.customer_id].first_name if row.customer_id in customers else "",
+                "last_name": customers[row.customer_id].last_name if row.customer_id in customers else "",
+                "email": customers[row.customer_id].email if row.customer_id in customers else None,
+                "total_purchases": total_purchases,
+                "total_spent": total_spent,
+                "average_order_value": average_order_value,
+                "last_purchase_date": row.last_purchase_date,
+            })
+
         return {
-            "items": [
-                {
-                    "id": row.customer_id,
-                    "first_name": customers[row.customer_id].first_name if row.customer_id in customers else "",
-                    "last_name": customers[row.customer_id].last_name if row.customer_id in customers else "",
-                    "email": customers[row.customer_id].email if row.customer_id in customers else None,
-                    "total_purchases": int(row.total_purchases),
-                    "total_spent": float(row.total_spent),
-                    "average_order_value": float(row.average_order_value or 0),
-                    "last_purchase_date": row.last_purchase_date,
-                }
-                for row in rows
-            ],
+            "items": items,
             "total": total,
             "page": page,
             "page_size": page_size,

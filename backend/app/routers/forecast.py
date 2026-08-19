@@ -48,6 +48,8 @@ async def get_forecast_kpis(
         except ValueError:
             pass
 
+    await forecast_service.refresh_accuracy_for_expired_forecasts(db, current_user.company_id)
+
     data = await forecast_crud.get_kpis(db, current_user.company_id, fp)
     return ForecastKPIsResponse(**data)
 
@@ -72,6 +74,8 @@ async def list_product_forecasts(
     pid = UUID(product_id) if product_id else None
     cid = UUID(category_id) if category_id else None
     fp = ForecastPeriodType(forecast_period) if forecast_period else None
+
+    await forecast_service.refresh_accuracy_for_expired_forecasts(db, current_user.company_id)
 
     items, total = await forecast_crud.list(
         db,
@@ -104,6 +108,8 @@ async def list_category_forecasts(
 
     skip = (page - 1) * limit
     fp = ForecastPeriodType(forecast_period) if forecast_period else None
+
+    await forecast_service.refresh_accuracy_for_expired_forecasts(db, current_user.company_id)
 
     items, total = await forecast_crud.list_category_forecasts(
         db,
@@ -174,6 +180,7 @@ async def get_top_predicted_products(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
     fp = ForecastPeriodType(forecast_period) if forecast_period else ForecastPeriodType.NEXT_30_DAYS
+    await forecast_service.refresh_accuracy_for_expired_forecasts(db, current_user.company_id)
     data = await forecast_service.get_chart_data(db, current_user.company_id, fp)
     return data
 

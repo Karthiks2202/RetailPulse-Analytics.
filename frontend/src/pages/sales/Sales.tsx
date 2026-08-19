@@ -3,7 +3,7 @@ import { formatCurrency } from '../../utils/currency';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import _autoTable from 'jspdf-autotable';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 import {

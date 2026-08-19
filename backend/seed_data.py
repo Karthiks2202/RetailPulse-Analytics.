@@ -18,13 +18,12 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 from sqlalchemy import select
-from app.database import engine, Base
+from app.database import engine
 from app.models.product import Product, ProductStatus, UnitOfMeasure
 from app.models.category import Category, CategoryStatus
 from app.models.transaction import Transaction, TransactionType, TransactionChannel
 from app.models.company import Company
 from app.models.customer import Customer, CustomerStatus, CustomerType
-from sqlalchemy import text
 
 
 def _dob(years_ago: int) -> datetime:
@@ -32,11 +31,6 @@ def _dob(years_ago: int) -> datetime:
 
 
 async def seed_data():
-    # Ensure tables exist before seeding
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(text("CREATE SEQUENCE IF NOT EXISTS invoice_seq"))
-
     async_session = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with async_session() as session:
         company_result = await session.execute(select(Company).limit(1))
