@@ -13,6 +13,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet
 from app.database import get_db
 from app.models.user import UserRole
+from app.models.company import Company
 from app.schemas.analytics import (
     AnalyticsFilters,
     KPIDashboardResponse,
@@ -424,11 +425,13 @@ async def export_analytics(
         )
 
     if payload.export_type == "pdf":
+        company = await db.get(Company, current_user.company_id)
+        company_name = company.name if company else "RetailPulse Analytics"
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=letter)
         styles = getSampleStyleSheet()
         story = []
-        story.append(Paragraph(f"{current_user.company or 'RetailPulse Analytics'} - Analytics Report", styles["Title"]))
+        story.append(Paragraph(f"{company_name} - Analytics Report", styles["Title"]))
         story.append(Spacer(1, 12))
         story.append(Paragraph(f"Report Type: {payload.report_type.upper()}", styles["Normal"]))
         story.append(Spacer(1, 12))

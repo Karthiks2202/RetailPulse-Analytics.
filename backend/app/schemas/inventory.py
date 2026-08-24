@@ -122,3 +122,94 @@ class InventoryStockStatusBreakdown(BaseModel):
     product_count: int
 
     model_config = {"from_attributes": True}
+
+
+class InventoryForecastResponse(BaseModel):
+    product_id: UUID
+    product_name: str
+    product_sku: str
+    category_id: Optional[UUID] = None
+    category_name: Optional[str] = None
+    brand: Optional[str] = None
+    current_stock: int
+    available_stock: int
+    reserved_stock: int
+    average_daily_sales: float
+    forecasted_demand: int
+    days_of_stock_remaining: float
+    reorder_point: int
+    recommended_reorder_quantity: int
+    stock_risk: str
+    recommendation: str
+    confidence_score: float
+    forecast_period: str
+    lead_time_days: int
+    safety_stock: int
+
+    model_config = {"from_attributes": True}
+
+
+class InventoryForecastListItem(BaseModel):
+    product_id: UUID
+    product_name: str
+    product_sku: str
+    category_id: Optional[UUID] = None
+    category_name: Optional[str] = None
+    brand: Optional[str] = None
+    current_stock: int
+    available_stock: int
+    average_daily_sales: float
+    forecasted_demand: int
+    days_of_stock_remaining: float
+    reorder_point: int
+    recommended_reorder_quantity: int
+    stock_risk: str
+    recommendation: str
+    confidence_score: float
+    forecast_period: str
+
+    model_config = {"from_attributes": True}
+
+
+class InventoryForecastSummary(BaseModel):
+    total_products: int
+    products_requiring_reorder: int
+    products_at_stockout_risk: int
+    overstocked_products: int
+    healthy_products: int
+
+    model_config = {"from_attributes": True}
+
+
+class ProductRecommendationDetail(BaseModel):
+    product_id: UUID
+    product_name: str
+    product_sku: str
+    category_name: Optional[str] = None
+    brand: Optional[str] = None
+    current_stock: int
+    available_stock: int
+    average_daily_sales: float
+    forecasted_demand: int
+    days_of_stock_remaining: float
+    reorder_point: int
+    recommended_reorder_quantity: int
+    stock_risk: str
+    recommendation: str
+    confidence_score: float
+    forecast_period: str
+    lead_time_days: int
+    safety_stock: int
+    historical_sales: int
+    low_stock_threshold: int
+
+    model_config = {"from_attributes": True}
+
+
+class PaginatedInventoryForecastResponse(BaseModel):
+    data: List[InventoryForecastListItem]
+    total: int
+    page: int
+    limit: int
+
+    model_config = {"from_attributes": True}

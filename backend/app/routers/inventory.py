@@ -16,11 +16,17 @@ from app.schemas.inventory import (
     InventoryAdjustmentResponse,
     StockMovementResponse,
     ReorderLevelUpdate,
+    InventoryForecastListItem,
+    InventoryForecastSummary,
+    ProductRecommendationDetail,
+    PaginatedInventoryForecastResponse,
 )
+from app.models.forecast import ForecastPeriodType
 from app.utils.dependencies import get_current_active_user
 from app.crud.inventory import inventory as inventory_crud
 from app.crud.notification import notification as notification_crud
 from app.services.audit import audit_service
+from app.services.forecast import forecast_service
 from app.models.product import Product
 from uuid import UUID
 from typing import List
@@ -596,3 +602,135 @@ async def update_reorder_level(
         stock_status=stock_status,
         unit_of_measure=product.unit_of_measure.value,
     )
+
+
+@router.get("/forecast", response_model=PaginatedInventoryForecastResponse)
+async def list_inventory_forecasts(
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    forecast_period: str = Query("NEXT_30_DAYS"),
+    category_id: str | None = Query(None),
+    brand: str | None = Query(None),
+    stock_risk: str | None = Query(None),
+    reorder_required: bool | None = Query(None),
+    search: str | None = Query(None),
+    sort_by: str = Query("days_of_stock_remaining"),
+    sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    if not is_admin_or_analyst(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+    try:
+        fp = ForecastPeriodType(forecast_period)
+    except ValueError:
+        fp = ForecastPeriodType.NEXT_30_DAYS
+
+    cid = UUID(category_id) if category_id else None
+    skip = (page - 1) * limit
+
+    items, total = await forecast_service.get_inventory_forecasts(
+        db,
+        current_user.company_id,
+        forecast_period=fp,
+        category_id=cid,
+        brand=brand,
+        stock_risk=stock_risk,
+        reorder_required=reorder_required,
+        search=search,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        skip=skip,
+        limit=limit,
+    )
+
+    return PaginatedInventoryForecastResponse(
+        data=[InventoryForecastListItem(**item) for item in items],
+        total=total,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.get("/forecast/summary", response_model=InventoryForecastSummary)
+async def get_inventory_forecast_summary(
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    forecast_period: str = Query("NEXT_30_DAYS"),
+):
+    if not is_admin_or_analyst(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+    try:
+        fp = ForecastPeriodType(forecast_period)
+    except ValueError:
+        fp = ForecastPeriodType.NEXT_30_DAYS
+
+    data = await forecast_service.get_inventory_forecast_summary(db, current_user.company_id, fp)
+    return InventoryForecastSummary(**data)
+
+
+@router.get("/recommendations", response_model=PaginatedInventoryForecastResponse)
+async def list_recommendations(
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    forecast_period: str = Query("NEXT_30_DAYS"),
+    category_id: str | None = Query(None),
+    search: str | None = Query(None),
+    sort_by: str = Query("days_of_stock_remaining"),
+    sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    if not is_admin_or_analyst(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+    try:
+        fp = ForecastPeriodType(forecast_period)
+    except ValueError:
+        fp = ForecastPeriodType.NEXT_30_DAYS
+
+    cid = UUID(category_id) if category_id else None
+    skip = (page - 1) * limit
+
+    items, total = await forecast_service.get_recommendations(
+        db,
+        current_user.company_id,
+        forecast_period=fp,
+        category_id=cid,
+        search=search,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        skip=skip,
+        limit=limit,
+    )
+
+    return PaginatedInventoryForecastResponse(
+        data=[InventoryForecastListItem(**item) for item in items],
+        total=total,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.get("/recommendations/{product_id}", response_model=ProductRecommendationDetail)
+async def get_product_recommendation(
+    product_id: str,
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    forecast_period: str = Query("NEXT_30_DAYS"),
+):
+    if not is_admin_or_analyst(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+    try:
+        fp = ForecastPeriodType(forecast_period)
+    except ValueError:
+        fp = ForecastPeriodType.NEXT_30_DAYS
+
+    pid = UUID(product_id)
+    data = await forecast_service.get_product_recommendation(db, current_user.company_id, pid, fp)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found or inactive")
+    return ProductRecommendationDetail(**data)

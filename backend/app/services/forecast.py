@@ -401,5 +401,335 @@ class ForecastService:
             await db.commit()
         return updated
 
+    def _calculate_stock_risk(
+        self,
+        current_stock: int,
+        available_stock: int,
+        avg_daily_sales: float,
+        reorder_point: int,
+        forecasted_demand: int,
+    ) -> str:
+        if current_stock == 0:
+            return "OUT_OF_STOCK"
+        if avg_daily_sales > 0:
+            days_remaining = available_stock / avg_daily_sales
+        else:
+            days_remaining = 9999.0
+        if days_remaining < 7:
+            return "STOCKOUT_RISK"
+        if available_stock <= reorder_point:
+            return "LOW_STOCK"
+        if current_stock > forecasted_demand * 2 and forecasted_demand > 0:
+            return "OVERSTOCK"
+        return "HEALTHY"
+
+    def _calculate_recommendation_text(self, stock_risk: str, recommended_qty: int, days_remaining: float) -> str:
+        if stock_risk == "OUT_OF_STOCK":
+            return "Immediate restock required"
+        if stock_risk == "STOCKOUT_RISK":
+            return "Reorder immediately"
+        if stock_risk == "LOW_STOCK":
+            return "Reorder soon"
+        if stock_risk == "OVERSTOCK":
+            return "Reduce orders or promote sales"
+        if recommended_qty > 0:
+            return "Consider reordering"
+        return "No action needed"
+
+    def _calculate_reorder_point(self, avg_daily_sales: float, lead_time_days: int, safety_stock: int) -> int:
+        if avg_daily_sales <= 0:
+            return safety_stock
+        return int((avg_daily_sales * lead_time_days) + safety_stock)
+
+    def _calculate_recommended_quantity(
+        self,
+        current_stock: int,
+        reorder_point: int,
+        forecasted_demand: int,
+        safety_stock: int,
+    ) -> int:
+        target = reorder_point + max(forecasted_demand, safety_stock)
+        qty = target - current_stock
+        return max(0, qty)
+
+    async def _get_avg_daily_sales(self, db: AsyncSession, company_id: UUID, product_id: UUID, days_back: int = 90) -> float:
+        cutoff = datetime.utcnow() - timedelta(days=days_back)
+        result = await db.execute(
+            select(func.coalesce(func.sum(SaleItem.quantity), 0))
+            .join(Sale, SaleItem.sale_id == Sale.id)
+            .where(Sale.company_id == company_id)
+            .where(SaleItem.product_id == product_id)
+            .where(Sale.sale_date >= cutoff)
+            .where(Sale.status == SaleStatus.COMPLETED)
+        )
+        total_qty = int(result.scalar_one_or_none() or 0)
+        if total_qty == 0:
+            return 0.0
+        return round(total_qty / days_back, 2)
+
+    async def _get_latest_forecast_for_product(
+        self, db: AsyncSession, company_id: UUID, product_id: UUID, forecast_period: ForecastPeriodType
+    ) -> DemandForecast | None:
+        result = await db.execute(
+            select(DemandForecast)
+            .where(DemandForecast.company_id == company_id)
+            .where(DemandForecast.product_id == product_id)
+            .where(DemandForecast.forecast_period == forecast_period)
+            .order_by(DemandForecast.generated_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_inventory_forecasts(
+        self,
+        db: AsyncSession,
+        company_id: UUID,
+        forecast_period: ForecastPeriodType = ForecastPeriodType.NEXT_30_DAYS,
+        category_id: Optional[UUID] = None,
+        brand: Optional[str] = None,
+        stock_risk: Optional[str] = None,
+        reorder_required: Optional[bool] = None,
+        search: Optional[str] = None,
+        sort_by: str = "days_of_stock_remaining",
+        sort_dir: str = "asc",
+        skip: int = 0,
+        limit: int = 20,
+    ) -> Tuple[List[dict], int]:
+        period_days = self._get_period_days(forecast_period)
+        lead_time_days = 7
+
+        product_query = select(Product).where(Product.company_id == company_id).where(Product.status == ProductStatus.ACTIVE)
+        if category_id:
+            product_query = product_query.where(Product.category_id == category_id)
+        if brand:
+            product_query = product_query.where(Product.brand.ilike(f"%{brand}%"))
+        if search:
+            product_query = product_query.where(
+                Product.name.ilike(f"%{search}%") | Product.sku.ilike(f"%{search}%")
+            )
+
+        count_query = select(func.count()).select_from(product_query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        fetch_limit = limit * 10 if (stock_risk or reorder_required is not None) else limit
+        product_query = product_query.offset(0).limit(fetch_limit)
+        products_result = await db.execute(product_query)
+        products = list(products_result.scalars().all())
+
+        items = []
+        for product in products:
+            available = product.stock_quantity - product.reserved_stock
+            avg_daily_sales = await self._get_avg_daily_sales(db, company_id, product.id)
+
+            forecast = await self._get_latest_forecast_for_product(db, company_id, product.id, forecast_period)
+            if forecast:
+                forecasted_demand = forecast.predicted_demand
+                confidence_score = float(forecast.confidence_score)
+                historical_sales = forecast.historical_sales
+            else:
+                sales_data = await self._get_historical_sales(db, company_id, product.id)
+                historical_sales = sum(sales_data)
+                ma = self._calculate_moving_average(sales_data)
+                forecasted_demand = int(ma * period_days)
+                confidence_score = self._calculate_confidence(sales_data, ma)
+
+            safety_stock = product.low_stock_threshold
+            reorder_point = self._calculate_reorder_point(avg_daily_sales, lead_time_days, safety_stock)
+            recommended_qty = self._calculate_recommended_quantity(
+                product.stock_quantity, reorder_point, forecasted_demand, safety_stock
+            )
+
+            if avg_daily_sales > 0:
+                days_remaining = round(available / avg_daily_sales, 1)
+            else:
+                days_remaining = 9999.0
+
+            stock_risk_val = self._calculate_stock_risk(
+                product.stock_quantity, available, avg_daily_sales, reorder_point, forecasted_demand
+            )
+            recommendation = self._calculate_recommendation_text(stock_risk_val, recommended_qty, days_remaining)
+
+            cat_name = None
+            if product.category_id:
+                cat = await db.get(Category, product.category_id)
+                if cat:
+                    cat_name = cat.name
+
+            items.append({
+                "product_id": product.id,
+                "product_name": product.name,
+                "product_sku": product.sku,
+                "category_id": product.category_id,
+                "category_name": cat_name,
+                "brand": product.brand,
+                "current_stock": product.stock_quantity,
+                "available_stock": available,
+                "reserved_stock": product.reserved_stock,
+                "average_daily_sales": avg_daily_sales,
+                "forecasted_demand": forecasted_demand,
+                "days_of_stock_remaining": days_remaining,
+                "reorder_point": reorder_point,
+                "recommended_reorder_quantity": recommended_qty,
+                "stock_risk": stock_risk_val,
+                "recommendation": recommendation,
+                "confidence_score": confidence_score,
+                "forecast_period": forecast_period.value,
+                "lead_time_days": lead_time_days,
+                "safety_stock": safety_stock,
+                "historical_sales": historical_sales,
+                "low_stock_threshold": product.low_stock_threshold,
+            })
+
+        if stock_risk:
+            items = [i for i in items if i["stock_risk"] == stock_risk]
+        if reorder_required is not None:
+            if reorder_required:
+                items = [i for i in items if i["recommended_reorder_quantity"] > 0 or i["stock_risk"] in ("OUT_OF_STOCK", "STOCKOUT_RISK", "LOW_STOCK")]
+            else:
+                items = [i for i in items if i["recommended_reorder_quantity"] == 0 and i["stock_risk"] not in ("OUT_OF_STOCK", "STOCKOUT_RISK", "LOW_STOCK")]
+
+        sort_map = {
+            "days_of_stock_remaining": lambda x: x["days_of_stock_remaining"],
+            "current_stock": lambda x: x["current_stock"],
+            "forecasted_demand": lambda x: x["forecasted_demand"],
+            "recommended_reorder_quantity": lambda x: x["recommended_reorder_quantity"],
+            "product_name": lambda x: x["product_name"].lower(),
+            "average_daily_sales": lambda x: x["average_daily_sales"],
+            "reorder_point": lambda x: x["reorder_point"],
+        }
+        sort_key = sort_map.get(sort_by, lambda x: x["days_of_stock_remaining"])
+        items.sort(key=sort_key, reverse=(sort_dir == "desc"))
+
+        filtered_total = len(items)
+        paginated = items[skip:skip + limit] if skip < len(items) else []
+
+        return paginated, filtered_total
+
+    async def get_recommendations(
+        self,
+        db: AsyncSession,
+        company_id: UUID,
+        forecast_period: ForecastPeriodType = ForecastPeriodType.NEXT_30_DAYS,
+        category_id: Optional[UUID] = None,
+        search: Optional[str] = None,
+        sort_by: str = "days_of_stock_remaining",
+        sort_dir: str = "asc",
+        skip: int = 0,
+        limit: int = 20,
+    ) -> Tuple[List[dict], int]:
+        items, _ = await self.get_inventory_forecasts(
+            db,
+            company_id,
+            forecast_period=forecast_period,
+            category_id=category_id,
+            search=search,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            skip=0,
+            limit=limit * 10,
+        )
+        items = [i for i in items if i["recommended_reorder_quantity"] > 0 or i["stock_risk"] in ("OUT_OF_STOCK", "STOCKOUT_RISK", "LOW_STOCK")]
+        total = len(items)
+        paginated = items[skip:skip + limit] if skip < len(items) else []
+        return paginated, total
+
+    async def get_product_recommendation(
+        self,
+        db: AsyncSession,
+        company_id: UUID,
+        product_id: UUID,
+        forecast_period: ForecastPeriodType = ForecastPeriodType.NEXT_30_DAYS,
+    ) -> dict | None:
+        product = await db.get(Product, product_id)
+        if not product or product.company_id != company_id or product.status == ProductStatus.INACTIVE:
+            return None
+
+        period_days = self._get_period_days(forecast_period)
+        lead_time_days = 7
+        available = product.stock_quantity - product.reserved_stock
+        avg_daily_sales = await self._get_avg_daily_sales(db, company_id, product.id)
+
+        forecast = await self._get_latest_forecast_for_product(db, company_id, product.id, forecast_period)
+        if forecast:
+            forecasted_demand = forecast.predicted_demand
+            confidence_score = float(forecast.confidence_score)
+            historical_sales = forecast.historical_sales
+        else:
+            sales_data = await self._get_historical_sales(db, company_id, product.id)
+            historical_sales = sum(sales_data)
+            ma = self._calculate_moving_average(sales_data)
+            forecasted_demand = int(ma * period_days)
+            confidence_score = self._calculate_confidence(sales_data, ma)
+
+        safety_stock = product.low_stock_threshold
+        reorder_point = self._calculate_reorder_point(avg_daily_sales, lead_time_days, safety_stock)
+        recommended_qty = self._calculate_recommended_quantity(
+            product.stock_quantity, reorder_point, forecasted_demand, safety_stock
+        )
+
+        if avg_daily_sales > 0:
+            days_remaining = round(available / avg_daily_sales, 1)
+        else:
+            days_remaining = 9999.0
+
+        stock_risk = self._calculate_stock_risk(
+            product.stock_quantity, available, avg_daily_sales, reorder_point, forecasted_demand
+        )
+        recommendation = self._calculate_recommendation_text(stock_risk, recommended_qty, days_remaining)
+
+        cat_name = None
+        if product.category_id:
+            cat = await db.get(Category, product.category_id)
+            if cat:
+                cat_name = cat.name
+
+        return {
+            "product_id": product.id,
+            "product_name": product.name,
+            "product_sku": product.sku,
+            "category_id": product.category_id,
+            "category_name": cat_name,
+            "brand": product.brand,
+            "current_stock": product.stock_quantity,
+            "available_stock": available,
+            "reserved_stock": product.reserved_stock,
+            "average_daily_sales": avg_daily_sales,
+            "forecasted_demand": forecasted_demand,
+            "days_of_stock_remaining": days_remaining,
+            "reorder_point": reorder_point,
+            "recommended_reorder_quantity": recommended_qty,
+            "stock_risk": stock_risk,
+            "recommendation": recommendation,
+            "confidence_score": confidence_score,
+            "forecast_period": forecast_period.value,
+            "lead_time_days": lead_time_days,
+            "safety_stock": safety_stock,
+            "historical_sales": historical_sales,
+            "low_stock_threshold": product.low_stock_threshold,
+        }
+
+    async def get_inventory_forecast_summary(
+        self,
+        db: AsyncSession,
+        company_id: UUID,
+        forecast_period: ForecastPeriodType = ForecastPeriodType.NEXT_30_DAYS,
+    ) -> dict:
+        items, _ = await self.get_inventory_forecasts(
+            db, company_id, forecast_period=forecast_period, skip=0, limit=1000
+        )
+        total_products = len(items)
+        products_requiring_reorder = sum(1 for i in items if i["recommended_reorder_quantity"] > 0 or i["stock_risk"] in ("OUT_OF_STOCK", "STOCKOUT_RISK", "LOW_STOCK"))
+        products_at_stockout_risk = sum(1 for i in items if i["stock_risk"] in ("OUT_OF_STOCK", "STOCKOUT_RISK"))
+        overstocked_products = sum(1 for i in items if i["stock_risk"] == "OVERSTOCK")
+        healthy_products = sum(1 for i in items if i["stock_risk"] == "HEALTHY")
+        return {
+            "total_products": total_products,
+            "products_requiring_reorder": products_requiring_reorder,
+            "products_at_stockout_risk": products_at_stockout_risk,
+            "overstocked_products": overstocked_products,
+            "healthy_products": healthy_products,
+        }
+
 
 forecast_service = ForecastService()

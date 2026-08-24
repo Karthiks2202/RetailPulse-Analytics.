@@ -516,9 +516,14 @@ export const Forecast: React.FC = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={topProductsData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
-                      <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                      <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }} />
+                      <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }}
+                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }}
+                        itemStyle={{ color: '#818cf8', fontWeight: 600 }}
+                        labelStyle={{ color: '#cbd5e1', fontWeight: 600 }}
+                      />
                       <Bar dataKey="predicted" radius={[4, 4, 4, 4]} barSize={16}>
                         {topProductsData.map((_entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} fillOpacity={0.85} />
@@ -545,9 +550,13 @@ export const Forecast: React.FC = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={accuracyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800/40" />
-                      <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }} />
+                      <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 12, color: '#f8fafc', fontSize: 12 }}
+                        itemStyle={{ color: '#818cf8', fontWeight: 600 }}
+                        labelStyle={{ color: '#cbd5e1', fontWeight: 600 }}
+                      />
                       <Legend />
                       <Line type="monotone" dataKey="historical" stroke="#ef4444" strokeWidth={2} name="Historical Sales" />
                       <Line type="monotone" dataKey="prediction" stroke="#4f46e5" strokeWidth={2} name="Prediction" />

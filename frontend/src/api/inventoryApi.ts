@@ -155,3 +155,101 @@ export const updateReorderLevel = async (productId: string, low_stock_threshold:
   const { data } = await axiosInstance.patch(`/inventory/${productId}/reorder-level`, { low_stock_threshold });
   return data;
 };
+
+export interface InventoryForecastItem {
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  category_id: string | null;
+  category_name: string | null;
+  brand: string | null;
+  current_stock: number;
+  available_stock: number;
+  reserved_stock: number;
+  average_daily_sales: number;
+  forecasted_demand: number;
+  days_of_stock_remaining: number;
+  reorder_point: number;
+  recommended_reorder_quantity: number;
+  stock_risk: string;
+  recommendation: string;
+  confidence_score: number;
+  forecast_period: string;
+}
+
+export interface InventoryForecastSummary {
+  total_products: number;
+  products_requiring_reorder: number;
+  products_at_stockout_risk: number;
+  overstocked_products: number;
+  healthy_products: number;
+}
+
+export interface PaginatedInventoryForecastResponse {
+  data: InventoryForecastItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ProductRecommendationDetail {
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  category_name: string | null;
+  brand: string | null;
+  current_stock: number;
+  available_stock: number;
+  average_daily_sales: number;
+  forecasted_demand: number;
+  days_of_stock_remaining: number;
+  reorder_point: number;
+  recommended_reorder_quantity: number;
+  stock_risk: string;
+  recommendation: string;
+  confidence_score: number;
+  forecast_period: string;
+  lead_time_days: number;
+  safety_stock: number;
+  historical_sales: number;
+  low_stock_threshold: number;
+}
+
+export const getInventoryForecasts = async (params?: {
+  forecast_period?: string;
+  category_id?: string;
+  brand?: string;
+  stock_risk?: string;
+  reorder_required?: boolean;
+  search?: string;
+  sort_by?: string;
+  sort_dir?: string;
+  page?: number;
+  limit?: number;
+}): Promise<PaginatedInventoryForecastResponse> => {
+  const { data } = await axiosInstance.get('/inventory/forecast', { params });
+  return data;
+};
+
+export const getInventoryForecastSummary = async (forecast_period?: string): Promise<InventoryForecastSummary> => {
+  const { data } = await axiosInstance.get('/inventory/forecast/summary', { params: { forecast_period } });
+  return data;
+};
+
+export const getRecommendations = async (params?: {
+  forecast_period?: string;
+  category_id?: string;
+  search?: string;
+  sort_by?: string;
+  sort_dir?: string;
+  page?: number;
+  limit?: number;
+}): Promise<PaginatedInventoryForecastResponse> => {
+  const { data } = await axiosInstance.get('/inventory/recommendations', { params });
+  return data;
+};
+
+export const getProductRecommendation = async (productId: string, forecast_period?: string): Promise<ProductRecommendationDetail> => {
+  const { data } = await axiosInstance.get(`/inventory/recommendations/${productId}`, { params: { forecast_period } });
+  return data;
+};
