@@ -37,7 +37,8 @@ class TestSaleCreate:
         product = await product_crud.create(
             db_session, company_id=company_id, name="Test Product", sku="SKU-001",
             category_id=None, brand="Test", description="", unit_price=100.0,
-            cost_price=50.0, stock_quantity=10, low_stock_threshold=5,
+            cost_price=50.0, stock_quantity=10,             low_stock_threshold=5,
+            lead_time_days=7,
             unit_of_measure="PCS", status=ProductStatus.ACTIVE,
         )
 
@@ -73,7 +74,8 @@ class TestSaleCreate:
         product = await product_crud.create(
             db_session, company_id=company_id, name="Test Product 2", sku="SKU-002",
             category_id=None, brand="Test", description="", unit_price=100.0,
-            cost_price=50.0, stock_quantity=5, low_stock_threshold=5,
+            cost_price=50.0, stock_quantity=5,             low_stock_threshold=5,
+            lead_time_days=7,
             unit_of_measure="PCS", status=ProductStatus.ACTIVE,
         )
 
@@ -129,7 +131,8 @@ class TestForecast:
         product = await product_crud.create(
             db_session, company_id=company_id, name="Forecast Product", sku="SKU-F-001",
             category_id=None, brand="Test", description="", unit_price=100.0,
-            cost_price=50.0, stock_quantity=100, low_stock_threshold=5,
+            cost_price=50.0, stock_quantity=100,             low_stock_threshold=5,
+            lead_time_days=7,
             unit_of_measure="PCS", status=ProductStatus.ACTIVE,
         )
 
@@ -157,7 +160,8 @@ class TestForecast:
         product = await product_crud.create(
             db_session, company_id=company_id, name="Forecast Product 2", sku="SKU-F-002",
             category_id=None, brand="Test", description="", unit_price=100.0,
-            cost_price=50.0, stock_quantity=100, low_stock_threshold=5,
+            cost_price=50.0, stock_quantity=100,             low_stock_threshold=5,
+            lead_time_days=7,
             unit_of_measure="PCS", status=ProductStatus.ACTIVE,
         )
 
@@ -183,7 +187,8 @@ class TestForecastAccuracy:
         product = await product_crud.create(
             db_session, company_id=company_id, name="Accuracy Product", sku="SKU-ACC-001",
             category_id=None, brand="Test", description="", unit_price=100.0,
-            cost_price=50.0, stock_quantity=100, low_stock_threshold=5,
+            cost_price=50.0, stock_quantity=100,             low_stock_threshold=5,
+            lead_time_days=7,
             unit_of_measure="PCS", status=ProductStatus.ACTIVE,
         )
 
@@ -273,12 +278,14 @@ class TestAnalyticsItemFilterAggregation:
             db_session, company_id=company_id, name="Laptop", sku="LP-1",
             category_id=cat.id, brand="TechCo", description="", unit_price=80000.0,
             cost_price=50000.0, stock_quantity=10, low_stock_threshold=2,
+            lead_time_days=7,
             unit_of_measure="PCS", status=ProductStatus.ACTIVE,
         )
         keyboard = await product_crud.create(
             db_session, company_id=company_id, name="Keyboard", sku="KB-1",
             category_id=cat.id, brand="TechCo", description="", unit_price=2000.0,
-            cost_price=1000.0, stock_quantity=20, low_stock_threshold=5,
+            cost_price=1000.0, stock_quantity=20,             low_stock_threshold=5,
+            lead_time_days=7,
             unit_of_measure="PCS", status=ProductStatus.ACTIVE,
         )
 

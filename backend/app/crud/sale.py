@@ -13,6 +13,7 @@ from app.models.inventory import StockMovement, MovementType
 from app.models.customer import Customer
 from app.models.company import Company
 from app.models.customer_timeline import CustomerTimeline
+from app.models.invoice_sequence import InvoiceSequence
 from app.crud.audit_log import audit_log as audit_log_crud
 from fastapi import Request
 from uuid import UUID
@@ -32,24 +33,18 @@ class CRUDSale:
         year = datetime.utcnow().year
         prefix = f"INV-{year}-"
 
-        await db.execute(select(Company.id).where(Company.id == company_id).with_for_update())
-
         result = await db.execute(
-            select(Sale.invoice_number)
-            .where(Sale.company_id == company_id)
-            .where(Sale.invoice_number.like(f"{prefix}%"))
-            .order_by(Sale.invoice_number.desc())
-            .limit(1)
+            select(InvoiceSequence)
+            .where(InvoiceSequence.company_id == company_id)
+            .with_for_update()
         )
-        last_invoice = result.scalar_one_or_none()
-        if last_invoice:
-            try:
-                last_num = int(last_invoice.replace(prefix, ""))
-            except ValueError:
-                last_num = 0
-        else:
-            last_num = 0
-        next_num = last_num + 1
+        sequence = result.scalar_one_or_none()
+        if not sequence:
+            sequence = InvoiceSequence(company_id=company_id, last_invoice_number=0)
+            db.add(sequence)
+
+        sequence.last_invoice_number += 1
+        next_num = sequence.last_invoice_number
         return f"{prefix}{next_num:06d}"
 
 

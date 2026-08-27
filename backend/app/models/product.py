@@ -36,6 +36,7 @@ class Product(Base):
     stock_quantity = Column(Integer, nullable=False, default=0)
     reserved_stock = Column(Integer, nullable=False, default=0)
     low_stock_threshold = Column(Integer, nullable=False, default=5)
+    lead_time_days = Column(Integer, nullable=False, default=7)
     unit_of_measure = Column(SQLEnum(UnitOfMeasure), nullable=False, default=UnitOfMeasure.PCS)
     status = Column(SQLEnum(ProductStatus), nullable=False, default=ProductStatus.ACTIVE)
     created_at = Column(DateTime, default=datetime.utcnow)

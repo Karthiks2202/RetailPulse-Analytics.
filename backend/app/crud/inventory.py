@@ -32,7 +32,7 @@ class CRUDInventory:
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[dict], int]:
-        query = select(Product).where(Product.company_id == company_id)
+        query = select(Product).options(selectinload(Product.category)).where(Product.company_id == company_id)
 
         if search:
             query = query.where(
@@ -81,11 +81,7 @@ class CRUDInventory:
         for p in products:
             available = p.stock_quantity - p.reserved_stock
             status = get_stock_status(available, p.low_stock_threshold)
-            cat_name = None
-            if p.category_id:
-                cat = await db.get(Category, p.category_id)
-                if cat:
-                    cat_name = cat.name
+            cat_name = p.category.name if p.category else None
 
             items.append({
                 "id": p.id,
@@ -138,20 +134,14 @@ class CRUDInventory:
         }
 
     async def get_category_breakdown(self, db: AsyncSession, company_id: UUID) -> list[dict]:
-        products_query = select(Product).where(Product.company_id == company_id)
+        products_query = select(Product).options(selectinload(Product.category)).where(Product.company_id == company_id)
         result = await db.execute(products_query)
         products = list(result.scalars().all())
 
         category_map: dict[str, int] = {}
         for p in products:
-            if p.category_id:
-                cat = await db.get(Category, p.category_id)
-                if cat:
-                    category_map[cat.name] = category_map.get(cat.name, 0) + 1
-                else:
-                    category_map["Uncategorized"] = category_map.get("Uncategorized", 0) + 1
-            else:
-                category_map["Uncategorized"] = category_map.get("Uncategorized", 0) + 1
+            cat_name = p.category.name if p.category else "Uncategorized"
+            category_map[cat_name] = category_map.get(cat_name, 0) + 1
 
         return [{"category_name": k, "product_count": v} for k, v in category_map.items()]
 

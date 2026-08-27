@@ -16,6 +16,7 @@ class ProductBase(BaseModel):
     cost_price: float = Field(ge=0)
     stock_quantity: int = Field(ge=0)
     low_stock_threshold: int = Field(ge=0, default=5)
+    lead_time_days: int = Field(ge=0, default=7)
     unit_of_measure: UnitOfMeasure = UnitOfMeasure.PCS
     status: ProductStatus = ProductStatus.ACTIVE
 
@@ -33,6 +34,7 @@ class ProductUpdate(BaseModel):
     cost_price: Optional[float] = Field(default=None, ge=0)
     stock_quantity: Optional[int] = Field(default=None, ge=0)
     low_stock_threshold: Optional[int] = Field(default=None, ge=0)
+    lead_time_days: Optional[int] = Field(default=None, ge=0)
     unit_of_measure: Optional[UnitOfMeasure] = None
     status: Optional[ProductStatus] = None
 

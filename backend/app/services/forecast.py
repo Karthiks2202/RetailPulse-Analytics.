@@ -150,13 +150,18 @@ class ForecastService:
         forecast_start_date: Optional[datetime] = None,
         forecast_end_date: Optional[datetime] = None,
         custom_days: Optional[int] = None,
+        product: Optional[Product] = None,
+        sales_data: Optional[List[int]] = None,
+        existing_forecast: Optional[DemandForecast] = None,
     ) -> DemandForecast:
-        product = await db.get(Product, product_id)
+        if product is None:
+            product = await db.get(Product, product_id)
         if not product or product.company_id != company_id or product.status == ProductStatus.INACTIVE:
             raise ValueError("Product not found or inactive")
 
         days = self._get_period_days(forecast_period, custom_days)
-        sales_data = await self._get_historical_sales(db, company_id, product_id)
+        if sales_data is None:
+            sales_data = await self._get_historical_sales(db, company_id, product_id)
         historical_sales = sum(sales_data)
 
         ma = self._calculate_moving_average(sales_data)
@@ -172,11 +177,12 @@ class ForecastService:
         start_date = forecast_start_date or datetime.utcnow()
         end_date = forecast_end_date or (datetime.utcnow() + timedelta(days=days))
 
-        existing = await forecast_crud.get_by_product_period(db, company_id, product_id, forecast_period)
-        if existing:
+        if existing_forecast is None:
+            existing_forecast = await forecast_crud.get_by_product_period(db, company_id, product_id, forecast_period)
+        if existing_forecast:
             forecast = await forecast_crud.update(
                 db,
-                existing,
+                existing_forecast,
                 forecast_start_date=start_date,
                 forecast_end_date=end_date,
                 predicted_demand=predicted_demand,
@@ -214,22 +220,77 @@ class ForecastService:
         forecast_end_date: Optional[datetime] = None,
         custom_days: Optional[int] = None,
     ) -> List[DemandForecast]:
-        result = await db.execute(
-            select(Product.id)
+        products_query = (
+            select(Product)
             .where(Product.company_id == company_id)
             .where(Product.status == ProductStatus.ACTIVE)
             .where(Product.stock_quantity.isnot(None))
         )
-        product_ids = [row[0] for row in result.all()]
+        products_result = await db.execute(products_query)
+        products = list(products_result.scalars().all())
+        product_ids = [p.id for p in products]
+        products_map = {p.id: p for p in products}
 
         if not product_ids:
             raise ValueError("No active products found")
 
+        cutoff = datetime.utcnow() - timedelta(days=90)
+        sales_rows = await db.execute(
+            select(
+                SaleItem.product_id,
+                func.date(Sale.sale_date).label("sale_day"),
+                func.sum(SaleItem.quantity).label("daily_qty"),
+            )
+            .join(Sale, SaleItem.sale_id == Sale.id)
+            .where(Sale.company_id == company_id)
+            .where(SaleItem.product_id.in_(product_ids))
+            .where(Sale.sale_date >= cutoff)
+            .where(Sale.status == SaleStatus.COMPLETED)
+            .group_by(SaleItem.product_id, func.date(Sale.sale_date))
+        )
+
+        raw_sales: dict[UUID, dict] = {}
+        for row in sales_rows.all():
+            pid = row.product_id
+            day = row.sale_day
+            if isinstance(day, str):
+                day = datetime.strptime(day, "%Y-%m-%d").date()
+            if pid not in raw_sales:
+                raw_sales[pid] = {}
+            raw_sales[pid][day] = int(row.daily_qty or 0)
+
+        sales_data_map: dict[UUID, List[int]] = {}
+        current = cutoff.date()
+        end = datetime.utcnow().date()
+        while current <= end:
+            for pid in product_ids:
+                if pid not in sales_data_map:
+                    sales_data_map[pid] = []
+                sales_data_map[pid].append(raw_sales.get(pid, {}).get(current, 0))
+            current += timedelta(days=1)
+
+        forecast_rows = await db.execute(
+            select(DemandForecast)
+            .where(DemandForecast.company_id == company_id)
+            .where(DemandForecast.product_id.in_(product_ids))
+            .where(DemandForecast.forecast_period == forecast_period)
+        )
+        forecast_map: dict[UUID, DemandForecast] = {}
+        for f in forecast_rows.scalars().all():
+            if f.product_id not in forecast_map:
+                forecast_map[f.product_id] = f
+
         forecasts = []
         for pid in product_ids:
             try:
+                product = products_map.get(pid)
+                sales_data = sales_data_map.get(pid, [])
+                existing = forecast_map.get(pid)
                 f = await self.generate_product_forecast(
-                    db, company_id, pid, forecast_period, forecast_start_date, forecast_end_date, custom_days
+                    db, company_id, pid, forecast_period, forecast_start_date, forecast_end_date, custom_days,
+                    product=product,
+                    sales_data=sales_data,
+                    existing_forecast=existing,
                 )
                 forecasts.append(f)
             except Exception:
@@ -496,7 +557,6 @@ class ForecastService:
         sort_dir: str = "asc",
         skip: int = 0,
         limit: int = 20,
-        lead_time_days: int = DEFAULT_LEAD_TIME_DAYS,
     ) -> Tuple[List[dict], int]:
         period_days = self._get_period_days(forecast_period)
 
@@ -516,8 +576,7 @@ class ForecastService:
 
         in_memory_filters = stock_risk is not None or reorder_required is not None
         if in_memory_filters:
-            fetch_limit = max(limit * 20, 500)
-            product_query = product_query.offset(0).limit(fetch_limit)
+            product_query = product_query.offset(0)
         else:
             product_query = product_query.offset(skip).limit(limit)
 
@@ -582,7 +641,8 @@ class ForecastService:
                 confidence_score = self._calculate_confidence([historical_sales], ma) if historical_sales > 0 else 0.0
 
             safety_stock = product.low_stock_threshold
-            reorder_point = self._calculate_reorder_point(avg_daily_sales, lead_time_days, safety_stock)
+            product_lead_time = product.lead_time_days or self.DEFAULT_LEAD_TIME_DAYS
+            reorder_point = self._calculate_reorder_point(avg_daily_sales, product_lead_time, safety_stock)
             recommended_qty = self._calculate_recommended_quantity(
                 product.stock_quantity, reorder_point, forecasted_demand, safety_stock
             )
@@ -618,7 +678,7 @@ class ForecastService:
                 "recommendation": recommendation,
                 "confidence_score": confidence_score,
                 "forecast_period": forecast_period.value,
-                "lead_time_days": lead_time_days,
+                "lead_time_days": product_lead_time,
                 "safety_stock": safety_stock,
                 "historical_sales": historical_sales,
                 "low_stock_threshold": product.low_stock_threshold,
@@ -644,8 +704,12 @@ class ForecastService:
         sort_key = sort_map.get(sort_by, lambda x: x["days_of_stock_remaining"])
         items.sort(key=sort_key, reverse=(sort_dir == "desc"))
 
-        filtered_total = len(items)
-        paginated = items[skip:skip + limit] if skip < len(items) else []
+        filtered_total = total if not in_memory_filters else len(items)
+
+        if in_memory_filters:
+            paginated = items[skip:skip + limit]
+        else:
+            paginated = items
 
         return paginated, filtered_total
 
@@ -661,7 +725,6 @@ class ForecastService:
         sort_dir: str = "asc",
         skip: int = 0,
         limit: int = 20,
-        lead_time_days: int = DEFAULT_LEAD_TIME_DAYS,
     ) -> Tuple[List[dict], int]:
         items, _ = await self.get_inventory_forecasts(
             db,
@@ -674,7 +737,6 @@ class ForecastService:
             sort_dir=sort_dir,
             skip=0,
             limit=max(limit * 20, 500),
-            lead_time_days=lead_time_days,
         )
         items = [i for i in items if i["recommended_reorder_quantity"] > 0 or i["stock_risk"] in ("OUT_OF_STOCK", "STOCKOUT_RISK", "LOW_STOCK")]
         total = len(items)
@@ -687,7 +749,6 @@ class ForecastService:
         company_id: UUID,
         product_id: UUID,
         forecast_period: ForecastPeriodType = ForecastPeriodType.NEXT_30_DAYS,
-        lead_time_days: int = DEFAULT_LEAD_TIME_DAYS,
     ) -> dict | None:
         product = await db.get(Product, product_id)
         if not product or product.company_id != company_id or product.status == ProductStatus.INACTIVE:
@@ -705,12 +766,13 @@ class ForecastService:
         else:
             sales_data = await self._get_historical_sales(db, company_id, product.id)
             historical_sales = sum(sales_data)
-            ma = self._calculate_moving_average(sales_data)
+            ma = avg_daily_sales
             forecasted_demand = int(ma * period_days)
-            confidence_score = self._calculate_confidence(sales_data, ma)
+            confidence_score = self._calculate_confidence([historical_sales], ma) if historical_sales > 0 else 0.0
 
         safety_stock = product.low_stock_threshold
-        reorder_point = self._calculate_reorder_point(avg_daily_sales, lead_time_days, safety_stock)
+        product_lead_time = product.lead_time_days or self.DEFAULT_LEAD_TIME_DAYS
+        reorder_point = self._calculate_reorder_point(avg_daily_sales, product_lead_time, safety_stock)
         recommended_qty = self._calculate_recommended_quantity(
             product.stock_quantity, reorder_point, forecasted_demand, safety_stock
         )
@@ -750,7 +812,7 @@ class ForecastService:
             "recommendation": recommendation,
             "confidence_score": confidence_score,
             "forecast_period": forecast_period.value,
-            "lead_time_days": lead_time_days,
+            "lead_time_days": product_lead_time,
             "safety_stock": safety_stock,
             "historical_sales": historical_sales,
             "low_stock_threshold": product.low_stock_threshold,

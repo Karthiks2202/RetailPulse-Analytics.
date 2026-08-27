@@ -158,6 +158,7 @@ async def create_product(
         float(payload.cost_price),
         payload.stock_quantity,
         payload.low_stock_threshold,
+        payload.lead_time_days,
         payload.unit_of_measure.value if hasattr(payload.unit_of_measure, 'value') else payload.unit_of_measure,
         payload.status.value if hasattr(payload.status, 'value') else payload.status,
     )
