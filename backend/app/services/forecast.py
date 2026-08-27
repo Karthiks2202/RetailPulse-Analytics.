@@ -726,7 +726,7 @@ class ForecastService:
         skip: int = 0,
         limit: int = 20,
     ) -> Tuple[List[dict], int]:
-        items, _ = await self.get_inventory_forecasts(
+        items, total = await self.get_inventory_forecasts(
             db,
             company_id,
             forecast_period=forecast_period,
@@ -735,13 +735,11 @@ class ForecastService:
             search=search,
             sort_by=sort_by,
             sort_dir=sort_dir,
-            skip=0,
-            limit=max(limit * 20, 500),
+            skip=skip,
+            limit=limit,
+            reorder_required=True,
         )
-        items = [i for i in items if i["recommended_reorder_quantity"] > 0 or i["stock_risk"] in ("OUT_OF_STOCK", "STOCKOUT_RISK", "LOW_STOCK")]
-        total = len(items)
-        paginated = items[skip:skip + limit]
-        return paginated, total
+        return items, total
 
     async def get_product_recommendation(
         self,
