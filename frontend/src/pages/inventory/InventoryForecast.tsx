@@ -78,7 +78,7 @@ export const InventoryForecast: React.FC = () => {
   const [forecastPeriod, setForecastPeriod] = useState('NEXT_30_DAYS');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [brandFilter, setBrandFilter] = useState('');
+  const [supplierFilter, setSupplierFilter] = useState('');
   const [stockRiskFilter, setStockRiskFilter] = useState('');
   const [reorderRequiredFilter, setReorderRequiredFilter] = useState<boolean | undefined>(undefined);
   const [sortBy, setSortBy] = useState('days_of_stock_remaining');
@@ -104,12 +104,12 @@ export const InventoryForecast: React.FC = () => {
   });
 
   const { data: forecastData, isLoading: forecastLoading, error: forecastError } = useQuery<PaginatedInventoryForecastResponse>({
-    queryKey: ['inventory-forecast', { forecastPeriod, categoryFilter, brandFilter, stockRiskFilter, reorderRequiredFilter, search, sortBy, sortDir, page }],
+    queryKey: ['inventory-forecast', { forecastPeriod, categoryFilter, supplierFilter, stockRiskFilter, reorderRequiredFilter, search, sortBy, sortDir, page }],
     queryFn: () =>
       getInventoryForecasts({
         forecast_period: forecastPeriod,
         category_id: categoryFilter || undefined,
-        brand: brandFilter || undefined,
+        supplier: supplierFilter || undefined,
         stock_risk: stockRiskFilter || undefined,
         reorder_required: reorderRequiredFilter,
         search: search || undefined,
@@ -338,8 +338,8 @@ export const InventoryForecast: React.FC = () => {
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
-        <select value={brandFilter} onChange={(e) => { setBrandFilter(e.target.value); setPage(1); }} className={`${inputClass} lg:w-36`}>
-          <option value="">All Brands</option>
+        <select value={supplierFilter} onChange={(e) => { setSupplierFilter(e.target.value); setPage(1); }} className={`${inputClass} lg:w-36`}>
+          <option value="">All Suppliers</option>
           {brands.map((b) => (
             <option key={b} value={b}>{b}</option>
           ))}

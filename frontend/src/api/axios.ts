@@ -9,12 +9,21 @@ export const axiosInstance = axios.create({
   },
 });
 
+const setAuthHeader = (headers: any, token: string) => {
+  if (!headers) return;
+  if (typeof headers.set === 'function') {
+    headers.set('Authorization', `Bearer ${token}`);
+  } else {
+    headers.Authorization = `Bearer ${token}`;
+  }
+};
+
 // Attach access token to outgoing requests
 axiosInstance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('accessToken');
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (token) {
+      setAuthHeader(config.headers, token);
     }
     return config;
   },
@@ -49,7 +58,7 @@ axiosInstance.interceptors.response.use(
         return new Promise((resolve, reject) => {
           failedQueue.push({
             resolve: (token: string) => {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
+              setAuthHeader(originalRequest.headers, token);
               resolve(axiosInstance(originalRequest));
             },
             reject: (err: any) => reject(err),
@@ -78,8 +87,14 @@ axiosInstance.interceptors.response.use(
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', newRefreshToken);
 
-        axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        if (axiosInstance.defaults.headers.common) {
+          if (typeof axiosInstance.defaults.headers.common.set === 'function') {
+            axiosInstance.defaults.headers.common.set('Authorization', `Bearer ${accessToken}`);
+          } else {
+            axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+          }
+        }
+        setAuthHeader(originalRequest.headers, accessToken);
 
         processQueue(null, accessToken);
         isRefreshing = false;

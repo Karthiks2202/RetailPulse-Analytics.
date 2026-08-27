@@ -218,7 +218,7 @@ export interface ProductRecommendationDetail {
 export const getInventoryForecasts = async (params?: {
   forecast_period?: string;
   category_id?: string;
-  brand?: string;
+  supplier?: string;
   stock_risk?: string;
   reorder_required?: boolean;
   search?: string;

@@ -21,8 +21,8 @@ async def get_me(current_user: User = Depends(get_current_active_user), db: Asyn
         "company_id": str(current_user.company_id),
         "name": current_user.name,
         "email": current_user.email,
-        "role": current_user.role.value,
-        "status": current_user.status.value,
+        "role": getattr(current_user.role, "value", str(current_user.role)),
+        "status": getattr(current_user.status, "value", str(current_user.status)),
         "last_login": current_user.last_login.isoformat() if current_user.last_login else None,
         "created_at": current_user.created_at.isoformat(),
         "company": {

@@ -22,6 +22,8 @@ class ForecastService:
         ForecastPeriodType.NEXT_90_DAYS: 90,
     }
 
+    DEFAULT_LEAD_TIME_DAYS = 7
+
     def _get_period_days(self, forecast_period: ForecastPeriodType, custom_days: Optional[int] = None) -> int:
         if forecast_period == ForecastPeriodType.CUSTOM and custom_days:
             return custom_days
@@ -486,7 +488,7 @@ class ForecastService:
         company_id: UUID,
         forecast_period: ForecastPeriodType = ForecastPeriodType.NEXT_30_DAYS,
         category_id: Optional[UUID] = None,
-        brand: Optional[str] = None,
+        supplier: Optional[str] = None,
         stock_risk: Optional[str] = None,
         reorder_required: Optional[bool] = None,
         search: Optional[str] = None,
@@ -494,15 +496,15 @@ class ForecastService:
         sort_dir: str = "asc",
         skip: int = 0,
         limit: int = 20,
+        lead_time_days: int = DEFAULT_LEAD_TIME_DAYS,
     ) -> Tuple[List[dict], int]:
         period_days = self._get_period_days(forecast_period)
-        lead_time_days = 7
 
         product_query = select(Product).where(Product.company_id == company_id).where(Product.status == ProductStatus.ACTIVE)
         if category_id:
             product_query = product_query.where(Product.category_id == category_id)
-        if brand:
-            product_query = product_query.where(Product.brand.ilike(f"%{brand}%"))
+        if supplier:
+            product_query = product_query.where(Product.brand.ilike(f"%{supplier}%"))
         if search:
             product_query = product_query.where(
                 Product.name.ilike(f"%{search}%") | Product.sku.ilike(f"%{search}%")
@@ -512,27 +514,72 @@ class ForecastService:
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
 
-        fetch_limit = limit * 10 if (stock_risk or reorder_required is not None) else limit
-        product_query = product_query.offset(0).limit(fetch_limit)
+        in_memory_filters = stock_risk is not None or reorder_required is not None
+        if in_memory_filters:
+            fetch_limit = max(limit * 20, 500)
+            product_query = product_query.offset(0).limit(fetch_limit)
+        else:
+            product_query = product_query.offset(skip).limit(limit)
+
         products_result = await db.execute(product_query)
         products = list(products_result.scalars().all())
+
+        if not products:
+            return [], 0
+
+        product_ids = [p.id for p in products]
+
+        sales_cutoff = datetime.utcnow() - timedelta(days=90)
+        sales_rows = await db.execute(
+            select(
+                SaleItem.product_id,
+                func.sum(SaleItem.quantity).label("total_qty"),
+            )
+            .join(Sale, SaleItem.sale_id == Sale.id)
+            .where(Sale.company_id == company_id)
+            .where(SaleItem.product_id.in_(product_ids))
+            .where(Sale.sale_date >= sales_cutoff)
+            .where(Sale.status == SaleStatus.COMPLETED)
+            .group_by(SaleItem.product_id)
+        )
+        sales_map = {row.product_id: int(row.total_qty or 0) for row in sales_rows.all()}
+        daily_sales_map = {pid: round(qty / 90, 2) for pid, qty in sales_map.items()}
+
+        forecast_rows = await db.execute(
+            select(DemandForecast)
+            .where(DemandForecast.company_id == company_id)
+            .where(DemandForecast.product_id.in_(product_ids))
+            .where(DemandForecast.forecast_period == forecast_period)
+            .order_by(DemandForecast.generated_at.desc())
+        )
+        forecast_map: dict[UUID, DemandForecast] = {}
+        for f in forecast_rows.scalars().all():
+            if f.product_id not in forecast_map:
+                forecast_map[f.product_id] = f
+
+        cat_ids = [p.category_id for p in products if p.category_id]
+        cat_names: dict[UUID, str] = {}
+        if cat_ids:
+            cat_rows = await db.execute(
+                select(Category.id, Category.name).where(Category.id.in_(cat_ids))
+            )
+            cat_names = {row.id: row.name for row in cat_rows.all()}
 
         items = []
         for product in products:
             available = product.stock_quantity - product.reserved_stock
-            avg_daily_sales = await self._get_avg_daily_sales(db, company_id, product.id)
+            avg_daily_sales = daily_sales_map.get(product.id, 0.0)
 
-            forecast = await self._get_latest_forecast_for_product(db, company_id, product.id, forecast_period)
+            forecast = forecast_map.get(product.id)
             if forecast:
                 forecasted_demand = forecast.predicted_demand
                 confidence_score = float(forecast.confidence_score)
                 historical_sales = forecast.historical_sales
             else:
-                sales_data = await self._get_historical_sales(db, company_id, product.id)
-                historical_sales = sum(sales_data)
-                ma = self._calculate_moving_average(sales_data)
+                historical_sales = sales_map.get(product.id, 0)
+                ma = avg_daily_sales
                 forecasted_demand = int(ma * period_days)
-                confidence_score = self._calculate_confidence(sales_data, ma)
+                confidence_score = self._calculate_confidence([historical_sales], ma) if historical_sales > 0 else 0.0
 
             safety_stock = product.low_stock_threshold
             reorder_point = self._calculate_reorder_point(avg_daily_sales, lead_time_days, safety_stock)
@@ -550,11 +597,7 @@ class ForecastService:
             )
             recommendation = self._calculate_recommendation_text(stock_risk_val, recommended_qty, days_remaining)
 
-            cat_name = None
-            if product.category_id:
-                cat = await db.get(Category, product.category_id)
-                if cat:
-                    cat_name = cat.name
+            cat_name = cat_names.get(product.category_id) if product.category_id else None
 
             items.append({
                 "product_id": product.id,
@@ -612,26 +655,30 @@ class ForecastService:
         company_id: UUID,
         forecast_period: ForecastPeriodType = ForecastPeriodType.NEXT_30_DAYS,
         category_id: Optional[UUID] = None,
+        supplier: Optional[str] = None,
         search: Optional[str] = None,
         sort_by: str = "days_of_stock_remaining",
         sort_dir: str = "asc",
         skip: int = 0,
         limit: int = 20,
+        lead_time_days: int = DEFAULT_LEAD_TIME_DAYS,
     ) -> Tuple[List[dict], int]:
         items, _ = await self.get_inventory_forecasts(
             db,
             company_id,
             forecast_period=forecast_period,
             category_id=category_id,
+            supplier=supplier,
             search=search,
             sort_by=sort_by,
             sort_dir=sort_dir,
             skip=0,
-            limit=limit * 10,
+            limit=max(limit * 20, 500),
+            lead_time_days=lead_time_days,
         )
         items = [i for i in items if i["recommended_reorder_quantity"] > 0 or i["stock_risk"] in ("OUT_OF_STOCK", "STOCKOUT_RISK", "LOW_STOCK")]
         total = len(items)
-        paginated = items[skip:skip + limit] if skip < len(items) else []
+        paginated = items[skip:skip + limit]
         return paginated, total
 
     async def get_product_recommendation(
@@ -640,13 +687,13 @@ class ForecastService:
         company_id: UUID,
         product_id: UUID,
         forecast_period: ForecastPeriodType = ForecastPeriodType.NEXT_30_DAYS,
+        lead_time_days: int = DEFAULT_LEAD_TIME_DAYS,
     ) -> dict | None:
         product = await db.get(Product, product_id)
         if not product or product.company_id != company_id or product.status == ProductStatus.INACTIVE:
             return None
 
         period_days = self._get_period_days(forecast_period)
-        lead_time_days = 7
         available = product.stock_quantity - product.reserved_stock
         avg_daily_sales = await self._get_avg_daily_sales(db, company_id, product.id)
 

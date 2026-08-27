@@ -11,6 +11,7 @@ from app.models.audit_log import AuditLog
 from app.models.notification import Notification, NotificationType
 from app.models.inventory import StockMovement, MovementType
 from app.models.customer import Customer
+from app.models.company import Company
 from app.models.customer_timeline import CustomerTimeline
 from app.crud.audit_log import audit_log as audit_log_crud
 from fastapi import Request
@@ -30,7 +31,9 @@ class CRUDSale:
     async def get_invoice_number(self, db: AsyncSession, company_id: UUID) -> str:
         year = datetime.utcnow().year
         prefix = f"INV-{year}-"
-        # Find the highest existing invoice number for this company in current year
+
+        await db.execute(select(Company.id).where(Company.id == company_id).with_for_update())
+
         result = await db.execute(
             select(Sale.invoice_number)
             .where(Sale.company_id == company_id)
