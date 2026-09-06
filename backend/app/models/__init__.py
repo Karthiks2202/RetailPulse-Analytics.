@@ -12,6 +12,7 @@ from app.models.customer import Customer, CustomerStatus, CustomerType
 from app.models.customer_timeline import CustomerTimeline
 from app.models.forecast import DemandForecast, ForecastHistory, ForecastPeriodType, RecommendationType
 from app.models.invoice_sequence import InvoiceSequence
+from app.models.import_history import ImportHistory, ImportError, ImportStatus, ImportType
 
 __all__ = [
     "Company",
@@ -45,4 +46,8 @@ __all__ = [
     "ForecastPeriodType",
     "RecommendationType",
     "InvoiceSequence",
+    "ImportHistory",
+    "ImportError",
+    "ImportStatus",
+    "ImportType",
 ]

@@ -13,6 +13,13 @@ from app.schemas.dashboard import DashboardOverview, MetricCard, ChannelBreakdow
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryResponse
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from app.schemas.sale import SaleCreate, SaleUpdate, SaleResponse, SaleItemResponse, SaleSummaryResponse, SaleListItemResponse
+from app.schemas.import_ import (
+    ImportHistoryResponse,
+    ImportErrorResponse,
+    ImportPreviewResponse,
+    ImportResultResponse,
+    ImportProcessResponse,
+)
 
 __all__ = [
     "CompanyCreate",
@@ -44,4 +51,9 @@ __all__ = [
     "SaleItemResponse",
     "SaleListItemResponse",
     "SaleSummaryResponse",
+    "ImportHistoryResponse",
+    "ImportErrorResponse",
+    "ImportPreviewResponse",
+    "ImportResultResponse",
+    "ImportProcessResponse",
 ]

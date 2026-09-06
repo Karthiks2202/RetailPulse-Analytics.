@@ -28,3 +28,4 @@ class Company(Base):
     customer_timelines = relationship("CustomerTimeline", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")
     demand_forecasts = relationship("DemandForecast", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")
     invoice_sequences = relationship("InvoiceSequence", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")
+    imports = relationship("ImportHistory", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")

@@ -20,6 +20,7 @@ import {
   People as PeopleIcon,
   Timeline as TimelineIcon,
   TrendingUp as TrendingUpIcon,
+  CloudUpload as CloudUploadIcon,
 } from '@mui/icons-material';
 import { NotificationBell } from './NotificationBell';
 import { useQueryClient } from '@tanstack/react-query';
@@ -37,6 +38,7 @@ const NAV_ITEMS = [
   { to: '/categories',label: 'Categories', Icon: CategoryIcon, adminOnly: true },
   { to: '/customers', label: 'Customers',  Icon: PeopleIcon, adminOnly: true },
   { to: '/sales',     label: 'Sales',      Icon: ReceiptIcon, adminOnly: true },
+  { to: '/data-import', label: 'Data Import', Icon: CloudUploadIcon, adminOnly: true },
 ];
 
 export const DashboardLayout: React.FC = () => {

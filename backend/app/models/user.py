@@ -37,3 +37,4 @@ class User(Base):
     stock_movements = relationship("StockMovement", back_populates="user", lazy="raise_on_sql")
     inventory_adjustments = relationship("InventoryAdjustment", back_populates="adjusted_by_user", lazy="raise_on_sql")
     customer_timelines = relationship("CustomerTimeline", back_populates="user", cascade="all, delete-orphan", lazy="raise_on_sql")
+    imports = relationship("ImportHistory", back_populates="uploaded_by_user", lazy="raise_on_sql")
