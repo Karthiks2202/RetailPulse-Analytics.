@@ -24,8 +24,8 @@ class ImportHistoryResponse(BaseModel):
 
 
 class ImportErrorResponse(BaseModel):
-    id: UUID
-    import_id: UUID
+    id: Optional[UUID] = None
+    import_id: Optional[UUID] = None
     row_number: int
     field: Optional[str] = None
     error_message: str

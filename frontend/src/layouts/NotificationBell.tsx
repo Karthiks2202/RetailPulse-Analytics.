@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Notifications as NotificationsIcon, CheckCircle as CheckIcon, Warning as WarningIcon, Error as ErrorIcon } from '@mui/icons-material';
 import { getNotifications, getUnreadCount, markAsRead, markAllAsRead, type Notification } from '../api/notificationsApi';
+import { useAuth } from '../context/AuthContext';
 
 export const NotificationBell: React.FC = () => {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
@@ -11,13 +13,14 @@ export const NotificationBell: React.FC = () => {
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['notifications', 'unreadCount'],
     queryFn: getUnreadCount,
+    enabled: !!user,
     refetchInterval: 30000, // refresh every 30s
   });
 
   const { data: notificationsData, isLoading } = useQuery({
     queryKey: ['notifications', 'list'],
     queryFn: () => getNotifications({ limit: 10 }),
-    enabled: open,
+    enabled: !!user && open,
   });
 
   const markReadMutation = useMutation({

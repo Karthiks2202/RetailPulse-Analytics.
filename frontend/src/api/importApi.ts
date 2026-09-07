@@ -21,8 +21,8 @@ export interface ImportHistoryItem {
 }
 
 export interface ImportErrorItem {
-  id: string;
-  import_id: string;
+  id?: string;
+  import_id?: string;
   row_number: number;
   field: string | null;
   error_message: string;

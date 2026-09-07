@@ -31,7 +31,7 @@ class CRUDImportHistory:
         if status:
             query = query.where(ImportHistory.status == status)
 
-        count_query = select(func.count(ImportHistory.id)).select_from(query.subquery())
+        count_query = select(func.count()).select_from(query.subquery())
         total = (await db.execute(count_query)).scalar() or 0
 
         query = query.order_by(ImportHistory.created_at.desc()).offset(skip).limit(limit)

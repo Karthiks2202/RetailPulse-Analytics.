@@ -28,7 +28,7 @@ class ImportValidationError(Exception):
 class ImportService:
     IMPORT_CONFIG = {
         ImportType.PRODUCTS: {
-            "required_columns": ["Product Name", "SKU", "Category", "Unit Price", "Stock Quantity"],
+            "required_columns": ["Product Name", "SKU", "Unit Price"],
             "column_map": {
                 "Product Name": "product_name",
                 "SKU": "sku",
@@ -36,13 +36,25 @@ class ImportService:
                 "Unit Price": "unit_price",
                 "Stock Quantity": "stock_quantity",
             },
+            "aliases": {
+                "product_name": ["product name", "product_name", "productname", "name", "title", "product", "item name", "item_name", "item", "description", "product title"],
+                "sku": ["sku", "product sku", "item sku", "code", "product code", "item code", "id", "product id"],
+                "category": ["category", "category name", "cat", "group", "type"],
+                "unit_price": ["unit price", "unit_price", "price", "cost", "unit cost", "rate", "selling price", "amount"],
+                "stock_quantity": ["stock quantity", "stock_quantity", "stock", "quantity", "qty", "count", "inventory", "stock level"],
+            },
         },
         ImportType.CUSTOMERS: {
-            "required_columns": ["Name", "Email", "Phone"],
+            "required_columns": ["Name"],
             "column_map": {
                 "Name": "name",
                 "Email": "email",
                 "Phone": "phone",
+            },
+            "aliases": {
+                "name": ["name", "customer name", "customer_name", "full name", "client name", "client", "contact name", "customer", "first name"],
+                "email": ["email", "email address", "email_address", "mail", "e mail"],
+                "phone": ["phone", "phone number", "phone_number", "mobile", "contact", "tel", "telephone", "cell"],
             },
         },
         ImportType.SALES: {
@@ -54,6 +66,13 @@ class ImportService:
                 "Unit Price": "unit_price",
                 "Sale Date": "sale_date",
             },
+            "aliases": {
+                "customer": ["customer", "customer name", "customer_name", "client", "client name", "buyer"],
+                "product": ["product", "product name", "product_name", "item", "item name", "title"],
+                "quantity": ["quantity", "qty", "count", "amount", "units", "items count"],
+                "unit_price": ["unit price", "unit_price", "price", "rate", "unit cost", "selling price"],
+                "sale_date": ["sale date", "sale_date", "date", "transaction date", "created at", "timestamp", "order date"],
+            },
         },
     }
 
@@ -61,6 +80,28 @@ class ImportService:
         self.db = db
         self.company_id = company_id
         self.uploaded_by = uploaded_by
+
+    @staticmethod
+    def _clean_header(name: str) -> str:
+        if not name:
+            return ""
+        cleaned = name.strip().strip('"').strip("'").lstrip("\ufeff").lower()
+        cleaned = re.sub(r"[^a-z0-9]+", " ", cleaned)
+        return re.sub(r"\s+", " ", cleaned).strip()
+
+    def _find_matching_header(self, import_type: ImportType, target_req: str, columns: list[str]) -> str | None:
+        target_clean = self._clean_header(target_req)
+        clean_cols = {self._clean_header(c): c for c in columns if c}
+        if target_clean in clean_cols:
+            return clean_cols[target_clean]
+
+        field = self.IMPORT_CONFIG[import_type]["column_map"].get(target_req)
+        aliases = self.IMPORT_CONFIG[import_type].get("aliases", {}).get(field, [])
+        for alias in aliases:
+            alias_clean = self._clean_header(alias)
+            if alias_clean in clean_cols:
+                return clean_cols[alias_clean]
+        return None
 
     async def create_import_history(self, import_type: ImportType, filename: str, total_records: int) -> ImportHistory:
         return await import_history_crud.create(self.db, self.company_id, import_type, filename, self.uploaded_by, total_records)
@@ -86,30 +127,62 @@ class ImportService:
 
     def parse_csv(self, file_content: bytes) -> tuple[list[str], list[dict[str, str]]]:
         try:
-            text = file_content.decode("utf-8")
+            text = file_content.decode("utf-8-sig")
         except UnicodeDecodeError:
             try:
                 text = file_content.decode("latin-1")
             except UnicodeDecodeError:
                 text = file_content.decode("utf-8", errors="replace")
 
-        reader = csv.DictReader(io.StringIO(text))
-        columns = reader.fieldnames or []
-        rows = [dict(row) for row in reader]
+        lines = [line for line in text.splitlines() if line.strip()]
+        if not lines:
+            return [], []
+
+        sample = "\n".join(lines[:10])
+        delimiter = ","
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+            delimiter = dialect.delimiter
+        except Exception:
+            header_line = lines[0]
+            if ";" in header_line and "," not in header_line:
+                delimiter = ";"
+            elif "\t" in header_line:
+                delimiter = "\t"
+            elif "|" in header_line:
+                delimiter = "|"
+
+        reader = csv.DictReader(io.StringIO("\n".join(lines)), delimiter=delimiter)
+        columns = [c.strip().strip('"').strip("'").lstrip("\ufeff") for c in (reader.fieldnames or []) if c]
+        rows = []
+        for r in reader:
+            clean_r = {}
+            for k, v in r.items():
+                if k:
+                    clean_k = k.strip().strip('"').strip("'").lstrip("\ufeff")
+                    clean_r[clean_k] = v.strip() if isinstance(v, str) else ""
+            rows.append(clean_r)
         return columns, rows
 
     def validate_columns(self, import_type: ImportType, columns: list[str]) -> None:
         required = self.IMPORT_CONFIG[import_type]["required_columns"]
-        normalized = [c.strip() for c in columns]
+        missing = []
         for col in required:
-            if col not in normalized:
-                raise ValueError(f"Missing required column: {col}")
+            matched = self._find_matching_header(import_type, col, columns)
+            if not matched:
+                field = self.IMPORT_CONFIG[import_type]["column_map"].get(col)
+                aliases = self.IMPORT_CONFIG[import_type].get("aliases", {}).get(field, [])
+                missing.append(f"'{col}' (accepted names: {', '.join(aliases[:4])})")
+        if missing:
+            raise ValueError(f"Missing required column: {'; '.join(missing)}")
 
     def normalize_row(self, import_type: ImportType, row: dict[str, str]) -> dict[str, Any]:
         column_map = self.IMPORT_CONFIG[import_type]["column_map"]
         normalized: dict[str, Any] = {}
+        columns = list(row.keys())
         for csv_col, field in column_map.items():
-            value = row.get(csv_col, "").strip()
+            matched_header = self._find_matching_header(import_type, csv_col, columns)
+            value = row.get(matched_header, "").strip() if matched_header else ""
             normalized[field] = value
         return normalized
 
@@ -238,12 +311,31 @@ class ImportService:
 
     async def validate_import(self, import_type: ImportType, file_content: bytes, filename: str) -> dict:
         columns, rows = self.parse_csv(file_content)
+        errors: list[dict[str, Any]] = []
+
         try:
             self.validate_columns(import_type, columns)
         except ValueError as e:
-            raise ValueError(str(e))
+            errors.append({
+                "row_number": 1,
+                "field": "Header",
+                "error_message": str(e),
+                "raw_data": f"Columns found: {', '.join(columns)}" if columns else "Empty file or no columns found",
+            })
+            return {
+                "import_id": "00000000-0000-0000-0000-000000000000",
+                "import_type": import_type.value,
+                "filename": filename,
+                "total_records": len(rows),
+                "columns": columns,
+                "preview_rows": [],
+                "valid_records": 0,
+                "invalid_records": len(rows) or 1,
+                "duplicate_records": 0,
+                "errors": errors,
+                "status": "FAILED",
+            }
 
-        errors: list[dict[str, Any]] = []
         valid_rows = 0
         duplicate_rows = 0
         invalid_rows = 0
@@ -351,17 +443,40 @@ class ImportService:
             "errors": errors,
         }
 
+    async def _get_or_create_category_id(self, category_name: str) -> UUID | None:
+        if not category_name:
+            return None
+        from app.models.category import Category
+        clean_target = self._clean_header(category_name)
+        result = await self.db.execute(select(Category).where(Category.company_id == self.company_id))
+        categories = result.scalars().all()
+        for cat in categories:
+            if self._clean_header(cat.name) == clean_target:
+                return cat.id
+
+        new_cat = Category(
+            company_id=self.company_id,
+            name=category_name.strip(),
+            description="",
+            status="ACTIVE",
+        )
+        self.db.add(new_cat)
+        await self.db.flush()
+        return new_cat.id
+
     async def _insert_product(self, normalized: dict[str, Any]) -> None:
         from app.crud.product import product as product_crud
         sku = normalized["sku"]
+        category_name = normalized.get("category", "")
+        category_id = await self._get_or_create_category_id(category_name) if category_name else None
         product = Product(
             company_id=self.company_id,
             name=normalized["product_name"],
             sku=sku,
-            category_id=None,
+            category_id=category_id,
             unit_price=Decimal(str(normalized.get("unit_price", "0"))),
             cost_price=Decimal(str(normalized.get("unit_price", "0"))),
-            stock_quantity=int(normalized.get("stock_quantity", "0")),
+            stock_quantity=int(normalized.get("stock_quantity", "0")) if normalized.get("stock_quantity") else 0,
             low_stock_threshold=5,
             lead_time_days=7,
             unit_of_measure="PCS",

@@ -87,8 +87,6 @@ async def validate_import(
     service = ImportService(db, current_user.company_id, current_user.id)
     try:
         result = await service.validate_import(itype, content, file.filename)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Validation failed")
 

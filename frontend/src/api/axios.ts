@@ -18,9 +18,18 @@ const setAuthHeader = (headers: any, token: string) => {
   }
 };
 
-// Attach access token to outgoing requests
+// Attach access token to outgoing requests and handle FormData headers
 axiosInstance.interceptors.request.use(
   (config) => {
+    if (config.data instanceof FormData) {
+      if (typeof config.headers.delete === 'function') {
+        config.headers.delete('Content-Type');
+        config.headers.delete('content-type');
+      } else if (config.headers) {
+        delete config.headers['Content-Type'];
+        delete config.headers['content-type'];
+      }
+    }
     const token = localStorage.getItem('accessToken');
     if (token) {
       setAuthHeader(config.headers, token);

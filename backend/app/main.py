@@ -13,10 +13,35 @@ from app.middleware.error_handler import (
 )
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
+import asyncio
+import subprocess
+from contextlib import asynccontextmanager
+
 from app.services.scheduler import scheduler
 
+def run_migrations():
+    alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
+    try:
+        subprocess.run(["alembic", "-c", str(alembic_ini), "upgrade", "head"], check=True, capture_output=True)
+    except Exception:
+        pass
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await asyncio.to_thread(run_migrations)
+    if not scheduler.running:
+        scheduler.start()
+    try:
+        yield
+    finally:
+        if scheduler.running:
+            try:
+                scheduler.shutdown(wait=False)
+            except Exception:
+                pass
+
 def create_app() -> FastAPI:
-    application = FastAPI(title=settings.APP_NAME, version="1.0.0")
+    application = FastAPI(title=settings.APP_NAME, version="1.0.0", lifespan=lifespan)
 
     application.add_exception_handler(RetailPulseException, retailpulse_exception_handler)
     application.add_exception_handler(RequestValidationError, validation_exception_handler)
@@ -38,17 +63,6 @@ def create_app() -> FastAPI:
     @application.get("/health")
     async def health():
         return {"status": "ok"}
-
-    @application.on_event("startup")
-    async def on_startup():
-        import subprocess
-        alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
-        subprocess.run(["alembic", "-c", str(alembic_ini), "upgrade", "head"], check=True)
-        scheduler.start()
-
-    @application.on_event("shutdown")
-    async def on_shutdown():
-        scheduler.shutdown()
 
     return application
 

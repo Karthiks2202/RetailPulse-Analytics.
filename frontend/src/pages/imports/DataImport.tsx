@@ -30,8 +30,8 @@ const IMPORT_TYPES: { value: ImportType; label: string }[] = [
 ];
 
 const REQUIRED_COLUMNS: Record<ImportType, string[]> = {
-  PRODUCTS: ['Product Name', 'SKU', 'Category', 'Unit Price', 'Stock Quantity'],
-  CUSTOMERS: ['Name', 'Email', 'Phone'],
+  PRODUCTS: ['Product Name', 'SKU', 'Unit Price'],
+  CUSTOMERS: ['Name'],
   SALES: ['Customer', 'Product', 'Quantity', 'Unit Price', 'Sale Date'],
 };
 
@@ -148,6 +148,30 @@ export const DataImport: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const downloadSampleTemplate = () => {
+    let content = '';
+    let filename = '';
+    if (importType === 'PRODUCTS') {
+      content = 'Product Name,SKU,Category,Unit Price,Stock Quantity\nWireless Mouse,SKU-1001,Electronics,25.99,150\nMechanical Keyboard,SKU-1002,Electronics,89.50,45\nErgonomic Chair,SKU-1003,Furniture,199.00,20';
+      filename = 'sample_products_template.csv';
+    } else if (importType === 'CUSTOMERS') {
+      content = 'Name,Email,Phone\nJohn Doe,john.doe@example.com,+15550100\nJane Smith,jane.smith@example.com,+15550101\nTech Corp,contact@techcorp.com,+15550102';
+      filename = 'sample_customers_template.csv';
+    } else {
+      content = 'Customer,Product,Quantity,Unit Price,Sale Date\nJohn Doe,Wireless Mouse,2,25.99,2026-09-01\nJane Smith,Mechanical Keyboard,1,89.50,2026-09-02';
+      filename = 'sample_sales_template.csv';
+    }
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (!isAdmin) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -184,7 +208,17 @@ export const DataImport: React.FC = () => {
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-slate-400 mt-2 font-medium">Required columns: {REQUIRED_COLUMNS[importType].join(', ')}</p>
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+              <p className="text-[11px] text-slate-400 font-medium">Required columns: {REQUIRED_COLUMNS[importType].join(', ')}</p>
+              <button
+                type="button"
+                onClick={downloadSampleTemplate}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+              >
+                <DownloadIcon style={{ fontSize: 14 }} />
+                Download Sample CSV Template
+              </button>
+            </div>
           </div>
 
           <div>
@@ -214,9 +248,17 @@ export const DataImport: React.FC = () => {
 
           <div className="flex justify-end gap-3">
             <button
+              type="button"
+              onClick={downloadSampleTemplate}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+            >
+              <DownloadIcon style={{ fontSize: 16 }} />
+              Download Template
+            </button>
+            <button
               onClick={handleValidate}
               disabled={!selectedFile || validateMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-60 transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-60 transition-all shadow-md shadow-indigo-500/20"
             >
               <VisibilityIcon style={{ fontSize: 16 }} />
               {validateMutation.isPending ? 'Validating...' : 'Validate & Preview'}
