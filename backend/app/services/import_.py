@@ -259,9 +259,6 @@ class ImportService:
                 raise ImportValidationError(row_number, "product", "Product is required", str(normalized_row))
             if not invoice_number:
                 raise ImportValidationError(row_number, "invoice_number", "Invoice Number is required", str(normalized_row))
-            if invoice_number in existing_invoices:
-                raise DuplicateRecordError(row_number, "invoice_number", f"Duplicate invoice number: {invoice_number}", str(normalized_row))
-            existing_invoices.add(invoice_number)
 
             try:
                 quantity = int(quantity_raw)
@@ -463,34 +460,59 @@ class ImportService:
         failed = 0
         batch_size = 50
 
-        for batch_start in range(0, len(valid_rows), batch_size):
-            batch = valid_rows[batch_start:batch_start + batch_size]
-            try:
-                for original_idx, normalized in batch:
-                    if import_type == ImportType.PRODUCTS:
-                        await self._insert_product(normalized)
-                    elif import_type == ImportType.CUSTOMERS:
-                        await self._insert_customer(normalized)
-                    elif import_type == ImportType.SALES:
-                        await self._insert_sale(normalized, customer_names, product_names)
-                await self.db.commit()
-                successful += len(batch)
-            except Exception as e:
-                await self.db.rollback()
-                failed += len(batch)
-                logger.exception("Batch insert failed during import")
-                for original_idx, normalized in batch:
-                    errors.append({
-                        "row_number": original_idx,
-                        "field": None,
-                        "error_message": "Unable to process this record. Please check the data and try again.",
-                        "raw_data": str(normalized),
-                    })
+        if import_type == ImportType.SALES:
+            sales_groups: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+            for original_idx, normalized in valid_rows:
+                inv_num = normalized.get("invoice_number", f"AUTO_GRP_{original_idx}")
+                sales_groups.setdefault(inv_num, []).append((original_idx, normalized))
 
-            await import_history_crud.update_status(
-                self.db, history, ImportStatus.PROCESSING,
-                successful, failed, duplicates, commit=True
-            )
+            for inv_num, items_group in sales_groups.items():
+                try:
+                    await self._insert_sales_group(inv_num, items_group, customer_names, product_names)
+                    await self.db.commit()
+                    successful += len(items_group)
+                except Exception as e:
+                    await self.db.rollback()
+                    failed += len(items_group)
+                    logger.exception(f"Failed to import sales group for invoice {inv_num}")
+                    for original_idx, normalized in items_group:
+                        errors.append({
+                            "row_number": original_idx,
+                            "field": None,
+                            "error_message": "Unable to process this record. Please check the data and try again.",
+                            "raw_data": str(normalized),
+                        })
+                await import_history_crud.update_status(
+                    self.db, history, ImportStatus.PROCESSING,
+                    successful, failed, duplicates, commit=True
+                )
+        else:
+            for batch_start in range(0, len(valid_rows), batch_size):
+                batch = valid_rows[batch_start:batch_start + batch_size]
+                try:
+                    for original_idx, normalized in batch:
+                        if import_type == ImportType.PRODUCTS:
+                            await self._insert_product(normalized)
+                        elif import_type == ImportType.CUSTOMERS:
+                            await self._insert_customer(normalized)
+                    await self.db.commit()
+                    successful += len(batch)
+                except Exception as e:
+                    await self.db.rollback()
+                    failed += len(batch)
+                    logger.exception("Batch insert failed during import")
+                    for original_idx, normalized in batch:
+                        errors.append({
+                            "row_number": original_idx,
+                            "field": None,
+                            "error_message": "Unable to process this record. Please check the data and try again.",
+                            "raw_data": str(normalized),
+                        })
+
+                await import_history_crud.update_status(
+                    self.db, history, ImportStatus.PROCESSING,
+                    successful, failed, duplicates, commit=True
+                )
 
         for error in errors:
             await import_history_crud.add_error(self.db, history.id, error["row_number"], error["error_message"], error.get("field"), error.get("raw_data"), commit=False)
@@ -579,25 +601,20 @@ class ImportService:
         self.db.add(customer)
         await self.db.flush()
 
-    async def _insert_sale(self, normalized: dict[str, Any], customer_names: dict[str, UUID], product_names: dict[str, UUID]) -> None:
+    async def _insert_sales_group(self, inv_num: str, items_group: list[tuple[int, dict[str, Any]]], customer_names: dict[str, UUID], product_names: dict[str, UUID]) -> None:
         from app.models.sale import SalesChannel, PaymentMethod, SaleStatus, PaymentStatus, SaleItem, InvoiceSequence
         from app.models.product import Product
         from decimal import Decimal
-        customer_name = normalized["customer"]
-        product_name = normalized["product"]
-        quantity = int(normalized["quantity"])
-        unit_price = Decimal(str(normalized["unit_price"]))
-        sale_date_raw = normalized["sale_date"]
 
+        first_norm = items_group[0][1]
+        customer_name = first_norm["customer"]
+        sale_date_raw = first_norm["sale_date"]
         customer_id = customer_names.get(customer_name)
-        product_id = product_names.get(product_name)
-        if not customer_id or not product_id:
-            raise ImportValidationError(0, None, "Invalid customer or product", str(normalized))
-
         sale_date = datetime.strptime(sale_date_raw, "%Y-%m-%d")
 
-        invoice_number = normalized.get("invoice_number")
-        if not invoice_number:
+        existing_db_invoices = await self._get_existing_invoices()
+        invoice_number = inv_num
+        if not invoice_number or invoice_number in existing_db_invoices or invoice_number.startswith("AUTO_GRP_"):
             year = datetime.utcnow().year
             prefix = f"IMP-{year}-"
             result = await self.db.execute(
@@ -613,6 +630,35 @@ class ImportService:
             sequence.last_invoice_number += 1
             invoice_number = f"{prefix}{sequence.last_invoice_number:06d}"
 
+        sale_items = []
+        total_amount = Decimal("0")
+
+        for original_idx, normalized in items_group:
+            product_name = normalized["product"]
+            product_id = product_names.get(product_name)
+            quantity = int(normalized["quantity"])
+            unit_price = Decimal(str(normalized["unit_price"]))
+            discount = Decimal(str(normalized.get("discount", "0"))) if normalized.get("discount") else Decimal("0")
+            tax = Decimal(str(normalized.get("tax", "0"))) if normalized.get("tax") else Decimal("0")
+
+            item_total = (unit_price * quantity) - discount + tax
+            total_amount += item_total
+
+            sale_items.append(SaleItem(
+                product_id=product_id,
+                quantity=quantity,
+                unit_price=float(unit_price),
+                discount=float(discount),
+                tax=float(tax),
+                total=float(item_total),
+            ))
+
+            if product_id:
+                product = await self.db.get(Product, product_id)
+                if product:
+                    product.stock_quantity = max((product.stock_quantity or 0) - quantity, 0)
+                    self.db.add(product)
+
         sale = Sale(
             company_id=self.company_id,
             invoice_number=invoice_number,
@@ -623,20 +669,9 @@ class ImportService:
             payment_method=PaymentMethod.CASH,
             payment_status=PaymentStatus.PAID,
             status=SaleStatus.COMPLETED,
-            total_amount=float(unit_price) * quantity,
+            total_amount=float(total_amount),
+            created_by=self.uploaded_by,
+            items=sale_items,
         )
-        sale.items.append(SaleItem(
-            product_id=product_id,
-            quantity=quantity,
-            unit_price=float(unit_price),
-            discount=0.0,
-            tax=0.0,
-            total=float(unit_price) * quantity,
-        ))
         self.db.add(sale)
         await self.db.flush()
-
-        product = await self.db.get(Product, product_id)
-        if product:
-            product.stock_quantity = max((product.stock_quantity or 0) - quantity, 0)
-            self.db.add(product)
