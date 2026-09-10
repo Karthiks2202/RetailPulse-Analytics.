@@ -82,18 +82,32 @@ export const getImportErrors = async (importId: string): Promise<ImportErrorItem
   return data;
 };
 
-export const validateImport = async (importType: ImportType, file: File): Promise<ImportPreviewResponse> => {
+export const uploadImport = async (importType: ImportType, file: File): Promise<ImportUploadResponse> => {
   const form = new FormData();
   form.append('import_type', importType);
   form.append('file', file);
+  const { data } = await axiosInstance.post('/import/upload', form);
+  return data;
+};
+
+export const validateImport = async (importType: ImportType, file: File, importId?: string): Promise<ImportPreviewResponse> => {
+  const form = new FormData();
+  form.append('import_type', importType);
+  form.append('file', file);
+  if (importId) {
+    form.append('import_id', importId);
+  }
   const { data } = await axiosInstance.post('/import/validate', form);
   return data;
 };
 
-export const processImport = async (importType: ImportType, file: File): Promise<ImportResultResponse> => {
+export const processImport = async (importType: ImportType, file: File, importId?: string): Promise<ImportResultResponse> => {
   const form = new FormData();
   form.append('import_type', importType);
   form.append('file', file);
+  if (importId) {
+    form.append('import_id', importId);
+  }
   const { data } = await axiosInstance.post('/import/process', form);
   return data;
 };

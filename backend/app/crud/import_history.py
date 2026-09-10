@@ -6,7 +6,7 @@ from app.models.import_history import ImportHistory, ImportError, ImportStatus, 
 
 
 class CRUDImportHistory:
-    async def create(self, db: AsyncSession, company_id: UUID, import_type: ImportType, filename: str, uploaded_by: Optional[UUID], total_records: int = 0) -> ImportHistory:
+    async def create(self, db: AsyncSession, company_id: UUID, import_type: ImportType, filename: str, uploaded_by: Optional[UUID], total_records: int = 0, commit: bool = True) -> ImportHistory:
         history = ImportHistory(
             company_id=company_id,
             import_type=import_type,
@@ -16,8 +16,12 @@ class CRUDImportHistory:
             status=ImportStatus.PENDING,
         )
         db.add(history)
-        await db.commit()
-        await db.refresh(history)
+        if commit:
+            await db.commit()
+            await db.refresh(history)
+        else:
+            await db.flush()
+            await db.refresh(history)
         return history
 
     async def get(self, db: AsyncSession, import_id: UUID, company_id: UUID) -> ImportHistory | None:
@@ -38,7 +42,7 @@ class CRUDImportHistory:
         result = await db.execute(query)
         return list(result.scalars().all()), total
 
-    async def update_status(self, db: AsyncSession, history: ImportHistory, status: ImportStatus, successful: int = 0, failed: int = 0, duplicates: int = 0) -> ImportHistory:
+    async def update_status(self, db: AsyncSession, history: ImportHistory, status: ImportStatus, successful: int = 0, failed: int = 0, duplicates: int = 0, commit: bool = True) -> ImportHistory:
         history.status = status
         history.successful_records = successful
         history.failed_records = failed
@@ -46,11 +50,15 @@ class CRUDImportHistory:
         if status in (ImportStatus.COMPLETED, ImportStatus.COMPLETED_WITH_ERRORS, ImportStatus.FAILED):
             history.completed_at = __import__('datetime').datetime.utcnow()
         db.add(history)
-        await db.commit()
-        await db.refresh(history)
+        if commit:
+            await db.commit()
+            await db.refresh(history)
+        else:
+            await db.flush()
+            await db.refresh(history)
         return history
 
-    async def add_error(self, db: AsyncSession, import_id: UUID, row_number: int, error_message: str, field: Optional[str] = None, raw_data: Optional[str] = None) -> ImportError:
+    async def add_error(self, db: AsyncSession, import_id: UUID, row_number: int, error_message: str, field: Optional[str] = None, raw_data: Optional[str] = None, commit: bool = True) -> ImportError:
         error = ImportError(
             import_id=import_id,
             row_number=row_number,
@@ -59,8 +67,12 @@ class CRUDImportHistory:
             raw_data=raw_data,
         )
         db.add(error)
-        await db.commit()
-        await db.refresh(error)
+        if commit:
+            await db.commit()
+            await db.refresh(error)
+        else:
+            await db.flush()
+            await db.refresh(error)
         return error
 
     async def get_errors(self, db: AsyncSession, import_id: UUID, company_id: UUID) -> List["ImportError"]:

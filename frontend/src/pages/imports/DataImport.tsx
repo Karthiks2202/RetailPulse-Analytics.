@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 import {
   getImportHistory,
+  uploadImport,
   validateImport,
   processImport,
   type ImportPreviewResponse,
@@ -30,8 +31,8 @@ const IMPORT_TYPES: { value: ImportType; label: string }[] = [
 ];
 
 const REQUIRED_COLUMNS: Record<ImportType, string[]> = {
-  PRODUCTS: ['Product Name', 'SKU', 'Unit Price'],
-  CUSTOMERS: ['Name'],
+  PRODUCTS: ['Product Name', 'SKU', 'Category', 'Unit Price', 'Stock Quantity'],
+  CUSTOMERS: ['Name', 'Email', 'Phone'],
   SALES: ['Customer', 'Product', 'Quantity', 'Unit Price', 'Sale Date'],
 };
 
@@ -54,6 +55,7 @@ export const DataImport: React.FC = () => {
   const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
   const [result, setResult] = useState<ImportResultResponse | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [uploadedImportId, setUploadedImportId] = useState<string | null>(null);
 
   const isAdmin = user?.role === 'COMPANY_ADMIN' || user?.role === 'SUPER_ADMIN';
 
@@ -63,12 +65,24 @@ export const DataImport: React.FC = () => {
     enabled: isAdmin,
   });
 
+  const { data: currentImportData } = useQuery({
+    queryKey: ['currentImport', uploadedImportId],
+    queryFn: () => getImportDetail(uploadedImportId!),
+    enabled: isImporting && !!uploadedImportId,
+    refetchInterval: 1000,
+  });
+
   const validateMutation = useMutation<ImportPreviewResponse, Error, File>({
-    mutationFn: (file: File) => validateImport(importType, file),
+    mutationFn: async (file: File) => {
+      const uploadData = await uploadImport(importType, file);
+      const previewData = await validateImport(importType, file, uploadData.import_id);
+      setUploadedImportId(uploadData.import_id);
+      return previewData;
+    },
     onSuccess: (data) => {
       setPreview(data);
       setPhase('preview');
-      showNotification('Validation complete. Review the preview below.', 'success');
+      showNotification('Upload and validation complete. Review the preview below.', 'success');
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.detail || 'Validation failed';
@@ -77,7 +91,7 @@ export const DataImport: React.FC = () => {
   });
 
   const processMutation = useMutation<ImportResultResponse, Error, File>({
-    mutationFn: (file: File) => processImport(importType, file),
+    mutationFn: (file: File) => processImport(importType, file, uploadedImportId || undefined),
     onSuccess: (data) => {
       setResult(data);
       setPhase('result');
@@ -123,10 +137,16 @@ export const DataImport: React.FC = () => {
     }
   };
 
+  const currentImport = currentImportData as ImportHistoryItem | undefined;
+  const processedRecords = (currentImport?.successful_records || 0) + (currentImport?.failed_records || 0);
+  const totalRecords = currentImport?.total_records || preview?.total_records || 0;
+  const progressPercentage = totalRecords > 0 ? Math.round((processedRecords / totalRecords) * 100) : 0;
+
   const handleReset = () => {
     setSelectedFile(null);
     setPreview(null);
     setResult(null);
+    setUploadedImportId(null);
     setPhase('select');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -255,14 +275,14 @@ export const DataImport: React.FC = () => {
               <DownloadIcon style={{ fontSize: 16 }} />
               Download Template
             </button>
-            <button
-              onClick={handleValidate}
-              disabled={!selectedFile || validateMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-60 transition-all shadow-md shadow-indigo-500/20"
-            >
-              <VisibilityIcon style={{ fontSize: 16 }} />
-              {validateMutation.isPending ? 'Validating...' : 'Validate & Preview'}
-            </button>
+              <button
+                onClick={handleValidate}
+                disabled={!selectedFile || validateMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-60 transition-all shadow-md shadow-indigo-500/20"
+              >
+                <VisibilityIcon style={{ fontSize: 16 }} />
+                {validateMutation.isPending ? 'Uploading & Validating...' : 'Upload & Preview'}
+              </button>
           </div>
         </div>
       )}
@@ -350,18 +370,37 @@ export const DataImport: React.FC = () => {
               </div>
             )}
 
-            <div className="flex justify-end gap-3">
-              <button onClick={handleReset} className="px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-                Cancel
-              </button>
-              <button
-                onClick={handleProcess}
-                disabled={isImporting || preview.valid_records === 0}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-xs font-bold shadow-md shadow-indigo-500/10 hover:bg-indigo-700 disabled:opacity-60 transition-all"
-              >
-                <PlayIcon style={{ fontSize: 16 }} />
-                {isImporting ? 'Importing...' : `Import ${preview.valid_records} Valid Records`}
-              </button>
+            <div className="space-y-3">
+              {isImporting && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Processing Import...</span>
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{progressPercentage}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-600 transition-all duration-300"
+                      style={{ width: `${progressPercentage}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                    {processedRecords} / {totalRecords} records processed
+                  </p>
+                </div>
+              )}
+              <div className="flex justify-end gap-3">
+                <button onClick={handleReset} className="px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleProcess}
+                  disabled={isImporting || preview.valid_records === 0}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-xs font-bold shadow-md shadow-indigo-500/10 hover:bg-indigo-700 disabled:opacity-60 transition-all"
+                >
+                  <PlayIcon style={{ fontSize: 16 }} />
+                  {isImporting ? 'Importing...' : `Import ${preview.valid_records} Valid Records`}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import Optional
 import os
+import logging
 from uuid import UUID
 
 from app.database import get_db
@@ -11,6 +12,8 @@ from app.schemas.import_ import ImportHistoryResponse, ImportErrorResponse, Impo
 from app.services.import_ import ImportService, ImportValidationError
 from app.utils.dependencies import get_current_active_user
 from app.services.audit import audit_service
+
+logger = logging.getLogger("retailpulse")
 
 router = APIRouter(prefix="/import", tags=["import"])
 
@@ -52,7 +55,8 @@ async def upload_file(
         columns, rows = service.parse_csv(content)
         service.validate_columns(itype, columns)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning(f"Validation error during upload: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file format or content")
 
     history = await service.create_import_history(itype, file.filename, len(rows))
     await audit_service.log(db, current_user.company_id, current_user.id, "Import Uploaded", request, entity_name=file.filename, details=f"Uploaded {itype.value} import with {len(rows)} records")
@@ -68,6 +72,7 @@ async def upload_file(
 @router.post("/validate", response_model=ImportPreviewResponse)
 async def validate_import(
     import_type: str = Form(...),
+    import_id: str = Form(None),
     file: UploadFile = File(...),
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
@@ -85,8 +90,9 @@ async def validate_import(
 
     content = await file.read()
     service = ImportService(db, current_user.company_id, current_user.id)
+    parsed_id = UUID(import_id) if import_id else None
     try:
-        result = await service.validate_import(itype, content, file.filename)
+        result = await service.validate_import(itype, content, file.filename, parsed_id)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Validation failed")
 
@@ -96,6 +102,7 @@ async def validate_import(
 @router.post("/process", response_model=ImportResultResponse)
 async def process_import(
     import_type: str = Form(...),
+    import_id: str = Form(None),
     file: UploadFile = File(...),
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
@@ -113,10 +120,12 @@ async def process_import(
 
     content = await file.read()
     service = ImportService(db, current_user.company_id, current_user.id)
+    parsed_id = UUID(import_id) if import_id else None
     try:
-        result = await service.process_import(itype, content, file.filename)
+        result = await service.process_import(itype, content, file.filename, parsed_id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning(f"Validation error during process: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file format or content")
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Import failed")
 

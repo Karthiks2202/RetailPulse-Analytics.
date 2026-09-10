@@ -47,13 +47,15 @@ def test_parse_csv_tab_delimiter():
 def test_validate_columns_with_aliases():
     service = ImportService(AsyncMock(), uuid4(), uuid4())
     # Alternate product column names
-    cols = ["Name", "Product Code", "Price"]
+    cols = ["Name", "Product Code", "Category", "Price", "Stock"]
     service.validate_columns(ImportType.PRODUCTS, cols)  # Should not raise
 
-    norm = service.normalize_row(ImportType.PRODUCTS, {"Name": "Smart Watch", "Product Code": "SW-01", "Price": "199.99"})
+    norm = service.normalize_row(ImportType.PRODUCTS, {"Name": "Smart Watch", "Product Code": "SW-01", "Category": "Electronics", "Price": "199.99", "Stock": "50"})
     assert norm["product_name"] == "Smart Watch"
     assert norm["sku"] == "SW-01"
     assert norm["unit_price"] == "199.99"
+    assert norm["category"] == "Electronics"
+    assert norm["stock_quantity"] == "50"
 
 
 def test_validate_columns_missing_required():

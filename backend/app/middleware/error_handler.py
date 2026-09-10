@@ -25,7 +25,7 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
 
 async def value_error_handler(request: Request, exc: ValueError):
     logger.warning(f"Value error: {exc}")
-    return JSONResponse(status_code=400, content={"error": str(exc)})
+    return JSONResponse(status_code=400, content={"error": "Invalid request"})
 
 async def generic_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
