@@ -230,16 +230,20 @@ class ImportService:
             phone = normalized_row.get("phone", "")
             if not name:
                 raise ImportValidationError(row_number, "name", "Name is required", str(normalized_row))
-            if email:
-                if email in existing_emails:
-                    raise DuplicateRecordError(row_number, "email", f"Duplicate email: {email}", str(normalized_row))
-                if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
-                    raise ImportValidationError(row_number, "email", f"Invalid email: {email}", str(normalized_row))
-                existing_emails.add(email)
-            if phone:
-                if phone in existing_phones:
-                    raise DuplicateRecordError(row_number, "phone", f"Duplicate phone: {phone}", str(normalized_row))
-                existing_phones.add(phone)
+            if not email:
+                raise ImportValidationError(row_number, "email", "Email is required", str(normalized_row))
+            if email in existing_emails:
+                raise DuplicateRecordError(row_number, "email", f"Duplicate email: {email}", str(normalized_row))
+            if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+                raise ImportValidationError(row_number, "email", f"Invalid email: {email}", str(normalized_row))
+            existing_emails.add(email)
+            if not phone:
+                raise ImportValidationError(row_number, "phone", "Phone is required", str(normalized_row))
+            if phone in existing_phones:
+                raise DuplicateRecordError(row_number, "phone", f"Duplicate phone: {phone}", str(normalized_row))
+            if not re.match(r"^\+?[\d\s()-]{7,}$", phone):
+                raise ImportValidationError(row_number, "phone", f"Invalid phone: {phone}", str(normalized_row))
+            existing_phones.add(phone)
 
         elif import_type == ImportType.SALES:
             customer_name = normalized_row.get("customer", "")
@@ -255,8 +259,9 @@ class ImportService:
                 raise ImportValidationError(row_number, "product", "Product is required", str(normalized_row))
             if not invoice_number:
                 raise ImportValidationError(row_number, "invoice_number", "Invoice Number is required", str(normalized_row))
-            if existing_invoices and invoice_number in existing_invoices:
+            if invoice_number in existing_invoices:
                 raise DuplicateRecordError(row_number, "invoice_number", f"Duplicate invoice number: {invoice_number}", str(normalized_row))
+            existing_invoices.add(invoice_number)
 
             try:
                 quantity = int(quantity_raw)
@@ -288,6 +293,7 @@ class ImportService:
             available = available_stock.get(product_id, 0)
             if quantity > available:
                 raise ImportValidationError(row_number, "quantity", f"Quantity exceeds available stock. Available: {available}, Requested: {quantity}", str(normalized_row))
+            available_stock[product_id] -= quantity
 
     async def _get_existing_skus(self) -> set[str]:
         result = await self.db.execute(select(Product.sku).where(Product.company_id == self.company_id))

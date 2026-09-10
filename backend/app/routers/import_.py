@@ -141,6 +141,9 @@ async def get_import_history(
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if current_user.role.value not in ("COMPANY_ADMIN", "SUPER_ADMIN"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can view import history")
+
     itype = ImportType(import_type.upper()) if import_type else None
     istatus = ImportStatus(status.upper()) if status else None
     histories, _ = await ImportService(db, current_user.company_id, current_user.id).list_import_history(skip=skip, limit=limit, import_type=itype, status=istatus)
@@ -170,6 +173,9 @@ async def get_import_detail(
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if current_user.role.value not in ("COMPANY_ADMIN", "SUPER_ADMIN"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can view import history")
+
     service = ImportService(db, current_user.company_id, current_user.id)
     history = await service.get_import_history(import_id)
     if not history:
@@ -197,6 +203,9 @@ async def get_import_errors(
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if current_user.role.value not in ("COMPANY_ADMIN", "SUPER_ADMIN"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can view import history")
+
     service = ImportService(db, current_user.company_id, current_user.id)
     history = await service.get_import_history(import_id)
     if not history:

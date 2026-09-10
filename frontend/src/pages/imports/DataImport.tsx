@@ -33,7 +33,7 @@ const IMPORT_TYPES: { value: ImportType; label: string }[] = [
 const REQUIRED_COLUMNS: Record<ImportType, string[]> = {
   PRODUCTS: ['Product Name', 'SKU', 'Category', 'Unit Price', 'Stock Quantity'],
   CUSTOMERS: ['Name', 'Email', 'Phone'],
-  SALES: ['Customer', 'Product', 'Quantity', 'Unit Price', 'Sale Date'],
+  SALES: ['Customer', 'Product', 'Quantity', 'Unit Price', 'Sale Date', 'Invoice Number'],
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -178,7 +178,7 @@ export const DataImport: React.FC = () => {
       content = 'Name,Email,Phone\nJohn Doe,john.doe@example.com,+15550100\nJane Smith,jane.smith@example.com,+15550101\nTech Corp,contact@techcorp.com,+15550102';
       filename = 'sample_customers_template.csv';
     } else {
-      content = 'Customer,Product,Quantity,Unit Price,Sale Date\nJohn Doe,Wireless Mouse,2,25.99,2026-09-01\nJane Smith,Mechanical Keyboard,1,89.50,2026-09-02';
+      content = 'Customer,Product,Quantity,Unit Price,Sale Date,Invoice Number\nJohn Doe,Wireless Mouse,2,25.99,2026-09-01,INV-001\nJane Smith,Mechanical Keyboard,1,89.50,2026-09-02,INV-002';
       filename = 'sample_sales_template.csv';
     }
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
