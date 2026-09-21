@@ -253,8 +253,8 @@ async def add_stock(
         current_user.id,
         "Stock Added",
         request,
-        entity_name=product.name,
-        details=f"Added {payload.quantity} units of '{product.name}'",
+        resource_type=product.name,
+        description=f"Added {payload.quantity} units of '{product.name}'",
     )
 
     available = product.stock_quantity - product.reserved_stock
@@ -274,8 +274,8 @@ async def add_stock(
             current_user.id,
             "Product Reached Low Stock",
             request,
-            entity_name=product.name,
-            details=f"Product '{product.name}' reached low stock after stock addition. Available: {available}",
+            resource_type=product.name,
+            description=f"Product '{product.name}' reached low stock after stock addition. Available: {available}",
         )
     elif stock_status == "OUT_OF_STOCK":
         await _create_notification(
@@ -291,8 +291,8 @@ async def add_stock(
             current_user.id,
             "Product Became Out of Stock",
             request,
-            entity_name=product.name,
-            details=f"Product '{product.name}' became out of stock after stock addition.",
+            resource_type=product.name,
+            description=f"Product '{product.name}' became out of stock after stock addition.",
         )
 
     await db.commit()
@@ -348,8 +348,8 @@ async def remove_stock(
         current_user.id,
         "Stock Removed",
         request,
-        entity_name=product.name,
-        details=f"Removed {payload.quantity} units of '{product.name}'",
+        resource_type=product.name,
+        description=f"Removed {payload.quantity} units of '{product.name}'",
     )
 
     available = product.stock_quantity - product.reserved_stock
@@ -369,8 +369,8 @@ async def remove_stock(
             current_user.id,
             "Product Reached Low Stock",
             request,
-            entity_name=product.name,
-            details=f"Product '{product.name}' reached low stock after stock removal. Available: {available}",
+            resource_type=product.name,
+            description=f"Product '{product.name}' reached low stock after stock removal. Available: {available}",
         )
     elif stock_status == "OUT_OF_STOCK":
         await _create_notification(
@@ -386,8 +386,8 @@ async def remove_stock(
             current_user.id,
             "Product Became Out of Stock",
             request,
-            entity_name=product.name,
-            details=f"Product '{product.name}' became out of stock after stock removal.",
+            resource_type=product.name,
+            description=f"Product '{product.name}' became out of stock after stock removal.",
         )
 
     await db.commit()
@@ -443,8 +443,8 @@ async def adjust_stock(
         current_user.id,
         "Stock Adjusted",
         request,
-        entity_name=product.name,
-        details=f"Adjusted {payload.quantity:+d} units of '{product.name}'",
+        resource_type=product.name,
+        description=f"Adjusted {payload.quantity:+d} units of '{product.name}'",
     )
 
     available = product.stock_quantity - product.reserved_stock
@@ -464,8 +464,8 @@ async def adjust_stock(
             current_user.id,
             "Product Reached Low Stock",
             request,
-            entity_name=product.name,
-            details=f"Product '{product.name}' reached low stock after manual adjustment. Available: {available}",
+            resource_type=product.name,
+            description=f"Product '{product.name}' reached low stock after manual adjustment. Available: {available}",
         )
     elif stock_status == "OUT_OF_STOCK":
         await _create_notification(
@@ -481,8 +481,8 @@ async def adjust_stock(
             current_user.id,
             "Product Became Out of Stock",
             request,
-            entity_name=product.name,
-            details=f"Product '{product.name}' became out of stock after manual adjustment.",
+            resource_type=product.name,
+            description=f"Product '{product.name}' became out of stock after manual adjustment.",
         )
 
     await _create_notification(
@@ -541,8 +541,8 @@ async def update_reorder_level(
         current_user.id,
         "Reorder Level Updated",
         request,
-        entity_name=product.name,
-        details=f"Updated reorder level for '{product.name}' to {payload.low_stock_threshold}",
+        resource_type=product.name,
+        description=f"Updated reorder level for '{product.name}' to {payload.low_stock_threshold}",
     )
 
     available = product.stock_quantity - product.reserved_stock
@@ -562,8 +562,8 @@ async def update_reorder_level(
             current_user.id,
             "Product Reached Low Stock",
             request,
-            entity_name=product.name,
-            details=f"Product '{product.name}' reached low stock after reorder level update. Available: {available}",
+            resource_type=product.name,
+            description=f"Product '{product.name}' reached low stock after reorder level update. Available: {available}",
         )
     elif stock_status == "OUT_OF_STOCK":
         await _create_notification(
@@ -579,8 +579,8 @@ async def update_reorder_level(
             current_user.id,
             "Product Became Out of Stock",
             request,
-            entity_name=product.name,
-            details=f"Product '{product.name}' became out of stock after reorder level update.",
+            resource_type=product.name,
+            description=f"Product '{product.name}' became out of stock after reorder level update.",
         )
 
     await db.commit()

@@ -8,7 +8,7 @@ from app.schemas.auth import (
     ChangePasswordRequest,
     MessageResponse,
 )
-from app.schemas.audit_log import AuditLogResponse
+from app.schemas.audit_log import AuditLogResponse, AuditLogFilter, AuditLogListResponse
 from app.schemas.dashboard import DashboardOverview, MetricCard, ChannelBreakdown, MonthlyRevenue
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryResponse
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
@@ -35,6 +35,8 @@ __all__ = [
     "ChangePasswordRequest",
     "MessageResponse",
     "AuditLogResponse",
+    "AuditLogFilter",
+    "AuditLogListResponse",
     "DashboardOverview",
     "MetricCard",
     "ChannelBreakdown",

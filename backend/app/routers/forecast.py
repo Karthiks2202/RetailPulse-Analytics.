@@ -233,8 +233,8 @@ async def export_product_forecast_csv(
         user_id=current_user.id,
         action="Forecast Exported",
         request=request,
-        entity_name="Product Forecast",
-        details=f"Exported product forecast CSV for period {forecast_period or 'all'}",
+        resource_type="Product Forecast",
+        description=f"Exported product forecast CSV for period {forecast_period or 'all'}",
     )
     await db.commit()
 
@@ -273,8 +273,8 @@ async def export_category_forecast_csv(
         user_id=current_user.id,
         action="Forecast Exported",
         request=request,
-        entity_name="Category Forecast",
-        details=f"Exported category forecast CSV for period {forecast_period or 'all'}",
+        resource_type="Category Forecast",
+        description=f"Exported category forecast CSV for period {forecast_period or 'all'}",
     )
     await db.commit()
 
@@ -375,8 +375,8 @@ async def export_forecast_pdf(
         user_id=current_user.id,
         action="Forecast Exported",
         request=request,
-        entity_name="Forecast Report",
-        details=f"Exported forecast PDF for period {forecast_period or 'all'}",
+        resource_type="Forecast Report",
+        description=f"Exported forecast PDF for period {forecast_period or 'all'}",
     )
     await db.commit()
 

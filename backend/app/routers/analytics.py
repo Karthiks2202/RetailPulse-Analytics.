@@ -406,8 +406,8 @@ async def export_analytics(
 
     await analytics_service.log_analytics_event(
         db, current_user.company_id, current_user.id, "Report Exported", request,
-        entity_name=payload.report_type,
-        details=f"Exported {payload.report_type} as {payload.export_type}",
+        resource_type=payload.report_type,
+        description=f"Exported {payload.report_type} as {payload.export_type}",
         export_type=payload.export_type,
     )
 

@@ -65,7 +65,7 @@ async def create_category(
         raise HTTPException(status_code=400, detail="Category with this name already exists")
 
     cat = await category_crud.create(db, current_user.company_id, payload.name, payload.description, payload.status.value)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Category Created", request, entity_name=cat.name, details=f"Created category '{cat.name}'")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Category Created", request, resource_type=cat.name, description=f"Created category '{cat.name}'")
     count = await category_crud.count_products(db, cat.id)
     return serialize_category(cat, count)
 
@@ -87,7 +87,7 @@ async def update_category(
             raise HTTPException(status_code=400, detail="Category with this name already exists")
 
     updated = await category_crud.update(db, cat, payload.name, payload.description, payload.status.value if payload.status else None)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Category Updated", request, entity_name=updated.name, details=f"Updated category '{updated.name}'")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Category Updated", request, resource_type=updated.name, description=f"Updated category '{updated.name}'")
     count = await category_crud.count_products(db, category_id)
     return serialize_category(updated, count)
 
@@ -107,4 +107,4 @@ async def delete_category(
         raise HTTPException(status_code=400, detail="Cannot delete category with products. Remove products first.")
 
     await category_crud.delete(db, cat)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Category Deleted", request, entity_name=cat.name, details=f"Deleted category '{cat.name}'")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Category Deleted", request, resource_type=cat.name, description=f"Deleted category '{cat.name}'")

@@ -376,7 +376,7 @@ async def export_customers_csv(
     request: Request = None,
 ):
     rows = await customer_crud.export_customers(db, current_user.company_id, status=status, customer_type=customer_type)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, entity_name="Customers", details=f"Exported {len(rows)} customers as CSV")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, resource_type="Customers", description=f"Exported {len(rows)} customers as CSV")
     if not rows:
         return StreamingResponse(io.StringIO(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=customers.csv"})
 
@@ -399,7 +399,7 @@ async def export_customers_pdf(
     request: Request = None,
 ):
     rows = await customer_crud.export_customers(db, current_user.company_id, status=status, customer_type=customer_type)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, entity_name="Customers", details=f"Exported {len(rows)} customers as PDF")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, resource_type="Customers", description=f"Exported {len(rows)} customers as PDF")
     return {
         "content": rows,
         "filename": "customers.pdf",
@@ -417,7 +417,7 @@ async def export_customer_analytics_csv(
     dashboard = await customer_crud.get_customer_analytics_dashboard(db, current_user.company_id)
     growth = await customer_crud.get_customer_growth(db, current_user.company_id)
     top = await customer_crud.get_top_customers(db, current_user.company_id)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, entity_name="Customer Analytics", details="Exported customer analytics report as CSV")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, resource_type="Customer Analytics", description="Exported customer analytics report as CSV")
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -452,7 +452,7 @@ async def export_customer_analytics_pdf(
     dashboard = await customer_crud.get_customer_analytics_dashboard(db, current_user.company_id)
     growth = await customer_crud.get_customer_growth(db, current_user.company_id)
     top = await customer_crud.get_top_customers(db, current_user.company_id)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, entity_name="Customer Analytics", details="Exported customer analytics report as PDF")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, resource_type="Customer Analytics", description="Exported customer analytics report as PDF")
     return {
         "content": {"dashboard": dashboard, "growth": growth, "top": top},
         "filename": "customer_analytics_report.pdf",
@@ -468,7 +468,7 @@ async def export_top_customers_csv(
     request: Request = None,
 ):
     top = await customer_crud.get_top_customers(db, current_user.company_id, limit=0)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, entity_name="Top Customers", details=f"Exported top {len(top)} customers as CSV")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, resource_type="Top Customers", description=f"Exported top {len(top)} customers as CSV")
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -487,7 +487,7 @@ async def export_top_customers_pdf(
     request: Request = None,
 ):
     top = await customer_crud.get_top_customers(db, current_user.company_id, limit=0)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, entity_name="Top Customers", details=f"Exported top {len(top)} customers as PDF")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Exported", request, resource_type="Top Customers", description=f"Exported top {len(top)} customers as PDF")
     return {
         "content": top,
         "filename": "top_customers_report.pdf",
@@ -577,7 +577,7 @@ async def create_customer(
         payload.notes,
         payload.status.value if hasattr(payload.status, "value") else payload.status,
     )
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Created", request, entity_name=f"{cust.first_name} {cust.last_name}", details=f"Created customer '{cust.first_name} {cust.last_name}'")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Created", request, resource_type=f"{cust.first_name} {cust.last_name}", description=f"Created customer '{cust.first_name} {cust.last_name}'")
     await _notify_company_admins(db, current_user.company_id, title="New Customer Registered", message=f"New customer '{cust.first_name} {cust.last_name}' has been registered.", notif_type=NotificationType.CUSTOMER_REGISTERED)
     return serialize_customer(cust)
 
@@ -614,7 +614,7 @@ async def update_customer(
         update_data["status"] = update_data["status"].value
 
     updated = await customer_crud.update(db, cust, **update_data)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Updated", request, entity_name=f"{updated.first_name} {updated.last_name}", details=f"Updated customer '{updated.first_name} {updated.last_name}'")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Updated", request, resource_type=f"{updated.first_name} {updated.last_name}", description=f"Updated customer '{updated.first_name} {updated.last_name}'")
     await customer_crud.log_timeline(db, current_user.company_id, customer_id, current_user.id, "Profile Updated", f"Updated customer '{updated.first_name} {updated.last_name}'")
     return serialize_customer(updated)
 
@@ -634,7 +634,7 @@ async def delete_customer(
         await customer_crud.delete(db, cust)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Deleted", request, entity_name=f"{cust.first_name} {cust.last_name}", details=f"Deleted customer '{cust.first_name} {cust.last_name}'")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Deleted", request, resource_type=f"{cust.first_name} {cust.last_name}", description=f"Deleted customer '{cust.first_name} {cust.last_name}'")
 
 
 @router.patch("/{customer_id}/activate", response_model=CustomerResponse)
@@ -649,7 +649,7 @@ async def activate_customer(
         raise HTTPException(status_code=404, detail="Customer not found")
 
     updated = await customer_crud.update(db, cust, status=CustomerStatus.ACTIVE.value)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Activated", request, entity_name=f"{updated.first_name} {updated.last_name}", details=f"Activated customer '{updated.first_name} {updated.last_name}'")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Activated", request, resource_type=f"{updated.first_name} {updated.last_name}", description=f"Activated customer '{updated.first_name} {updated.last_name}'")
     await customer_crud.log_timeline(db, current_user.company_id, customer_id, current_user.id, "Reactivated", f"Reactivated customer '{updated.first_name} {updated.last_name}'")
     return serialize_customer(updated)
 
@@ -666,7 +666,7 @@ async def deactivate_customer(
         raise HTTPException(status_code=404, detail="Customer not found")
 
     updated = await customer_crud.update(db, cust, status=CustomerStatus.INACTIVE.value)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Deactivated", request, entity_name=f"{updated.first_name} {updated.last_name}", details=f"Deactivated customer '{updated.first_name} {updated.last_name}'")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Deactivated", request, resource_type=f"{updated.first_name} {updated.last_name}", description=f"Deactivated customer '{updated.first_name} {updated.last_name}'")
     await customer_crud.log_timeline(db, current_user.company_id, customer_id, current_user.id, "Deactivated", f"Deactivated customer '{updated.first_name} {updated.last_name}'")
     return serialize_customer(updated)
 

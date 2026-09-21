@@ -21,6 +21,7 @@ import {
   Timeline as TimelineIcon,
   TrendingUp as TrendingUpIcon,
   CloudUpload as CloudUploadIcon,
+  History as AuditIcon,
 } from '@mui/icons-material';
 import { NotificationBell } from './NotificationBell';
 import { useQueryClient } from '@tanstack/react-query';
@@ -31,7 +32,7 @@ const NAV_ITEMS = [
   { to: '/profile',   label: 'My Profile', Icon: ProfileIcon, adminOnly: false },
   { to: '/analytics', label: 'Analytics', Icon: AnalyticsIcon, adminOnly: true },
   { to: '/analytics/sales', label: 'Sales Analytics', Icon: TrendingUpIcon, adminOnly: true },
-  { to: '/forecast',  label: 'Forecast', Icon: TimelineIcon, adminOnly: true },
+  { to: '/forecast',  label: 'Forecast',  Icon: TimelineIcon, adminOnly: true },
   { to: '/inventory', label: 'Inventory',  Icon: ShowChartIcon, adminOnly: true },
   { to: '/inventory/forecast', label: 'Inventory Forecast', Icon: TrendingUpIcon, adminOnly: true },
   { to: '/products',  label: 'Products',   Icon: InventoryIcon, adminOnly: true },
@@ -39,6 +40,7 @@ const NAV_ITEMS = [
   { to: '/customers', label: 'Customers',  Icon: PeopleIcon, adminOnly: true },
   { to: '/sales',     label: 'Sales',      Icon: ReceiptIcon, adminOnly: true },
   { to: '/data-import', label: 'Data Import', Icon: CloudUploadIcon, adminOnly: true },
+  { to: '/audit-logs', label: 'Audit Logs', Icon: AuditIcon, adminOnly: true },
 ];
 
 export const DashboardLayout: React.FC = () => {
