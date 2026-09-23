@@ -2,6 +2,7 @@ from app.crud.audit_log import audit_log as audit_log_crud
 from fastapi import Request
 from uuid import UUID
 from typing import Optional
+from app.utils import sanitize_audit_values
 
 class AuditService:
     @staticmethod
@@ -30,8 +31,8 @@ class AuditService:
             resource_type=resource_type,
             resource_id=resource_id,
             description=description,
-            before_values=before_values,
-            after_values=after_values,
+            before_values=sanitize_audit_values(before_values) if before_values else None,
+            after_values=sanitize_audit_values(after_values) if after_values else None,
             status=status,
         )
 

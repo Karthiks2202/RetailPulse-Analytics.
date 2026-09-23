@@ -192,8 +192,8 @@ class ExportRequest(BaseModel):
 
 class AuditLogCreate(BaseModel):
     action: str
-    entity_name: str = ""
-    details: Optional[str] = None
+    resource_type: str = ""
+    description: Optional[str] = None
     export_type: Optional[str] = None
 
 

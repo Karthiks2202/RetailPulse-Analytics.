@@ -23,12 +23,6 @@ from typing import Optional
 
 
 class CRUDSale:
-    async def _log_audit(self, db, company_id, user_id, action, request, entity_name="", details=None):
-        from app.services.audit import audit_service
-        ip_address = request.headers.get("x-forwarded-for", request.client.host if request.client else "Unknown")
-        browser = request.headers.get("user-agent", "Unknown")
-        await audit_log_crud.create(db, company_id=company_id, user_id=user_id, action=action, entity_name=entity_name, details=details, ip_address=ip_address, browser=browser)
-
     async def get_invoice_number(self, db: AsyncSession, company_id: UUID) -> str:
         year = datetime.utcnow().year
         prefix = f"INV-{year}-"
@@ -234,9 +228,10 @@ class CRUDSale:
                 if product.stock_quantity == 0:
                     audit_entries.append(AuditLog(
                         company_id=company_id, user_id=user_id, action="Product Out of Stock",
-                        entity_name=product.name, details=f"Product '{product.name}' stock reached 0",
+                        resource_type="Product", resource_id=product.id,
+                        description=f"Product '{product.name}' stock reached 0",
                         ip_address=request.headers.get("x-forwarded-for", request.client.host if request.client else "Unknown"),
-                        browser=request.headers.get("user-agent", "Unknown"),
+                        user_agent=request.headers.get("user-agent", "Unknown"),
                     ))
                     notifications.append(Notification(
                         company_id=company_id, user_id=user_id,
@@ -246,9 +241,10 @@ class CRUDSale:
                 elif product.stock_quantity <= product.low_stock_threshold:
                     audit_entries.append(AuditLog(
                         company_id=company_id, user_id=user_id, action="Low Stock Alert",
-                        entity_name=product.name, details=f"Product '{product.name}' stock is low: {product.stock_quantity}",
+                        resource_type="Product", resource_id=product.id,
+                        description=f"Product '{product.name}' stock is low: {product.stock_quantity}",
                         ip_address=request.headers.get("x-forwarded-for", request.client.host if request.client else "Unknown"),
-                        browser=request.headers.get("user-agent", "Unknown"),
+                        user_agent=request.headers.get("user-agent", "Unknown"),
                     ))
                     notifications.append(Notification(
                         company_id=company_id, user_id=user_id,
@@ -282,9 +278,9 @@ class CRUDSale:
                 browser = request.headers.get("user-agent", "Unknown")
                 db.add(AuditLog(
                     company_id=company_id, user_id=user_id, action="Sale Created",
-                    entity_name=invoice_number,
-                    details=f"Sale {invoice_number} created with {len(sale_items)} items, total ${float(total_amount):.2f}",
-                    ip_address=ip_address, browser=browser,
+                    resource_type="Sale", resource_id=sale.id,
+                    description=f"Sale {invoice_number} created with {len(sale_items)} items, total ${float(total_amount):.2f}",
+                    ip_address=ip_address, user_agent=browser,
                 ))
                 for a in audit_entries:
                     db.add(a)
@@ -434,8 +430,9 @@ class CRUDSale:
         browser = request.headers.get("user-agent", "Unknown")
         db.add(AuditLog(
             company_id=company_id, user_id=user_id, action="Sale Updated",
-            entity_name=sale.invoice_number, details=f"Sale {sale.invoice_number} updated",
-            ip_address=ip_address, browser=browser,
+            resource_type="Sale", resource_id=sale.id,
+            description=f"Sale {sale.invoice_number} updated",
+            ip_address=ip_address, user_agent=browser,
         ))
 
         for pid, initial_qty in initial_quantities.items():
@@ -488,8 +485,9 @@ class CRUDSale:
         browser = request.headers.get("user-agent", "Unknown")
         db.add(AuditLog(
             company_id=company_id, user_id=user_id, action="Sale Deleted",
-            entity_name=invoice_number, details=f"Sale {invoice_number} deleted and inventory restored",
-            ip_address=ip_address, browser=browser,
+            resource_type="Sale", resource_id=sale.id,
+            description=f"Sale {invoice_number} deleted and inventory restored",
+            ip_address=ip_address, user_agent=browser,
         ))
 
         for pid, initial_qty in initial_quantities.items():

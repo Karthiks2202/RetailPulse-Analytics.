@@ -363,8 +363,8 @@ class ForecastService:
             user_id=user_id,
             action="Forecast Generated",
             request=request,
-            entity_name=f"Forecast {forecast_period}",
-            details=f"Generated {len(forecasts)} product forecasts for period {forecast_period}",
+            resource_type=f"Forecast {forecast_period}",
+            description=f"Generated {len(forecasts)} product forecasts for period {forecast_period}",
         )
         await db.commit()
         return forecasts
@@ -387,8 +387,8 @@ class ForecastService:
             user_id=user_id,
             action="Forecast Refreshed",
             request=request,
-            entity_name=f"Forecast {forecast_period}",
-            details=f"Refreshed {len(forecasts)} product forecasts for period {forecast_period}",
+            resource_type=f"Forecast {forecast_period}",
+            description=f"Refreshed {len(forecasts)} product forecasts for period {forecast_period}",
         )
         await db.commit()
         return forecasts

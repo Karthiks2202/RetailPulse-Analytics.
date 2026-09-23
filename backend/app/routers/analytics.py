@@ -349,12 +349,12 @@ async def log_analytics_event(
     db: AsyncSession = Depends(get_db),
 ):
     action = payload.get("action", "")
-    entity_name = payload.get("entity_name", "")
-    details = payload.get("details")
+    resource_type = payload.get("resource_type", "")
+    description = payload.get("description")
     export_type = payload.get("export_type")
     if not action:
         raise HTTPException(status_code=400, detail="action is required")
-    await analytics_service.log_analytics_event(db, current_user.company_id, current_user.id, action, request, entity_name, details, export_type)
+    await analytics_service.log_analytics_event(db, current_user.company_id, current_user.id, action, request, resource_type, description, export_type)
     return {"status": "logged"}
 
 
