@@ -1,0 +1,3 @@
+ID,User,Action,Resource Type,Resource ID,Description,IP Address,User Agent,Before Values,After Values,Status,Timestamp
+331f2846-b90e-4998-9ea3-fd89ae809bdf,Karthik,Audit Logs Exported,AuditLog,,Exported 1 audit log(s) as PDF,127.0.0.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0",,,SUCCESS,2026-09-22T08:29:40.842282
+f171810c-0cee-40b2-96b7-cb75809dbe19,Karthik,User Login,User,1cb10809-2fc5-4335-b805-1f22ff2121a0,,127.0.0.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0",,,SUCCESS,2026-09-22T08:29:30.150458

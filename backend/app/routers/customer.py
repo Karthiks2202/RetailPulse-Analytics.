@@ -613,9 +613,9 @@ async def update_customer(
     if "status" in update_data and hasattr(update_data["status"], "value"):
         update_data["status"] = update_data["status"].value
 
-    updated = await customer_crud.update(db, cust, **update_data)
     changed_fields = list(update_data.keys())
     before = {k: getattr(cust, k) for k in changed_fields if hasattr(cust, k)}
+    updated = await customer_crud.update(db, cust, **update_data)
     await audit_service.log(
         db,
         current_user.company_id,

@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, func, or_, cast, String
+from sqlalchemy.orm import selectinload, joinedload
 from app.models.audit_log import AuditLog
 from app.models.user import User
 from uuid import UUID
@@ -28,7 +28,7 @@ class CRUDAuditLog:
         return log
 
     async def get(self, db: AsyncSession, log_id: UUID) -> AuditLog | None:
-        result = await db.execute(select(AuditLog).where(AuditLog.id == log_id))
+        result = await db.execute(select(AuditLog).options(joinedload(AuditLog.user)).where(AuditLog.id == log_id))
         return result.scalar_one_or_none()
 
     async def get_multi(
@@ -47,7 +47,7 @@ class CRUDAuditLog:
         sort_by: str = "created_at",
         sort_dir: str = "desc",
     ) -> tuple[list[AuditLog], int]:
-        query = select(AuditLog).options(selectinload(AuditLog.user)).where(AuditLog.company_id == company_id)
+        query = select(AuditLog).options(joinedload(AuditLog.user)).where(AuditLog.company_id == company_id)
 
         if user_id:
             query = query.where(AuditLog.user_id == user_id)
@@ -62,12 +62,15 @@ class CRUDAuditLog:
         if date_to:
             query = query.where(AuditLog.created_at <= date_to)
         if search:
+            query = query.outerjoin(User)
             query = query.where(
                 or_(
                     AuditLog.action.ilike(f"%{search}%"),
                     AuditLog.resource_type.ilike(f"%{search}%"),
                     AuditLog.description.ilike(f"%{search}%"),
                     AuditLog.ip_address.ilike(f"%{search}%"),
+                    cast(AuditLog.resource_id, String).ilike(f"%{search}%"),
+                    User.name.ilike(f"%{search}%"),
                 )
             )
 

@@ -204,9 +204,9 @@ async def update_product(
         if not cat or cat.company_id != current_user.company_id:
             raise HTTPException(status_code=400, detail="Invalid category")
 
-    updated = await product_crud.update(db, prod, **update_data)
     changed_fields = list(update_data.keys())
     before = {k: getattr(prod, k) for k in changed_fields if hasattr(prod, k)}
+    updated = await product_crud.update(db, prod, **update_data)
     await audit_service.log(
         db,
         current_user.company_id,
