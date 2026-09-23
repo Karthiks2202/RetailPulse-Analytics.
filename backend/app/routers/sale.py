@@ -254,7 +254,7 @@ async def export_sales_csv(
     request: Request = None,
 ):
     rows = await sale_crud.export_sales(db, current_user.company_id)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Sales Exported", request, resource_type="Sales", description=f"Exported {len(rows)} sale rows as CSV")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Sales Exported", request, resource_type="Sales", resource_id=None, description=f"Exported {len(rows)} sale rows as CSV")
     if not rows:
         return {
             "content": "",
@@ -285,7 +285,7 @@ async def export_sales_pdf(
     request: Request = None,
 ):
     rows = await sale_crud.export_sales(db, current_user.company_id)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Sales Exported", request, resource_type="Sales", description=f"Exported {len(rows)} sale rows as PDF")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Sales Exported", request, resource_type="Sales", resource_id=None, description=f"Exported {len(rows)} sale rows as PDF")
     return {
         "content": rows,
         "filename": "sales.pdf",

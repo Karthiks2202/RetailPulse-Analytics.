@@ -162,7 +162,7 @@ async def create_product(
         payload.unit_of_measure.value if hasattr(payload.unit_of_measure, 'value') else payload.unit_of_measure,
         payload.status.value if hasattr(payload.status, 'value') else payload.status,
     )
-    await audit_service.log(db, current_user.company_id, current_user.id, "Product Created", request, resource_type=prod.name, description=f"Created product '{prod.name}' with SKU {prod.sku}")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Product Created", request, resource_type="Product", resource_id=prod.id, description=f"Created product '{prod.name}' with SKU {prod.sku}")
     cat = await category_crud.get(db, prod.category_id) if prod.category_id else None
     return serialize_product(prod, cat)
 
@@ -205,7 +205,20 @@ async def update_product(
             raise HTTPException(status_code=400, detail="Invalid category")
 
     updated = await product_crud.update(db, prod, **update_data)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Product Updated", request, resource_type=updated.name, description=f"Updated product '{updated.name}'")
+    changed_fields = list(update_data.keys())
+    before = {k: getattr(prod, k) for k in changed_fields if hasattr(prod, k)}
+    await audit_service.log(
+        db,
+        current_user.company_id,
+        current_user.id,
+        "Product Updated",
+        request,
+        resource_type="Product",
+        resource_id=prod.id,
+        description=f"Updated product '{updated.name}'",
+        before_values=before,
+        after_values={k: getattr(updated, k) for k in changed_fields if hasattr(updated, k)},
+    )
     cat = await category_crud.get(db, updated.category_id) if updated.category_id else None
     return serialize_product(updated, cat)
 
@@ -224,7 +237,7 @@ async def delete_product(
         await product_crud.delete(db, prod)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    await audit_service.log(db, current_user.company_id, current_user.id, "Product Deleted", request, resource_type=prod.name, description=f"Deleted product '{prod.name}'")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Product Deleted", request, resource_type="Product", resource_id=prod.id, description=f"Deleted product '{prod.name}'")
 
 @router.patch("/{product_id}/activate", response_model=ProductResponse)
 async def activate_product(
@@ -238,7 +251,18 @@ async def activate_product(
         raise HTTPException(status_code=404, detail="Product not found")
 
     updated = await product_crud.update(db, prod, status=ProductStatus.ACTIVE.value)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Product Activated", request, resource_type=updated.name, description=f"Activated product '{updated.name}'")
+    await audit_service.log(
+        db,
+        current_user.company_id,
+        current_user.id,
+        "Product Activated",
+        request,
+        resource_type="Product",
+        resource_id=prod.id,
+        description=f"Activated product '{updated.name}'",
+        before_values={"status": ProductStatus.INACTIVE.value},
+        after_values={"status": ProductStatus.ACTIVE.value},
+    )
     cat = await category_crud.get(db, updated.category_id) if updated.category_id else None
     return serialize_product(updated, cat)
 
@@ -254,6 +278,17 @@ async def deactivate_product(
         raise HTTPException(status_code=404, detail="Product not found")
 
     updated = await product_crud.update(db, prod, status=ProductStatus.INACTIVE.value)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Product Deactivated", request, resource_type=updated.name, description=f"Deactivated product '{updated.name}'")
+    await audit_service.log(
+        db,
+        current_user.company_id,
+        current_user.id,
+        "Product Deactivated",
+        request,
+        resource_type="Product",
+        resource_id=prod.id,
+        description=f"Deactivated product '{updated.name}'",
+        before_values={"status": ProductStatus.ACTIVE.value},
+        after_values={"status": ProductStatus.INACTIVE.value},
+    )
     cat = await category_crud.get(db, updated.category_id) if updated.category_id else None
     return serialize_product(updated, cat)

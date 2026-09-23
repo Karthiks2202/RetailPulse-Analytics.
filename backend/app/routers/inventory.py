@@ -235,6 +235,10 @@ async def add_stock(
         raise HTTPException(status_code=400, detail="Quantity must be positive for stock addition")
 
     try:
+        product = await inventory_crud.get(db, payload.product_id)
+        if not product or product.company_id != current_user.company_id:
+            raise ValueError("Product not found")
+        before_stock = product.stock_quantity
         product = await inventory_crud.add_stock(
             db,
             current_user.company_id,
@@ -253,8 +257,11 @@ async def add_stock(
         current_user.id,
         "Stock Added",
         request,
-        resource_type=product.name,
+        resource_type="Inventory",
+        resource_id=payload.product_id,
         description=f"Added {payload.quantity} units of '{product.name}'",
+        before_values={"stock_quantity": before_stock},
+        after_values={"stock_quantity": product.stock_quantity},
     )
 
     available = product.stock_quantity - product.reserved_stock
@@ -274,7 +281,8 @@ async def add_stock(
             current_user.id,
             "Product Reached Low Stock",
             request,
-            resource_type=product.name,
+            resource_type="Product",
+            resource_id=product.id,
             description=f"Product '{product.name}' reached low stock after stock addition. Available: {available}",
         )
     elif stock_status == "OUT_OF_STOCK":
@@ -291,7 +299,8 @@ async def add_stock(
             current_user.id,
             "Product Became Out of Stock",
             request,
-            resource_type=product.name,
+            resource_type="Product",
+            resource_id=product.id,
             description=f"Product '{product.name}' became out of stock after stock addition.",
         )
 
@@ -330,6 +339,10 @@ async def remove_stock(
         raise HTTPException(status_code=400, detail="Quantity must be positive for stock removal")
 
     try:
+        product = await inventory_crud.get(db, payload.product_id)
+        if not product or product.company_id != current_user.company_id:
+            raise ValueError("Product not found")
+        before_stock = product.stock_quantity
         product = await inventory_crud.remove_stock(
             db,
             current_user.company_id,
@@ -348,8 +361,11 @@ async def remove_stock(
         current_user.id,
         "Stock Removed",
         request,
-        resource_type=product.name,
+        resource_type="Inventory",
+        resource_id=payload.product_id,
         description=f"Removed {payload.quantity} units of '{product.name}'",
+        before_values={"stock_quantity": before_stock},
+        after_values={"stock_quantity": product.stock_quantity},
     )
 
     available = product.stock_quantity - product.reserved_stock
@@ -369,7 +385,7 @@ async def remove_stock(
             current_user.id,
             "Product Reached Low Stock",
             request,
-            resource_type=product.name,
+            resource_type="Product", resource_id=product.id,
             description=f"Product '{product.name}' reached low stock after stock removal. Available: {available}",
         )
     elif stock_status == "OUT_OF_STOCK":
@@ -386,7 +402,7 @@ async def remove_stock(
             current_user.id,
             "Product Became Out of Stock",
             request,
-            resource_type=product.name,
+            resource_type="Product", resource_id=product.id,
             description=f"Product '{product.name}' became out of stock after stock removal.",
         )
 
@@ -425,6 +441,10 @@ async def adjust_stock(
         raise HTTPException(status_code=400, detail="Quantity cannot be zero for manual adjustment")
 
     try:
+        product = await inventory_crud.get(db, payload.product_id)
+        if not product or product.company_id != current_user.company_id:
+            raise ValueError("Product not found")
+        before_stock = product.stock_quantity
         product = await inventory_crud.adjust_stock(
             db,
             current_user.company_id,
@@ -443,8 +463,11 @@ async def adjust_stock(
         current_user.id,
         "Stock Adjusted",
         request,
-        resource_type=product.name,
+        resource_type="Inventory",
+        resource_id=payload.product_id,
         description=f"Adjusted {payload.quantity:+d} units of '{product.name}'",
+        before_values={"stock_quantity": before_stock},
+        after_values={"stock_quantity": product.stock_quantity},
     )
 
     available = product.stock_quantity - product.reserved_stock
@@ -464,7 +487,7 @@ async def adjust_stock(
             current_user.id,
             "Product Reached Low Stock",
             request,
-            resource_type=product.name,
+            resource_type="Product", resource_id=product.id,
             description=f"Product '{product.name}' reached low stock after manual adjustment. Available: {available}",
         )
     elif stock_status == "OUT_OF_STOCK":
@@ -481,7 +504,7 @@ async def adjust_stock(
             current_user.id,
             "Product Became Out of Stock",
             request,
-            resource_type=product.name,
+            resource_type="Product", resource_id=product.id,
             description=f"Product '{product.name}' became out of stock after manual adjustment.",
         )
 
@@ -526,6 +549,10 @@ async def update_reorder_level(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     try:
+        existing = await inventory_crud.get(db, product_id)
+        if not existing or existing.company_id != current_user.company_id:
+            raise ValueError("Product not found")
+        before_threshold = existing.low_stock_threshold
         product = await inventory_crud.update_reorder_level(
             db,
             current_user.company_id,
@@ -541,8 +568,11 @@ async def update_reorder_level(
         current_user.id,
         "Reorder Level Updated",
         request,
-        resource_type=product.name,
+        resource_type="Inventory",
+        resource_id=product_id,
         description=f"Updated reorder level for '{product.name}' to {payload.low_stock_threshold}",
+        before_values={"low_stock_threshold": before_threshold},
+        after_values={"low_stock_threshold": product.low_stock_threshold},
     )
 
     available = product.stock_quantity - product.reserved_stock
@@ -562,7 +592,7 @@ async def update_reorder_level(
             current_user.id,
             "Product Reached Low Stock",
             request,
-            resource_type=product.name,
+            resource_type="Product", resource_id=product.id,
             description=f"Product '{product.name}' reached low stock after reorder level update. Available: {available}",
         )
     elif stock_status == "OUT_OF_STOCK":
@@ -579,7 +609,7 @@ async def update_reorder_level(
             current_user.id,
             "Product Became Out of Stock",
             request,
-            resource_type=product.name,
+            resource_type="Product", resource_id=product.id,
             description=f"Product '{product.name}' became out of stock after reorder level update.",
         )
 

@@ -1,12 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
 from typing import Optional
 from datetime import datetime
-from io import StringIO
+from io import BytesIO, StringIO
 import csv
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
 
 from app.database import get_db
 from app.models.user import UserRole
@@ -260,25 +264,42 @@ async def export_audit_logs_pdf(
     )
     await db.commit()
 
-    return {
-        "content": [
-            {
-                "id": str(log.id),
-                "user_name": log.user.name if log.user else "",
-                "action": log.action,
-                "resource_type": log.resource_type,
-                "resource_id": str(log.resource_id) if log.resource_id else "",
-                "description": log.description or "",
-                "ip_address": log.ip_address,
-                "user_agent": log.user_agent,
-                "before_values": log.before_values,
-                "after_values": log.after_values,
-                "status": log.status,
-                "created_at": log.created_at.isoformat() if log.created_at else "",
-            }
-            for log in logs
-        ],
-        "filename": "audit_logs.pdf",
-        "content_type": "application/json",
-        "message": "PDF data generated. Use frontend PDF library to render.",
-    }
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    elements = [Paragraph("Audit Logs Export", styles["Title"]), Spacer(1, 12)]
+
+    table_data = [
+        ["Timestamp", "User", "Action", "Resource", "Resource ID", "Description", "IP Address", "Status"],
+    ]
+    for log in logs:
+        user_name = log.user.name if log.user else ""
+        table_data.append([
+            log.created_at.strftime("%Y-%m-%d %H:%M:%S") if log.created_at else "",
+            user_name,
+            log.action,
+            log.resource_type or "",
+            str(log.resource_id) if log.resource_id else "",
+            (log.description or "")[:80],
+            log.ip_address,
+            log.status,
+        ])
+
+    table = Table(table_data, repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4f46e5")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 10),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 8),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f8fafc"), colors.white]),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+    ]))
+    elements.append(table)
+    doc.build(elements)
+    pdf_bytes = buffer.getvalue()
+    return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=audit_logs.pdf"})
+
+

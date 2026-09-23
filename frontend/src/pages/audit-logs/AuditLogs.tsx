@@ -9,6 +9,7 @@ import {
   clearAuditLogs,
   type AuditLog,
 } from '../../api/auditLogApi';
+import { listCompanyUsers } from '../../api/userApi';
 import {
   Search as SearchIcon,
   Download as DownloadIcon,
@@ -71,6 +72,7 @@ export const AuditLogs: React.FC = () => {
   const isAdmin = user?.role === 'COMPANY_ADMIN' || user?.role === 'SUPER_ADMIN';
 
   const [search, setSearch] = useState('');
+  const [userFilter, setUserFilter] = useState('');
   const [actionFilter, setActionFilter] = useState('');
   const [resourceTypeFilter, setResourceTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -86,11 +88,20 @@ export const AuditLogs: React.FC = () => {
   const [clearConfirm, setClearConfirm] = useState('');
   const [clearBeforeDate, setClearBeforeDate] = useState('');
 
+  const { data: usersData } = useQuery({
+    queryKey: ['company-users'],
+    queryFn: listCompanyUsers,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const users = usersData || [];
+
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['audit-logs', { search, actionFilter, resourceTypeFilter, statusFilter, dateFrom, dateTo, sortBy, sortDir, page, limit }],
+    queryKey: ['audit-logs', { search, userFilter, actionFilter, resourceTypeFilter, statusFilter, dateFrom, dateTo, sortBy, sortDir, page, limit }],
     queryFn: () =>
       getAuditLogs({
         search: search || undefined,
+        user_id: userFilter || undefined,
         action: actionFilter || undefined,
         resource_type: resourceTypeFilter || undefined,
         status: statusFilter || undefined,
@@ -157,6 +168,7 @@ export const AuditLogs: React.FC = () => {
 
   const resetFilters = () => {
     setSearch('');
+    setUserFilter('');
     setActionFilter('');
     setResourceTypeFilter('');
     setStatusFilter('');
@@ -167,6 +179,7 @@ export const AuditLogs: React.FC = () => {
 
   const handleExportCsv = () => {
     exportCsvMutation.mutate({
+      user_id: userFilter || undefined,
       action: actionFilter || undefined,
       resource_type: resourceTypeFilter || undefined,
       status: statusFilter || undefined,
@@ -178,6 +191,7 @@ export const AuditLogs: React.FC = () => {
 
   const handleExportPdf = () => {
     exportPdfMutation.mutate({
+      user_id: userFilter || undefined,
       action: actionFilter || undefined,
       resource_type: resourceTypeFilter || undefined,
       status: statusFilter || undefined,
@@ -197,7 +211,7 @@ export const AuditLogs: React.FC = () => {
     return JSON.stringify(val, null, 2);
   };
 
-  const activeFiltersCount = [actionFilter, resourceTypeFilter, statusFilter, dateFrom, dateTo].filter(Boolean).length;
+  const activeFiltersCount = [userFilter, actionFilter, resourceTypeFilter, statusFilter, dateFrom, dateTo].filter(Boolean).length;
 
   if (!isAdmin) {
     return (
@@ -262,6 +276,15 @@ export const AuditLogs: React.FC = () => {
       {showFilters && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">User</label>
+              <select value={userFilter} onChange={(e) => { setUserFilter(e.target.value); setPage(1); }} className={inputClass}>
+                <option value="">All Users</option>
+                {users.map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">Action</label>
               <select value={actionFilter} onChange={(e) => { setActionFilter(e.target.value); setPage(1); }} className={inputClass}>

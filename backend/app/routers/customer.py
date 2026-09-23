@@ -577,7 +577,7 @@ async def create_customer(
         payload.notes,
         payload.status.value if hasattr(payload.status, "value") else payload.status,
     )
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Created", request, resource_type=f"{cust.first_name} {cust.last_name}", description=f"Created customer '{cust.first_name} {cust.last_name}'")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Created", request, resource_type="Customer", resource_id=cust.id, description=f"Created customer '{cust.first_name} {cust.last_name}'")
     await _notify_company_admins(db, current_user.company_id, title="New Customer Registered", message=f"New customer '{cust.first_name} {cust.last_name}' has been registered.", notif_type=NotificationType.CUSTOMER_REGISTERED)
     return serialize_customer(cust)
 
@@ -614,7 +614,20 @@ async def update_customer(
         update_data["status"] = update_data["status"].value
 
     updated = await customer_crud.update(db, cust, **update_data)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Updated", request, resource_type=f"{updated.first_name} {updated.last_name}", description=f"Updated customer '{updated.first_name} {updated.last_name}'")
+    changed_fields = list(update_data.keys())
+    before = {k: getattr(cust, k) for k in changed_fields if hasattr(cust, k)}
+    await audit_service.log(
+        db,
+        current_user.company_id,
+        current_user.id,
+        "Customer Updated",
+        request,
+        resource_type="Customer",
+        resource_id=cust.id,
+        description=f"Updated customer '{updated.first_name} {updated.last_name}'",
+        before_values=before,
+        after_values={k: getattr(updated, k) for k in changed_fields if hasattr(updated, k)},
+    )
     await customer_crud.log_timeline(db, current_user.company_id, customer_id, current_user.id, "Profile Updated", f"Updated customer '{updated.first_name} {updated.last_name}'")
     return serialize_customer(updated)
 
@@ -634,7 +647,7 @@ async def delete_customer(
         await customer_crud.delete(db, cust)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Deleted", request, resource_type=f"{cust.first_name} {cust.last_name}", description=f"Deleted customer '{cust.first_name} {cust.last_name}'")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Deleted", request, resource_type="Customer", resource_id=cust.id, description=f"Deleted customer '{cust.first_name} {cust.last_name}'")
 
 
 @router.patch("/{customer_id}/activate", response_model=CustomerResponse)
@@ -649,7 +662,18 @@ async def activate_customer(
         raise HTTPException(status_code=404, detail="Customer not found")
 
     updated = await customer_crud.update(db, cust, status=CustomerStatus.ACTIVE.value)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Activated", request, resource_type=f"{updated.first_name} {updated.last_name}", description=f"Activated customer '{updated.first_name} {updated.last_name}'")
+    await audit_service.log(
+        db,
+        current_user.company_id,
+        current_user.id,
+        "Customer Activated",
+        request,
+        resource_type="Customer",
+        resource_id=cust.id,
+        description=f"Activated customer '{updated.first_name} {updated.last_name}'",
+        before_values={"status": CustomerStatus.INACTIVE.value},
+        after_values={"status": CustomerStatus.ACTIVE.value},
+    )
     await customer_crud.log_timeline(db, current_user.company_id, customer_id, current_user.id, "Reactivated", f"Reactivated customer '{updated.first_name} {updated.last_name}'")
     return serialize_customer(updated)
 
@@ -666,7 +690,18 @@ async def deactivate_customer(
         raise HTTPException(status_code=404, detail="Customer not found")
 
     updated = await customer_crud.update(db, cust, status=CustomerStatus.INACTIVE.value)
-    await audit_service.log(db, current_user.company_id, current_user.id, "Customer Deactivated", request, resource_type=f"{updated.first_name} {updated.last_name}", description=f"Deactivated customer '{updated.first_name} {updated.last_name}'")
+    await audit_service.log(
+        db,
+        current_user.company_id,
+        current_user.id,
+        "Customer Deactivated",
+        request,
+        resource_type="Customer",
+        resource_id=cust.id,
+        description=f"Deactivated customer '{updated.first_name} {updated.last_name}'",
+        before_values={"status": CustomerStatus.ACTIVE.value},
+        after_values={"status": CustomerStatus.INACTIVE.value},
+    )
     await customer_crud.log_timeline(db, current_user.company_id, customer_id, current_user.id, "Deactivated", f"Deactivated customer '{updated.first_name} {updated.last_name}'")
     return serialize_customer(updated)
 

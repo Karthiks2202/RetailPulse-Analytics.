@@ -40,5 +40,5 @@ async def change_password(payload: ChangePasswordRequest, request: Request, curr
     current_user.password = hash_password(payload.new_password)
     db.add(current_user)
     await db.commit()
-    await audit_service.log(db, company_id=current_user.company_id, user_id=current_user.id, action="Password Changed", request=request)
+    await audit_service.log(db, company_id=current_user.company_id, user_id=current_user.id, action="Password Changed", request=request, resource_type="User", resource_id=current_user.id)
     return MessageResponse(message="Password updated successfully")

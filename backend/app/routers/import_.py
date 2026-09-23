@@ -59,7 +59,7 @@ async def upload_file(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file format or content")
 
     history = await service.create_import_history(itype, file.filename, len(rows))
-    await audit_service.log(db, current_user.company_id, current_user.id, "Import Uploaded", request, resource_type=file.filename, description=f"Uploaded {itype.value} import with {len(rows)} records")
+    await audit_service.log(db, current_user.company_id, current_user.id, "Import Uploaded", request, resource_type="Import", resource_id=history.id, description=f"Uploaded {itype.value} import with {len(rows)} records")
     return ImportUploadResponse(
         import_id=history.id,
         import_type=itype.value,

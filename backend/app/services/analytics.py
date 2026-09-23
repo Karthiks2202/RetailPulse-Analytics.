@@ -1043,7 +1043,7 @@ class AnalyticsService:
             "page_size": page_size,
         }
 
-    async def log_analytics_event(self, db: AsyncSession, company_id: UUID, user_id: UUID, action: str, request, resource_type: str = "", description: Optional[str] = None, export_type: Optional[str] = None):
+    async def log_analytics_event(self, db: AsyncSession, company_id: UUID, user_id: UUID, action: str, request, resource_type: str = "", description: Optional[str] = None, export_type: Optional[str] = None, resource_id: Optional[UUID] = None):
         await audit_service.log(
             db,
             company_id=company_id,
@@ -1051,6 +1051,7 @@ class AnalyticsService:
             action=action,
             request=request,
             resource_type=resource_type,
+            resource_id=resource_id,
             description=description,
         )
 

@@ -56,7 +56,7 @@ async def register(payload: RegisterRequest, request: Request, db: AsyncSession 
     await db.commit()
     await db.refresh(user)
 
-    await audit_service.log(db, company_id=company.id, user_id=user.id, action="Company Registered", request=request)
+    await audit_service.log(db, company_id=company.id, user_id=user.id, action="Company Registered", request=request, resource_type="Company", resource_id=company.id)
 
     return {
         "message": "Company and Admin user registered successfully",
@@ -86,7 +86,7 @@ async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depe
     db.add(user)
 
     await db.commit()
-    await audit_service.log(db, company_id=user.company_id, user_id=user.id, action="User Login", request=request)
+    await audit_service.log(db, company_id=user.company_id, user_id=user.id, action="User Login", request=request, resource_type="User", resource_id=user.id)
 
     company_result = await db.execute(select(Company).where(Company.id == user.company_id))
     company = company_result.scalar_one_or_none()
@@ -168,7 +168,7 @@ async def logout(payload: LogoutRequest, request: Request, db: AsyncSession = De
     if stored:
         user = await db.get(User, stored.user_id)
         if user:
-            await audit_service.log(db, company_id=user.company_id, user_id=user.id, action="User Logout", request=request)
+            await audit_service.log(db, company_id=user.company_id, user_id=user.id, action="User Logout", request=request, resource_type="User", resource_id=user.id)
         await db.delete(stored)
         await db.commit()
     return MessageResponse(message="Logged out successfully")
