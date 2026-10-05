@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
 from app.models.user import UserRole
-from app.models.notification import NotificationType
+from app.models.notification import NotificationType, NotificationPriority, NotificationResourceType
 from app.schemas.inventory import (
     InventoryItemResponse,
     PaginatedInventoryResponse,
@@ -47,13 +47,16 @@ def get_status(available: int, threshold: int) -> str:
     return "IN_STOCK"
 
 
-async def _create_notification(db: AsyncSession, company_id: UUID, title: str, message: str, notif_type: NotificationType = NotificationType.LOW_STOCK):
+async def _create_notification(db: AsyncSession, company_id: UUID, title: str, message: str, notif_type: NotificationType = NotificationType.LOW_STOCK, priority: NotificationPriority = NotificationPriority.MEDIUM, resource_type: NotificationResourceType = NotificationResourceType.PRODUCT, resource_id: UUID | None = None):
     await notification_crud.create(
         db=db,
         company_id=company_id,
         title=title,
         message=message,
         type=notif_type,
+        priority=priority,
+        resource_type=resource_type,
+        resource_id=resource_id,
     )
 
 
@@ -513,7 +516,7 @@ async def adjust_stock(
         current_user.company_id,
         f"Manual Adjustment: {product.name}",
         f"Stock for '{product.name}' (SKU: {product.sku}) was manually adjusted by {current_user.name}. New quantity: {product.stock_quantity}, Change: {payload.quantity:+d}.",
-        NotificationType.SYSTEM,
+        NotificationType.SYSTEM_ALERT,
     )
 
     await db.commit()

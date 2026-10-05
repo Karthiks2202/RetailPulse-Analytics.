@@ -22,6 +22,7 @@ import {
   TrendingUp as TrendingUpIcon,
   CloudUpload as CloudUploadIcon,
   History as AuditIcon,
+  Notifications as NotificationsIcon,
 } from '@mui/icons-material';
 import { NotificationBell } from './NotificationBell';
 import { useQueryClient } from '@tanstack/react-query';
@@ -30,6 +31,7 @@ import { refreshAnalytics } from '../api/analyticsApi';
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', Icon: DashIcon, adminOnly: false },
   { to: '/profile',   label: 'My Profile', Icon: ProfileIcon, adminOnly: false },
+  { to: '/notifications', label: 'Notifications', Icon: NotificationsIcon, adminOnly: false },
   { to: '/analytics', label: 'Analytics', Icon: AnalyticsIcon, adminOnly: true },
   { to: '/analytics/sales', label: 'Sales Analytics', Icon: TrendingUpIcon, adminOnly: true },
   { to: '/forecast',  label: 'Forecast',  Icon: TimelineIcon, adminOnly: true },
@@ -40,7 +42,7 @@ const NAV_ITEMS = [
   { to: '/customers', label: 'Customers',  Icon: PeopleIcon, adminOnly: true },
   { to: '/sales',     label: 'Sales',      Icon: ReceiptIcon, adminOnly: true },
   { to: '/data-import', label: 'Data Import', Icon: CloudUploadIcon, adminOnly: true },
-  { to: '/audit-logs', label: 'Audit Logs', Icon: AuditIcon, adminOnly: true },
+  { to: '/audit-logs', label: 'Audit Logs', Icon: AuditIcon, adminOnly: true, strictAdmin: true },
 ];
 
 export const DashboardLayout: React.FC = () => {
@@ -93,8 +95,9 @@ export const DashboardLayout: React.FC = () => {
 
       {/* Nav */}
       <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.map(({ to, label, Icon, adminOnly }) => {
-          if (adminOnly && !isAdmin && !isAnalyst) return null;
+        {NAV_ITEMS.map(({ to, label, Icon, adminOnly, strictAdmin }) => {
+          if (strictAdmin && !isAdmin) return null;
+          if (adminOnly && !strictAdmin && !isAdmin && !isAnalyst) return null;
           const active = isActive(to);
           return (
             <Link

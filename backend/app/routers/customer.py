@@ -65,7 +65,7 @@ def is_admin(user):
     return user.role in (UserRole.COMPANY_ADMIN, UserRole.SUPER_ADMIN)
 
 
-async def _notify_company_admins(db: AsyncSession, company_id: UUID, title: str, message: str, notif_type: NotificationType = NotificationType.SYSTEM):
+async def _notify_company_admins(db: AsyncSession, company_id: UUID, title: str, message: str, notif_type: NotificationType = NotificationType.SYSTEM_ALERT):
     await notification_crud.create(db=db, company_id=company_id, title=title, message=message, type=notif_type)
 
 

@@ -6,7 +6,7 @@ from app.models.category import Category
 from app.models.product import Product, ProductStatus, UnitOfMeasure
 from app.models.transaction import Transaction, TransactionChannel, TransactionType
 from app.models.sale import Sale, SaleItem, SalesChannel, PaymentMethod, SaleStatus
-from app.models.notification import Notification, NotificationType
+from app.models.notification import Notification, NotificationType, NotificationPriority, NotificationResourceType
 from app.models.inventory import StockMovement, MovementType, InventoryAdjustment, AdjustmentType
 from app.models.customer import Customer, CustomerStatus, CustomerType
 from app.models.customer_timeline import CustomerTimeline
@@ -33,6 +33,8 @@ __all__ = [
     "SaleStatus",
     "Notification",
     "NotificationType",
+    "NotificationPriority",
+    "NotificationResourceType",
     "StockMovement",
     "MovementType",
     "InventoryAdjustment",

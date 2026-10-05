@@ -337,7 +337,7 @@ class ForecastService:
                 company_id=company_id,
                 title="Overstock Risk",
                 message=f"Product '{product.name}' (SKU: {product.sku}) may have overstock risk. Current stock: {available}, Predicted demand: {forecast.predicted_demand}",
-                type=NotificationType.SYSTEM,
+                type=NotificationType.SYSTEM_ALERT,
             )
 
     async def generate_with_notifications(

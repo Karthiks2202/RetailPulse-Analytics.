@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 class CRUDAuditLog:
-    async def create(self, db: AsyncSession, company_id: UUID, user_id: UUID | None, action: str, ip_address: str, user_agent: str, resource_type: str = "", resource_id: UUID | None = None, description: str | None = None, before_values: dict | None = None, after_values: dict | None = None, status: str = "SUCCESS") -> AuditLog:
+    async def create(self, db: AsyncSession, company_id: UUID, user_id: UUID | None, action: str, ip_address: str, user_agent: str, resource_type: str = "", resource_id: UUID | None = None, description: str | None = None, before_values: dict | None = None, after_values: dict | None = None, status: str = "SUCCESS", commit: bool = True) -> AuditLog:
         log = AuditLog(
             company_id=company_id,
             user_id=user_id,
@@ -23,8 +23,9 @@ class CRUDAuditLog:
             status=status,
         )
         db.add(log)
-        await db.commit()
-        await db.refresh(log)
+        if commit:
+            await db.commit()
+            await db.refresh(log)
         return log
 
     async def get(self, db: AsyncSession, log_id: UUID) -> AuditLog | None:

@@ -1,12 +1,36 @@
 import axiosInstance from './axios';
 
+export type NotificationType = 
+  | 'STOCKOUT_RISK'
+  | 'LOW_STOCK'
+  | 'OUT_OF_STOCK'
+  | 'OVERSTOCK'
+  | 'IMPORT_COMPLETED'
+  | 'IMPORT_FAILED'
+  | 'IMPORT_COMPLETED_WITH_ERRORS'
+  | 'SALES_ALERT'
+  | 'SYSTEM_ALERT'
+  | 'CUSTOMER_REGISTERED'
+  | 'VIP_STATUS'
+  | 'CUSTOMER_INACTIVE'
+  | 'FIRST_PURCHASE';
+
+export type NotificationPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type NotificationResourceType = 'PRODUCT' | 'IMPORT' | 'SALE' | 'SYSTEM' | 'INVENTORY';
+
 export interface Notification {
   id: string;
+  company_id: string;
   title: string;
   message: string;
-  type: 'LOW_STOCK' | 'OUT_OF_STOCK' | 'SYSTEM';
+  type: NotificationType;
+  priority: NotificationPriority;
+  resource_type: NotificationResourceType | null;
+  resource_id: string | null;
   is_read: boolean;
+  read_at: string | null;
   created_at: string;
+  expires_at: string | null;
 }
 
 export interface NotificationsResponse {
@@ -16,17 +40,28 @@ export interface NotificationsResponse {
   limit: number;
 }
 
-export const getNotifications = async (params?: {
+export interface NotificationFilters {
+  type?: NotificationType;
+  priority?: NotificationPriority;
+  is_read?: boolean;
+  resource_type?: NotificationResourceType;
   skip?: number;
   limit?: number;
-}): Promise<NotificationsResponse> => {
+}
+
+export const getNotifications = async (params?: NotificationFilters): Promise<NotificationsResponse> => {
   const { data } = await axiosInstance.get('/notifications', { params });
   return data;
 };
 
-export const getUnreadCount = async (): Promise<number> => {
+export const getUnreadCount = async (): Promise<{ unread_count: number }> => {
   const { data } = await axiosInstance.get('/notifications/unread-count');
-  return data.unread_count;
+  return data;
+};
+
+export const getNotification = async (id: string): Promise<Notification> => {
+  const { data } = await axiosInstance.get(`/notifications/${id}`);
+  return data;
 };
 
 export const markAsRead = async (id: string): Promise<Notification> => {
@@ -34,6 +69,17 @@ export const markAsRead = async (id: string): Promise<Notification> => {
   return data;
 };
 
-export const markAllAsRead = async (): Promise<void> => {
-  await axiosInstance.patch('/notifications/read-all');
+export const markAllAsRead = async (): Promise<{ status: string }> => {
+  const { data } = await axiosInstance.patch('/notifications/read-all');
+  return data;
+};
+
+export const deleteNotification = async (id: string): Promise<{ status: string }> => {
+  const { data } = await axiosInstance.delete(`/notifications/${id}`);
+  return data;
+};
+
+export const cleanupExpiredNotifications = async (): Promise<{ deleted: number }> => {
+  const { data } = await axiosInstance.post('/notifications/cleanup-expired');
+  return data;
 };

@@ -87,38 +87,7 @@ async def list_audit_logs(
     return AuditLogListResponse(data=data, total=total, page=page, limit=limit)
 
 
-@router.get("/{log_id}", response_model=AuditLogResponse)
-async def get_audit_log(
-    log_id: UUID,
-    current_user=Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-):
-    if not is_admin(current_user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
-    log = await audit_log_crud.get(db, log_id)
-    if not log or log.company_id != current_user.company_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit log not found")
-
-    user_name = None
-    if log.user:
-        user_name = log.user.name
-    return AuditLogResponse(
-        id=log.id,
-        company_id=log.company_id,
-        user_id=log.user_id,
-        user_name=user_name,
-        action=log.action,
-        resource_type=log.resource_type,
-        resource_id=log.resource_id,
-        description=log.description,
-        ip_address=log.ip_address,
-        user_agent=log.user_agent,
-        before_values=log.before_values,
-        after_values=log.after_values,
-        status=log.status,
-        created_at=log.created_at,
-    )
 
 
 @router.post("/clear")
@@ -135,7 +104,12 @@ async def clear_audit_logs(
     if not confirm:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Confirmation required. Set confirm=true to proceed.")
 
-    cutoff = before_date or datetime.utcnow()
+    from datetime import timedelta
+    min_retention_date = datetime.utcnow() - timedelta(days=30)
+    cutoff = before_date or min_retention_date
+    if cutoff > min_retention_date:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete audit logs from the last 30 days for retention purposes.")
+
     deleted_count = await audit_log_crud.clear_logs(db, current_user.company_id, cutoff)
 
     await audit_service.log(
@@ -301,5 +275,38 @@ async def export_audit_logs_pdf(
     doc.build(elements)
     pdf_bytes = buffer.getvalue()
     return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=audit_logs.pdf"})
+
+@router.get("/{log_id}", response_model=AuditLogResponse)
+async def get_audit_log(
+    log_id: UUID,
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    log = await audit_log_crud.get(db, log_id)
+    if not log or log.company_id != current_user.company_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit log not found")
+
+    user_name = None
+    if log.user:
+        user_name = log.user.name
+    return AuditLogResponse(
+        id=log.id,
+        company_id=log.company_id,
+        user_id=log.user_id,
+        user_name=user_name,
+        action=log.action,
+        resource_type=log.resource_type,
+        resource_id=log.resource_id,
+        description=log.description,
+        ip_address=log.ip_address,
+        user_agent=log.user_agent,
+        before_values=log.before_values,
+        after_values=log.after_values,
+        status=log.status,
+        created_at=log.created_at,
+    )
 
 

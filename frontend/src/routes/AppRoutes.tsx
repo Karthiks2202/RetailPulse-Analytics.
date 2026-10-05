@@ -23,6 +23,7 @@ import Customers from '../pages/customers/Customers';
 import CustomerDetails from '../pages/customers/CustomerDetails';
 import DataImport from '../pages/imports/DataImport';
 import AuditLogs from '../pages/audit-logs/AuditLogs';
+import NotificationsPage from '../pages/notifications/Notifications';
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -60,6 +61,7 @@ export const AppRoutes: React.FC = () => {
             <Route path="/sales/:id" element={<SaleDetails />} />
           </Route>
           <Route path="/profile" element={<Profile />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
         </Route>
       </Route>
 

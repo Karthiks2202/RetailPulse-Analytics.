@@ -12,6 +12,7 @@ from app.models.sale import Sale, SaleStatus, PaymentStatus
 from app.models.product import Product
 from app.models.category import Category
 from app.models.user import User
+from app.models.notification import NotificationType, NotificationPriority, NotificationResourceType
 from app.schemas.sale import SaleCreate, SaleUpdate, SaleResponse, SaleListItemResponse, SaleSummaryResponse, SaleItemResponse
 from app.schemas.category import CategoryResponse
 from app.schemas.product import ProductResponse
@@ -19,6 +20,7 @@ from app.utils.dependencies import get_current_active_user
 from app.crud.sale import sale as sale_crud
 from app.crud.category import category as category_crud
 from app.crud.product import product as product_crud
+from app.crud.notification import notification as notification_crud
 from app.services.audit import audit_service
 
 router = APIRouter(prefix="/sales", tags=["sales"])
@@ -208,6 +210,25 @@ async def create_sale(
         payload.customer_id,
         payload.notes,
     )
+
+    total = sale.total_amount or 0
+    priority = NotificationPriority.HIGH if total > 10000 else NotificationPriority.LOW
+    await notification_crud.create(
+        db=db,
+        company_id=current_user.company_id,
+        title=f"New Sale: {sale.invoice_number}",
+        message=f"Sale {sale.invoice_number} completed for {total:.2f}. Customer: {sale.customer_name}.",
+        type=NotificationType.SALES_ALERT,
+        priority=priority,
+        resource_type=NotificationResourceType.SALE,
+        resource_id=sale.id,
+    )
+    await audit_service.log(
+        db, current_user.company_id, current_user.id, "Notification Created: SALES_ALERT",
+        request, resource_type="Sale", resource_id=sale.id,
+        description=f"Sale {sale.invoice_number} completed for {total:.2f}",
+    )
+
     return await get_sale(sale.id, current_user, db)
 
 

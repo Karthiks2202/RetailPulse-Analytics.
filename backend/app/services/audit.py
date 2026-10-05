@@ -18,6 +18,7 @@ class AuditService:
         before_values: dict | None = None,
         after_values: dict | None = None,
         status: str = "SUCCESS",
+        commit: bool = True,
     ):
         ip_address = request.headers.get("x-forwarded-for", request.client.host if request.client else "Unknown")
         user_agent = request.headers.get("user-agent", "Unknown")
@@ -34,6 +35,7 @@ class AuditService:
             before_values=sanitize_audit_values(before_values) if before_values else None,
             after_values=sanitize_audit_values(after_values) if after_values else None,
             status=status,
+            commit=commit,
         )
 
 audit_service = AuditService()
