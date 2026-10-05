@@ -8,12 +8,10 @@ from uuid import UUID
 
 from app.database import get_db
 from app.models.import_history import ImportType, ImportStatus
-from app.models.notification import NotificationType, NotificationPriority, NotificationResourceType
 from app.schemas.import_ import ImportHistoryResponse, ImportErrorResponse, ImportPreviewResponse, ImportResultResponse
 from app.services.import_ import ImportService, ImportValidationError
 from app.utils.dependencies import get_current_active_user
 from app.services.audit import audit_service
-from app.crud.notification import notification as notification_crud
 
 logger = logging.getLogger("retailpulse")
 
@@ -138,45 +136,11 @@ async def process_import(
         except ValueError:
             istatus = ImportStatus.FAILED
 
-        if istatus == ImportStatus.COMPLETED:
-            notif_type = NotificationType.IMPORT_COMPLETED
-            priority = NotificationPriority.LOW
-            title = f"Import Completed: {result['filename']}"
-            message = (
-                f"Import '{result['filename']}' ({result['import_type']}) completed successfully. "
-                f"Total: {result['total_records']}, Successful: {result['successful_records']}."
-            )
-        elif istatus == ImportStatus.COMPLETED_WITH_ERRORS:
-            notif_type = NotificationType.IMPORT_COMPLETED_WITH_ERRORS
-            priority = NotificationPriority.MEDIUM
-            title = f"Import Completed with Errors: {result['filename']}"
-            message = (
-                f"Import '{result['filename']}' ({result['import_type']}) completed with errors. "
-                f"Successful: {result['successful_records']}, Failed: {result['failed_records']}, "
-                f"Duplicates: {result['duplicate_records']}."
-            )
-        else:
-            notif_type = NotificationType.IMPORT_FAILED
-            priority = NotificationPriority.HIGH
-            title = f"Import Failed: {result['filename']}"
-            message = (
-                f"Import '{result['filename']}' ({result['import_type']}) failed. "
-                f"Total: {result['total_records']}, Failed: {result['failed_records']}."
-            )
-
-        await notification_crud.create(
-            db=db,
-            company_id=current_user.company_id,
-            title=title,
-            message=message,
-            type=notif_type,
-            priority=priority,
-            resource_type=NotificationResourceType.IMPORT,
-            resource_id=import_history.id,
-        )
         await audit_service.log(
-            db, current_user.company_id, current_user.id, f"Notification Created: {notif_type.value}",
-            request, resource_type="Import", resource_id=import_history.id, description=message,
+            db, current_user.company_id, current_user.id,
+            f"Import Processed: {istatus.value}",
+            request, resource_type="Import", resource_id=import_history.id,
+            description=f"Import {import_history.filename} finished with status {istatus.value}",
         )
         await db.commit()
 

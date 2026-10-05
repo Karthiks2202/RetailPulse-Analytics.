@@ -58,11 +58,13 @@ async def list_notifications(
         notifications, total = await notification_crud.get_all(
             db, current_user.company_id, skip=skip, limit=limit,
             type=type_enum, priority=priority_enum, is_read=is_read_bool, resource_type=resource_type_enum,
+            for_user_id=current_user.id,
         )
     else:
         notifications, total = await notification_crud.get_all(
             db, current_user.company_id, skip=skip, limit=limit,
             type=type_enum, priority=priority_enum, is_read=is_read_bool, resource_type=resource_type_enum,
+            for_user_id=current_user.id,
         )
 
     serialized_notifications = [NotificationResponse.model_validate(n).model_dump(mode='json') for n in notifications]
@@ -80,7 +82,7 @@ async def get_unread_count(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    count = await notification_crud.get_unread_count(db, current_user.company_id)
+    count = await notification_crud.get_unread_count(db, current_user.company_id, for_user_id=current_user.id)
     return {"unread_count": count}
 
 
@@ -93,6 +95,8 @@ async def get_notification(
     notification = await notification_crud.get_by_id(db, current_user.company_id, notification_id)
     if not notification:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+    if notification.user_id is not None and notification.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
     return notification
 
 
@@ -102,7 +106,12 @@ async def mark_notification_as_read(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    notification = await notification_crud.mark_as_read(db, current_user.company_id, notification_id)
+    notification = await notification_crud.get_by_id(db, current_user.company_id, notification_id)
+    if not notification:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+    if notification.user_id is not None and notification.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+    notification = await notification_crud.mark_as_read(db, current_user.company_id, notification_id, user_id=current_user.id)
     if not notification:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
     return notification
@@ -113,7 +122,7 @@ async def mark_all_notifications_as_read(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await notification_crud.mark_all_as_read(db, current_user.company_id)
+    await notification_crud.mark_all_as_read(db, current_user.company_id, for_user_id=current_user.id)
     return {"status": "success"}
 
 
@@ -125,6 +134,8 @@ async def delete_notification(
 ):
     notification = await notification_crud.get_by_id(db, current_user.company_id, notification_id)
     if not notification:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+    if notification.user_id is not None and notification.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
     await db.delete(notification)
     await db.commit()

@@ -2,7 +2,7 @@ import csv
 import io
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
@@ -15,8 +15,15 @@ from app.models.product import Product
 from app.models.customer import Customer
 from app.models.sale import Sale, SaleItem
 from app.crud.import_history import import_history as import_history_crud
+from app.models.notification import NotificationType, NotificationPriority, NotificationResourceType
+from app.crud.notification import notification as notification_crud
+from app.services.notification import notification_service
 
 logger = logging.getLogger("retailpulse")
+
+
+class ImportNotificationError(Exception):
+    pass
 
 
 class ImportValidationError(Exception):
@@ -524,14 +531,19 @@ class ImportService:
         await import_history_crud.update_status(self.db, history, status, successful, failed, duplicates, commit=True)
         await self.db.refresh(history)
 
+        try:
+            await self._create_import_notification(history, status)
+        except Exception:
+            logger.exception("Failed to create import notification")
+
         return {
             "import_id": str(history.id),
-            "import_type": import_type.value,
-            "filename": filename,
-            "total_records": len(rows),
-            "successful_records": successful,
-            "failed_records": failed,
-            "duplicate_records": duplicates,
+            "import_type": history.import_type.value,
+            "filename": history.filename,
+            "total_records": history.total_records,
+            "successful_records": history.successful_records,
+            "failed_records": history.failed_records,
+            "duplicate_records": history.duplicate_records,
             "status": history.status.value,
             "errors": errors,
         }
@@ -675,3 +687,35 @@ class ImportService:
         )
         self.db.add(sale)
         await self.db.flush()
+
+    async def _create_import_notification(self, history: ImportHistory, status: ImportStatus) -> None:
+        if status == ImportStatus.COMPLETED:
+            notif_type = NotificationType.IMPORT_COMPLETED
+            priority = NotificationPriority.LOW
+            title = f"Import Completed: {history.filename}"
+            message = (
+                f"Import of '{history.filename}' ({history.import_type.value}) completed successfully. "
+                f"Total: {history.total_records}, Successful: {history.successful_records}."
+            )
+        elif status == ImportStatus.COMPLETED_WITH_ERRORS:
+            notif_type = NotificationType.IMPORT_COMPLETED_WITH_ERRORS
+            priority = NotificationPriority.MEDIUM
+            title = f"Import Completed with Errors: {history.filename}"
+            message = (
+                f"Import of '{history.filename}' ({history.import_type.value}) completed with errors. "
+                f"Total: {history.total_records}, Successful: {history.successful_records}, "
+                f"Failed: {history.failed_records}, Duplicates: {history.duplicate_records}."
+            )
+        else:
+            notif_type = NotificationType.IMPORT_FAILED
+            priority = NotificationPriority.HIGH
+            title = f"Import Failed: {history.filename}"
+            message = (
+                f"Import of '{history.filename}' ({history.import_type.value}) failed. "
+                f"Total: {history.total_records}, Failed: {history.failed_records}."
+            )
+
+        await notification_service._create_alert_for_roles(
+            self.db, self.company_id, notif_type, priority, title, message,
+            NotificationResourceType.IMPORT, history.id, None,
+        )

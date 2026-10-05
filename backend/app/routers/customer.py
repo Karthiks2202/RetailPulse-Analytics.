@@ -38,7 +38,7 @@ from app.utils.dependencies import get_current_active_user
 from app.services.audit import audit_service
 from app.crud.customer import customer as customer_crud
 from app.crud.notification import notification as notification_crud
-from app.models.notification import NotificationType
+from app.models.notification import NotificationType, NotificationResourceType
 from app.models.user import UserRole
 
 router = APIRouter(prefix="/customers", tags=["customers"])
@@ -65,8 +65,13 @@ def is_admin(user):
     return user.role in (UserRole.COMPANY_ADMIN, UserRole.SUPER_ADMIN)
 
 
-async def _notify_company_admins(db: AsyncSession, company_id: UUID, title: str, message: str, notif_type: NotificationType = NotificationType.SYSTEM_ALERT):
-    await notification_crud.create(db=db, company_id=company_id, title=title, message=message, type=notif_type)
+from app.services.notification import notification_service
+
+async def _notify_company_admins(db: AsyncSession, company_id: UUID, title: str, message: str, notif_type: NotificationType = NotificationType.SYSTEM_ALERT, resource_type: NotificationResourceType = NotificationResourceType.SYSTEM, resource_id: UUID | None = None, request: Request | None = None, user_id: UUID | None = None):
+    await notification_service._create_alert_for_roles(
+        db, company_id, notif_type, NotificationPriority.MEDIUM, title, message,
+        resource_type, resource_id, request, user_id,
+    )
 
 
 def serialize_customer(cust: Customer) -> CustomerResponse:
@@ -531,10 +536,10 @@ async def get_customer_profile(
     last_purchase_date = data.get("last_purchase_date")
 
     if total_orders >= 10 and total_revenue >= 5000:
-        await _notify_company_admins(db, current_user.company_id, title="VIP Customer", message=f"Customer '{cust.first_name} {cust.last_name}' has reached VIP status with {total_orders} orders and ${total_revenue:.2f} spent.", notif_type=NotificationType.VIP_STATUS)
+        await _notify_company_admins(db, current_user.company_id, title="VIP Customer", message=f"Customer '{cust.first_name} {cust.last_name}' has reached VIP status with {total_orders} orders and ${total_revenue:.2f} spent.", notif_type=NotificationType.VIP_STATUS, resource_type=NotificationResourceType.CUSTOMER, resource_id=cust.id, request=request, user_id=current_user.id)
 
     if last_purchase_date is None or (datetime.utcnow() - last_purchase_date).days > 90:
-        await _notify_company_admins(db, current_user.company_id, title="Inactive Customer", message=f"Customer '{cust.first_name} {cust.last_name}' has been inactive for over 90 days.", notif_type=NotificationType.CUSTOMER_INACTIVE)
+        await _notify_company_admins(db, current_user.company_id, title="Inactive Customer", message=f"Customer '{cust.first_name} {cust.last_name}' has been inactive for over 90 days.", notif_type=NotificationType.CUSTOMER_INACTIVE, resource_type=NotificationResourceType.CUSTOMER, resource_id=cust.id, request=request, user_id=current_user.id)
 
     return CustomerDetailedProfileResponse(**data)
 
@@ -578,7 +583,7 @@ async def create_customer(
         payload.status.value if hasattr(payload.status, "value") else payload.status,
     )
     await audit_service.log(db, current_user.company_id, current_user.id, "Customer Created", request, resource_type="Customer", resource_id=cust.id, description=f"Created customer '{cust.first_name} {cust.last_name}'")
-    await _notify_company_admins(db, current_user.company_id, title="New Customer Registered", message=f"New customer '{cust.first_name} {cust.last_name}' has been registered.", notif_type=NotificationType.CUSTOMER_REGISTERED)
+    await _notify_company_admins(db, current_user.company_id, title="New Customer Registered", message=f"New customer '{cust.first_name} {cust.last_name}' has been registered.", notif_type=NotificationType.CUSTOMER_REGISTERED, resource_type=NotificationResourceType.CUSTOMER, resource_id=cust.id, request=request, user_id=current_user.id)
     return serialize_customer(cust)
 
 

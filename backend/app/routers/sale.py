@@ -222,6 +222,7 @@ async def create_sale(
         priority=priority,
         resource_type=NotificationResourceType.SALE,
         resource_id=sale.id,
+        user_id=current_user.id,
     )
     await audit_service.log(
         db, current_user.company_id, current_user.id, "Notification Created: SALES_ALERT",

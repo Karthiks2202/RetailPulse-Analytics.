@@ -26,6 +26,7 @@ class NotificationResponse(NotificationBase):
     company_id: UUID
     read_at: Optional[datetime] = None
     created_at: datetime
+    expires_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

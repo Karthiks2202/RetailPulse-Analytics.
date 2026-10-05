@@ -47,16 +47,12 @@ def get_status(available: int, threshold: int) -> str:
     return "IN_STOCK"
 
 
-async def _create_notification(db: AsyncSession, company_id: UUID, title: str, message: str, notif_type: NotificationType = NotificationType.LOW_STOCK, priority: NotificationPriority = NotificationPriority.MEDIUM, resource_type: NotificationResourceType = NotificationResourceType.PRODUCT, resource_id: UUID | None = None):
-    await notification_crud.create(
-        db=db,
-        company_id=company_id,
-        title=title,
-        message=message,
-        type=notif_type,
-        priority=priority,
-        resource_type=resource_type,
-        resource_id=resource_id,
+from app.services.notification import notification_service
+
+async def _create_notification(db: AsyncSession, company_id: UUID, title: str, message: str, notif_type: NotificationType = NotificationType.LOW_STOCK, priority: NotificationPriority = NotificationPriority.MEDIUM, resource_type: NotificationResourceType = NotificationResourceType.PRODUCT, resource_id: UUID | None = None, request: Request | None = None, user_id: UUID | None = None):
+    await notification_service._create_alert_for_roles(
+        db, company_id, notif_type, priority, title, message,
+        resource_type, resource_id, request, user_id,
     )
 
 
@@ -277,6 +273,10 @@ async def add_stock(
             f"Low Stock: {product.name}",
             f"Product '{product.name}' (SKU: {product.sku}) has reached low stock level. Available: {available}, Threshold: {product.low_stock_threshold}",
             NotificationType.LOW_STOCK,
+            resource_type=NotificationResourceType.PRODUCT,
+            resource_id=product.id,
+            request=request,
+            user_id=current_user.id,
         )
         await audit_service.log(
             db,
@@ -295,6 +295,10 @@ async def add_stock(
             f"Out of Stock: {product.name}",
             f"Product '{product.name}' (SKU: {product.sku}) is now out of stock.",
             NotificationType.OUT_OF_STOCK,
+            resource_type=NotificationResourceType.PRODUCT,
+            resource_id=product.id,
+            request=request,
+            user_id=current_user.id,
         )
         await audit_service.log(
             db,
@@ -381,6 +385,10 @@ async def remove_stock(
             f"Low Stock: {product.name}",
             f"Product '{product.name}' (SKU: {product.sku}) has reached low stock level. Available: {available}, Threshold: {product.low_stock_threshold}",
             NotificationType.LOW_STOCK,
+            resource_type=NotificationResourceType.PRODUCT,
+            resource_id=product.id,
+            request=request,
+            user_id=current_user.id,
         )
         await audit_service.log(
             db,
@@ -398,6 +406,10 @@ async def remove_stock(
             f"Out of Stock: {product.name}",
             f"Product '{product.name}' (SKU: {product.sku}) is now out of stock.",
             NotificationType.OUT_OF_STOCK,
+            resource_type=NotificationResourceType.PRODUCT,
+            resource_id=product.id,
+            request=request,
+            user_id=current_user.id,
         )
         await audit_service.log(
             db,
@@ -483,6 +495,10 @@ async def adjust_stock(
             f"Low Stock: {product.name}",
             f"Product '{product.name}' (SKU: {product.sku}) has reached low stock level after manual adjustment. Available: {available}, Threshold: {product.low_stock_threshold}",
             NotificationType.LOW_STOCK,
+            resource_type=NotificationResourceType.PRODUCT,
+            resource_id=product.id,
+            request=request,
+            user_id=current_user.id,
         )
         await audit_service.log(
             db,
@@ -500,6 +516,10 @@ async def adjust_stock(
             f"Out of Stock: {product.name}",
             f"Product '{product.name}' (SKU: {product.sku}) is now out of stock after manual adjustment.",
             NotificationType.OUT_OF_STOCK,
+            resource_type=NotificationResourceType.PRODUCT,
+            resource_id=product.id,
+            request=request,
+            user_id=current_user.id,
         )
         await audit_service.log(
             db,
@@ -517,6 +537,10 @@ async def adjust_stock(
         f"Manual Adjustment: {product.name}",
         f"Stock for '{product.name}' (SKU: {product.sku}) was manually adjusted by {current_user.name}. New quantity: {product.stock_quantity}, Change: {payload.quantity:+d}.",
         NotificationType.SYSTEM_ALERT,
+        resource_type=NotificationResourceType.PRODUCT,
+        resource_id=product.id,
+        request=request,
+        user_id=current_user.id,
     )
 
     await db.commit()
@@ -588,6 +612,10 @@ async def update_reorder_level(
             f"Low Stock: {product.name}",
             f"Product '{product.name}' (SKU: {product.sku}) has reached low stock level. Available: {available}, Threshold: {product.low_stock_threshold}",
             NotificationType.LOW_STOCK,
+            resource_type=NotificationResourceType.PRODUCT,
+            resource_id=product.id,
+            request=request,
+            user_id=current_user.id,
         )
         await audit_service.log(
             db,
@@ -605,6 +633,10 @@ async def update_reorder_level(
             f"Out of Stock: {product.name}",
             f"Product '{product.name}' (SKU: {product.sku}) is now out of stock.",
             NotificationType.OUT_OF_STOCK,
+            resource_type=NotificationResourceType.PRODUCT,
+            resource_id=product.id,
+            request=request,
+            user_id=current_user.id,
         )
         await audit_service.log(
             db,

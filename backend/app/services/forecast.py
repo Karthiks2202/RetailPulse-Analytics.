@@ -12,6 +12,7 @@ from app.models.notification import NotificationType
 from app.crud.forecast import demand_forecast as forecast_crud
 from app.services.audit import audit_service
 from app.crud.notification import notification as notification_crud
+from app.services.notification import notification_service
 from fastapi import Request
 
 
@@ -316,28 +317,25 @@ class ForecastService:
         available = product.stock_quantity - product.reserved_stock
 
         if forecast.recommendation == RecommendationType.IMMEDIATE_RESTOCK_REQUIRED:
-            await notification_crud.create(
-                db=db,
-                company_id=company_id,
-                title="Immediate Restock Required",
-                message=f"Product '{product.name}' (SKU: {product.sku}) is predicted to run out of stock. Predicted demand: {forecast.predicted_demand}, Available: {available}",
-                type=NotificationType.LOW_STOCK,
+            await notification_service._create_alert_for_roles(
+                db, company_id, NotificationType.LOW_STOCK, NotificationPriority.HIGH,
+                "Immediate Restock Required",
+                f"Product '{product.name}' (SKU: {product.sku}) is predicted to run out of stock. Predicted demand: {forecast.predicted_demand}, Available: {available}",
+                NotificationResourceType.PRODUCT, forecast.product_id, None,
             )
         elif forecast.recommendation == RecommendationType.REORDER_SOON:
-            await notification_crud.create(
-                db=db,
-                company_id=company_id,
-                title="Reorder Soon",
-                message=f"Product '{product.name}' (SKU: {product.sku}) should be reordered soon. Predicted demand: {forecast.predicted_demand}, Available: {available}",
-                type=NotificationType.LOW_STOCK,
+            await notification_service._create_alert_for_roles(
+                db, company_id, NotificationType.LOW_STOCK, NotificationPriority.MEDIUM,
+                "Reorder Soon",
+                f"Product '{product.name}' (SKU: {product.sku}) should be reordered soon. Predicted demand: {forecast.predicted_demand}, Available: {available}",
+                NotificationResourceType.PRODUCT, forecast.product_id, None,
             )
         elif forecast.recommendation == RecommendationType.OVERSTOCK_RISK:
-            await notification_crud.create(
-                db=db,
-                company_id=company_id,
-                title="Overstock Risk",
-                message=f"Product '{product.name}' (SKU: {product.sku}) may have overstock risk. Current stock: {available}, Predicted demand: {forecast.predicted_demand}",
-                type=NotificationType.SYSTEM_ALERT,
+            await notification_service._create_alert_for_roles(
+                db, company_id, NotificationType.SYSTEM_ALERT, NotificationPriority.LOW,
+                "Overstock Risk",
+                f"Product '{product.name}' (SKU: {product.sku}) may have overstock risk. Current stock: {available}, Predicted demand: {forecast.predicted_demand}",
+                NotificationResourceType.PRODUCT, forecast.product_id, None,
             )
 
     async def generate_with_notifications(

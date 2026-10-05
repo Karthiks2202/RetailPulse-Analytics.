@@ -13,6 +13,7 @@ import {
   CloudUpload as ImportIcon,
   ShoppingCart as SaleIcon,
   Settings as SystemIcon,
+  Launch as LaunchIcon,
 } from '@mui/icons-material';
 import {
   getNotifications,
@@ -20,12 +21,16 @@ import {
   markAsRead,
   markAllAsRead,
   deleteNotification,
+  getNotification,
   type Notification,
   type NotificationType,
   type NotificationPriority,
   type NotificationResourceType,
 } from '../../api/notificationsApi';
+import { getProductRecommendation } from '../../api/inventoryApi';
+import { getImportDetail } from '../../api/importApi';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { label: string; color: string; bg: string; Icon: React.ElementType }> = {
   STOCKOUT_RISK: { label: 'Stockout Risk', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/30', Icon: ErrorIcon },
@@ -82,6 +87,7 @@ const formatDate = (dateString: string) => {
 
 export const NotificationsPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const [filterTab, setFilterTab] = useState<'all' | 'unread' | 'read'>('all');
@@ -89,11 +95,36 @@ export const NotificationsPage: React.FC = () => {
   const [selectedPriority, setSelectedPriority] = useState<NotificationPriority | ''>('');
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(0);
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
 
   const { data: unreadCountData } = useQuery({
     queryKey: ['notifications', 'unreadCount'],
     queryFn: getUnreadCount,
     refetchInterval: 30000,
+  });
+
+  const { data: detailData, isLoading: detailLoading } = useQuery({
+    queryKey: ['notification', 'detail', selectedNotification?.id],
+    queryFn: async () => {
+      if (!selectedNotification) return null;
+      const [notif, productRec] = await Promise.all([
+        getNotification(selectedNotification.id),
+        selectedNotification.resource_type === 'PRODUCT' && selectedNotification.resource_id
+          ? getProductRecommendation(selectedNotification.resource_id).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      return { notif, productRec };
+    },
+    enabled: !!selectedNotification,
+  });
+
+  const { data: importDetail } = useQuery({
+    queryKey: ['import', 'detail', selectedNotification?.resource_id],
+    queryFn: async () => {
+      if (!selectedNotification || selectedNotification.resource_type !== 'IMPORT' || !selectedNotification.resource_id) return null;
+      return getImportDetail(selectedNotification.resource_id);
+    },
+    enabled: !!selectedNotification && selectedNotification.resource_type === 'IMPORT',
   });
 
   const filters = useMemo(() => {
@@ -131,6 +162,7 @@ export const NotificationsPage: React.FC = () => {
     mutationFn: deleteNotification,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      setSelectedNotification(null);
     },
   });
 
@@ -158,6 +190,27 @@ export const NotificationsPage: React.FC = () => {
     };
     return links[n.resource_type] || '#';
   };
+
+  const handleNotificationClick = async (notif: Notification) => {
+    setSelectedNotification(notif);
+    if (!notif.is_read) {
+      markReadMutation.mutate(notif.id);
+    }
+  };
+
+  const handleViewResource = () => {
+    if (!selectedNotification) return;
+    const link = getResourceLink(selectedNotification);
+    if (link && link !== '#') {
+      navigate(link);
+      setSelectedNotification(null);
+    }
+  };
+
+  const detailNotif = detailData?.notif || selectedNotification;
+  const productRec = detailData?.productRec;
+  const isProductNotification = selectedNotification?.resource_type === 'PRODUCT';
+  const isImportNotification = selectedNotification?.resource_type === 'IMPORT';
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -303,15 +356,19 @@ export const NotificationsPage: React.FC = () => {
             const priorityConfig = PRIORITY_CONFIG[notif.priority] || { label: notif.priority, dot: 'bg-slate-400' };
             const ResourceIcon = RESOURCE_ICON[notif.resource_type || 'SYSTEM'] || SystemIcon;
             const resourceLink = getResourceLink(notif);
+            const isSelected = selectedNotification?.id === notif.id;
 
             return (
               <div
                 key={notif.id}
-                className={`group relative rounded-xl border transition-all hover:shadow-md ${
-                  !notif.is_read
-                    ? 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/50'
-                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                className={`group relative rounded-xl border transition-all hover:shadow-md cursor-pointer ${
+                  isSelected
+                    ? 'bg-indigo-50/60 dark:bg-indigo-950/30 border-indigo-300 dark:border-indigo-700'
+                    : !notif.is_read
+                      ? 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/50'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
                 }`}
+                onClick={() => handleNotificationClick(notif)}
               >
                 <div className="p-4 flex gap-4">
                   {/* Icon */}
@@ -352,7 +409,7 @@ export const NotificationsPage: React.FC = () => {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                         {!notif.is_read && (
                           <button
                             onClick={() => markReadMutation.mutate(notif.id)}
@@ -377,6 +434,7 @@ export const NotificationsPage: React.FC = () => {
                     {resourceLink && (
                       <a
                         href={resourceLink}
+                        onClick={(e) => e.stopPropagation()}
                         className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
                       >
                         View {notif.resource_type?.toLowerCase()}
@@ -417,6 +475,151 @@ export const NotificationsPage: React.FC = () => {
             >
               Next
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Detail Modal */}
+      {selectedNotification && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setSelectedNotification(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {detailLoading ? (
+              <div className="p-8 space-y-4">
+                <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-1/2 animate-pulse" />
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full animate-pulse" />
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4 animate-pulse" />
+              </div>
+            ) : (
+              <>
+                {/* Header */}
+                <div className="flex items-start justify-between p-6 border-b border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${NOTIFICATION_TYPE_CONFIG[detailNotif?.type || selectedNotification.type]?.bg || 'bg-slate-100'}`}>
+                      {React.createElement(NOTIFICATION_TYPE_CONFIG[detailNotif?.type || selectedNotification.type]?.Icon || NotificationsIcon, {
+                        className: NOTIFICATION_TYPE_CONFIG[detailNotif?.type || selectedNotification.type]?.color || 'text-slate-600',
+                        style: { fontSize: 20 }
+                      })}
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900 dark:text-white">{detailNotif?.title || selectedNotification.title}</h2>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${NOTIFICATION_TYPE_CONFIG[detailNotif?.type || selectedNotification.type]?.bg || 'bg-slate-100'} ${NOTIFICATION_TYPE_CONFIG[detailNotif?.type || selectedNotification.type]?.color || 'text-slate-600'}`}>
+                        {NOTIFICATION_TYPE_CONFIG[detailNotif?.type || selectedNotification.type]?.label || detailNotif?.type || selectedNotification.type}
+                      </span>
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedNotification(null)} className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <CloseIcon style={{ fontSize: 18 }} />
+                  </button>
+                </div>
+
+                {/* Body */}
+                <div className="p-6 space-y-4">
+                  <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{detailNotif?.message || selectedNotification.message}</p>
+
+                  {/* Product Details */}
+                  {isProductNotification && productRec && (
+                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3">
+                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Product Details</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Product</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{productRec.product_name}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">SKU</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{productRec.product_sku}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Current Stock</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{productRec.current_stock}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Reorder Point</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{productRec.reorder_point}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Risk</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{productRec.stock_risk}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Priority</p>
+                          <p className={`text-sm font-bold ${PRIORITY_CONFIG[selectedNotification.priority]?.label === 'Critical' ? 'text-red-600' : PRIORITY_CONFIG[selectedNotification.priority]?.label === 'High' ? 'text-orange-600' : 'text-slate-800'}`}>{selectedNotification.priority}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Recommended Quantity</p>
+                          <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{productRec.recommended_reorder_quantity}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Import Details */}
+                  {isImportNotification && importDetail && (
+                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3">
+                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Import Details</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Filename</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{importDetail.filename}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Type</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{importDetail.import_type}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Status</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{importDetail.status}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Records</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{importDetail.total_records}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Successful</p>
+                          <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{importDetail.successful_records}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Failed</p>
+                          <p className="text-sm font-bold text-red-600 dark:text-red-400">{importDetail.failed_records}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Priority Badge */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Priority:</span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${PRIORITY_CONFIG[selectedNotification.priority]?.label === 'Critical' ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' : PRIORITY_CONFIG[selectedNotification.priority]?.label === 'High' ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : PRIORITY_CONFIG[selectedNotification.priority]?.label === 'Medium' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+                      {selectedNotification.priority}
+                    </span>
+                  </div>
+
+                  {/* Timestamp */}
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                    {new Date(selectedNotification.created_at).toLocaleString()}
+                  </p>
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-end gap-3 p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30">
+                  <button
+                    onClick={() => setSelectedNotification(null)}
+                    className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    Close
+                  </button>
+                  {getResourceLink(selectedNotification) && getResourceLink(selectedNotification) !== '#' && (
+                    <button
+                      onClick={handleViewResource}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors"
+                    >
+                      View {selectedNotification.resource_type?.toLowerCase()}
+                      <LaunchIcon style={{ fontSize: 12 }} />
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
