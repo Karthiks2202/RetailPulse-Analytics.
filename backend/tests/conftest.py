@@ -28,6 +28,7 @@ from app.models.customer_timeline import CustomerTimeline
 from app.models.inventory import StockMovement, InventoryAdjustment, MovementType
 from app.models.notification import Notification, NotificationType
 from app.models.forecast import DemandForecast, ForecastHistory, ForecastPeriodType
+from app.models.report import ScheduledReport, ReportHistory, ReportType, ReportFrequency, ReportFormat, ReportExecutionStatus
 
 engine = create_async_engine(
     "sqlite+aiosqlite:///:memory:",

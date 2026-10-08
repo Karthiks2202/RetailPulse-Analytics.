@@ -24,6 +24,8 @@ import CustomerDetails from '../pages/customers/CustomerDetails';
 import DataImport from '../pages/imports/DataImport';
 import AuditLogs from '../pages/audit-logs/AuditLogs';
 import NotificationsPage from '../pages/notifications/Notifications';
+import Reports from '../pages/reports/Reports';
+import ScheduledReports from '../pages/reports/ScheduledReports';
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -59,6 +61,8 @@ export const AppRoutes: React.FC = () => {
             <Route path="/inventory/forecast" element={<InventoryForecast />} />
             <Route path="/sales" element={<Sales />} />
             <Route path="/sales/:id" element={<SaleDetails />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/reports/scheduled" element={<ScheduledReports />} />
           </Route>
           <Route path="/profile" element={<Profile />} />
           <Route path="/notifications" element={<NotificationsPage />} />
