@@ -21,6 +21,7 @@ from app.models.customer_timeline import CustomerTimeline
 from app.models.inventory import StockMovement, InventoryAdjustment
 from app.models.notification import Notification
 from app.models.forecast import DemandForecast, ForecastHistory
+from app.models.report import ScheduledReport, ReportHistory
 from app.config import settings
 
 config = context.config

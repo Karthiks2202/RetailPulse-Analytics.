@@ -197,12 +197,13 @@ async def create_sale(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     items = [item.model_dump() for item in payload.items]
+    sale_date = payload.sale_date.replace(tzinfo=None) if payload.sale_date else datetime.utcnow()
     sale = await sale_crud.create(
         db,
         current_user.company_id,
         current_user.id,
         payload.customer_name,
-        payload.sale_date or datetime.utcnow(),
+        sale_date,
         payload.sales_channel.value,
         payload.payment_method.value,
         items,

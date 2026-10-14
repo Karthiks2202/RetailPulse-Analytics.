@@ -20,7 +20,8 @@ class ReportService:
         return filters
 
     async def generate_report_data(
-        self, db: AsyncSession, company_id: UUID, report_type: ReportType, filters: Optional[Dict[str, Any]] = None, page: int = 1, page_size: int = 50
+        self, db: AsyncSession, company_id: UUID, report_type: ReportType, filters: Optional[Dict[str, Any]] = None, page: int = 1, page_size: int = 50,
+        sort_by: Optional[str] = None, sort_order: Optional[str] = "asc",
     ) -> ReportDataResponse:
         applied_filters = self._apply_filters(filters)
         period = None
@@ -31,22 +32,23 @@ class ReportService:
             }
 
         if report_type == ReportType.SALES:
-            return await self._sales_report(db, company_id, applied_filters, page, page_size, period)
+            return await self._sales_report(db, company_id, applied_filters, page, page_size, period, sort_by, sort_order)
         elif report_type == ReportType.INVENTORY:
-            return await self._inventory_report(db, company_id, applied_filters, page, page_size, period)
+            return await self._inventory_report(db, company_id, applied_filters, page, page_size, period, sort_by, sort_order)
         elif report_type == ReportType.CUSTOMER:
-            return await self._customer_report(db, company_id, applied_filters, page, page_size, period)
+            return await self._customer_report(db, company_id, applied_filters, page, page_size, period, sort_by, sort_order)
         elif report_type == ReportType.PRODUCT_PERFORMANCE:
-            return await self._product_performance_report(db, company_id, applied_filters, page, page_size, period)
+            return await self._product_performance_report(db, company_id, applied_filters, page, page_size, period, sort_by, sort_order)
         elif report_type == ReportType.STOCK_MOVEMENT:
-            return await self._stock_movement_report(db, company_id, applied_filters, page, page_size, period)
+            return await self._stock_movement_report(db, company_id, applied_filters, page, page_size, period, sort_by, sort_order)
         else:
             raise ValueError(f"Unsupported report type: {report_type}")
 
     async def _sales_report(
-        self, db: AsyncSession, company_id: UUID, filters: Dict[str, Any], page: int, page_size: int, period: Optional[Dict[str, Any]]
+        self, db: AsyncSession, company_id: UUID, filters: Dict[str, Any], page: int, page_size: int, period: Optional[Dict[str, Any]],
+        sort_by: Optional[str] = None, sort_order: Optional[str] = "asc",
     ) -> ReportDataResponse:
-        sales, total = await sale_crud.list_with_items(
+        sales, total = await sale_crud.sale.list_with_items(
             db=db,
             company_id=company_id,
             skip=(page - 1) * page_size,
@@ -60,6 +62,8 @@ class ReportService:
             payment_method=filters.get("payment_method"),
             payment_status=filters.get("payment_status"),
             category_id=filters.get("category_id"),
+            sort_by=sort_by or "created_at",
+            sort_dir=sort_order or "desc",
         )
         rows = []
         for sale in sales:
@@ -89,7 +93,8 @@ class ReportService:
         )
 
     async def _inventory_report(
-        self, db: AsyncSession, company_id: UUID, filters: Dict[str, Any], page: int, page_size: int, period: Optional[Dict[str, Any]]
+        self, db: AsyncSession, company_id: UUID, filters: Dict[str, Any], page: int, page_size: int, period: Optional[Dict[str, Any]],
+        sort_by: Optional[str] = None, sort_order: Optional[str] = "asc",
     ) -> ReportDataResponse:
         items, total = await inventory_crud.inventory.get_inventory_items(
             db=db,
@@ -98,6 +103,8 @@ class ReportService:
             category_id=filters.get("category_id"),
             stock_status=filters.get("stock_status"),
             brand=filters.get("brand"),
+            sort_by=sort_by or "name",
+            sort_dir=sort_order or "asc",
             skip=(page - 1) * page_size,
             limit=page_size,
         )
@@ -124,7 +131,8 @@ class ReportService:
         )
 
     async def _customer_report(
-        self, db: AsyncSession, company_id: UUID, filters: Dict[str, Any], page: int, page_size: int, period: Optional[Dict[str, Any]]
+        self, db: AsyncSession, company_id: UUID, filters: Dict[str, Any], page: int, page_size: int, period: Optional[Dict[str, Any]],
+        sort_by: Optional[str] = None, sort_order: Optional[str] = "asc",
     ) -> ReportDataResponse:
         from app.models.customer import CustomerStatus, CustomerType
         customer_type_enum = None
@@ -149,19 +157,24 @@ class ReportService:
             customer_type=customer_type_enum,
             status=status_enum,
             segment=filters.get("segment"),
+            sort_by=sort_by or "created_at",
+            sort_dir=sort_order or "desc",
         )
+        customer_ids = [c.id for c in customers]
+        summaries = await customer_crud.customer.get_customers_purchase_summaries(db, company_id, customer_ids) if customer_ids else {}
         rows = []
         for customer in customers:
+            summary = summaries.get(customer.id, {})
             rows.append({
-                "name": customer.name,
+                "name": f"{customer.first_name} {customer.last_name}",
                 "email": customer.email,
                 "phone": customer.phone,
                 "customer_type": customer.customer_type.value if hasattr(customer.customer_type, 'value') else str(customer.customer_type),
                 "segment": customer.segment.value if hasattr(customer.segment, 'value') else str(customer.segment),
                 "status": customer.status.value if hasattr(customer.status, 'value') else str(customer.status),
-                "total_purchases": customer.total_purchases or 0,
-                "total_spent": float(customer.total_spent or 0),
-                "last_purchase_date": customer.last_purchase_date.isoformat() if customer.last_purchase_date else None,
+                "total_purchases": summary.get("total_purchases", 0),
+                "total_spent": float(summary.get("total_spent", 0) or 0),
+                "last_purchase_date": summary.get("last_purchase_date"),
             })
         columns = [
             "name", "email", "phone", "customer_type", "segment", "status", "total_purchases", "total_spent", "last_purchase_date",
@@ -171,7 +184,8 @@ class ReportService:
         )
 
     async def _product_performance_report(
-        self, db: AsyncSession, company_id: UUID, filters: Dict[str, Any], page: int, page_size: int, period: Optional[Dict[str, Any]]
+        self, db: AsyncSession, company_id: UUID, filters: Dict[str, Any], page: int, page_size: int, period: Optional[Dict[str, Any]],
+        sort_by: Optional[str] = None, sort_order: Optional[str] = "asc",
     ) -> ReportDataResponse:
         from app.services.analytics import analytics_service
         top_products_data = await analytics_service.get_top_products(
@@ -180,6 +194,8 @@ class ReportService:
             filters=filters or {},
             page=page,
             page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
         rows = []
         for product in top_products_data.get("items", []):
@@ -200,7 +216,8 @@ class ReportService:
         )
 
     async def _stock_movement_report(
-        self, db: AsyncSession, company_id: UUID, filters: Dict[str, Any], page: int, page_size: int, period: Optional[Dict[str, Any]]
+        self, db: AsyncSession, company_id: UUID, filters: Dict[str, Any], page: int, page_size: int, period: Optional[Dict[str, Any]],
+        sort_by: Optional[str] = None, sort_order: Optional[str] = "asc",
     ) -> ReportDataResponse:
         movements, total = await inventory_crud.inventory.get_stock_movements(
             db=db,
@@ -209,6 +226,8 @@ class ReportService:
             movement_type=filters.get("movement_type"),
             skip=(page - 1) * page_size,
             limit=page_size,
+            sort_by=sort_by or "created_at",
+            sort_dir=sort_order or "desc",
         )
         rows = []
         for movement in movements:
@@ -219,7 +238,7 @@ class ReportService:
                 "previous_quantity": movement.previous_quantity,
                 "updated_quantity": movement.updated_quantity,
                 "user_name": movement.user.name if movement.user else "System",
-                "notes": movement.notes or "",
+                "notes": movement.reason or "",
                 "created_at": movement.created_at.isoformat() if movement.created_at else None,
             })
         columns = [

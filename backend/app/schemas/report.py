@@ -69,6 +69,7 @@ class ReportHistoryResponse(BaseModel):
     company_id: UUID
     scheduled_report_id: Optional[UUID] = None
     generated_by: Optional[UUID] = None
+    generated_by_name: Optional[str] = None
     report_name: str
     report_type: ReportType
     filters: Dict[str, Any]

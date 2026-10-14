@@ -14,6 +14,9 @@ import {
   type ReportFrequency,
   type ReportFormat,
 } from '../../api/reportApi';
+import { getCategories } from '../../api/categoryApi';
+import { getProducts } from '../../api/productApi';
+import { getCustomers } from '../../api/customerApi';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -53,6 +56,19 @@ interface ScheduledReportFormValues {
   recipients: string;
   export_format: ReportFormat;
   is_active: boolean;
+  date_from: string;
+  date_to: string;
+  product_id: string;
+  category_id: string;
+  brand: string;
+  customer_id: string;
+  sales_status: string;
+  stock_status: string;
+  payment_method: string;
+  payment_status: string;
+  sales_channel: string;
+  movement_type: string;
+  search: string;
 }
 
 const emptyFormValues: ScheduledReportFormValues = {
@@ -63,6 +79,19 @@ const emptyFormValues: ScheduledReportFormValues = {
   recipients: '',
   export_format: 'csv',
   is_active: true,
+  date_from: '',
+  date_to: '',
+  product_id: '',
+  category_id: '',
+  brand: '',
+  customer_id: '',
+  sales_status: '',
+  stock_status: '',
+  payment_method: '',
+  payment_status: '',
+  sales_channel: '',
+  movement_type: '',
+  search: '',
 };
 
 const ScheduledReports: React.FC = () => {
@@ -84,11 +113,16 @@ const ScheduledReports: React.FC = () => {
     enabled: isAdmin,
   });
 
+  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => getCategories(), enabled: isAdmin });
+  const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: () => getProducts({ status: 'ACTIVE' }), enabled: isAdmin });
+  const { data: customers = [] } = useQuery({ queryKey: ['customers'], queryFn: () => getCustomers({ status: 'ACTIVE' }), enabled: isAdmin });
+
   const createMutation = useMutation({
     mutationFn: createScheduledReport,
     onSuccess: () => {
       showNotification('Scheduled report created', 'success');
       setModalOpen(false);
+      setEditingReport(null);
       reset(emptyFormValues);
       queryClient.invalidateQueries({ queryKey: ['scheduledReports'] });
     },
@@ -122,6 +156,24 @@ const ScheduledReports: React.FC = () => {
     },
   });
 
+  const buildFilters = (values: ScheduledReportFormValues) => {
+    const filters: Record<string, any> = {};
+    if (values.date_from) filters.date_from = values.date_from;
+    if (values.date_to) filters.date_to = values.date_to;
+    if (values.product_id) filters.product_id = values.product_id;
+    if (values.category_id) filters.category_id = values.category_id;
+    if (values.brand) filters.brand = values.brand;
+    if (values.customer_id) filters.customer_id = values.customer_id;
+    if (values.sales_status) filters.sales_status = values.sales_status;
+    if (values.stock_status) filters.stock_status = values.stock_status;
+    if (values.payment_method) filters.payment_method = values.payment_method;
+    if (values.payment_status) filters.payment_status = values.payment_status;
+    if (values.sales_channel) filters.sales_channel = values.sales_channel;
+    if (values.movement_type) filters.movement_type = values.movement_type;
+    if (values.search) filters.search = values.search;
+    return filters;
+  };
+
   const openCreate = () => {
     setEditingReport(null);
     reset(emptyFormValues);
@@ -137,6 +189,20 @@ const ScheduledReports: React.FC = () => {
     setValue('recipients', (report.recipients || []).join(', '));
     setValue('export_format', report.export_format);
     setValue('is_active', report.is_active);
+    const filters = report.filters || {};
+    setValue('date_from', filters.date_from || '');
+    setValue('date_to', filters.date_to || '');
+    setValue('product_id', filters.product_id || '');
+    setValue('category_id', filters.category_id || '');
+    setValue('brand', filters.brand || '');
+    setValue('customer_id', filters.customer_id || '');
+    setValue('sales_status', filters.sales_status || '');
+    setValue('stock_status', filters.stock_status || '');
+    setValue('payment_method', filters.payment_method || '');
+    setValue('payment_status', filters.payment_status || '');
+    setValue('sales_channel', filters.sales_channel || '');
+    setValue('movement_type', filters.movement_type || '');
+    setValue('search', filters.search || '');
     setModalOpen(true);
   };
 
@@ -146,6 +212,7 @@ const ScheduledReports: React.FC = () => {
       showNotification('At least one recipient email is required', 'error');
       return;
     }
+    const filters = buildFilters(values);
     if (editingReport) {
       updateMutation.mutate({
         id: editingReport.id,
@@ -157,6 +224,7 @@ const ScheduledReports: React.FC = () => {
           recipients,
           export_format: values.export_format,
           is_active: values.is_active,
+          filters,
         },
       });
     } else {
@@ -168,6 +236,7 @@ const ScheduledReports: React.FC = () => {
         recipients,
         export_format: values.export_format,
         is_active: values.is_active,
+        filters,
       });
     }
   };
@@ -336,6 +405,119 @@ const ScheduledReports: React.FC = () => {
                 <input {...register('recipients', { required: 'At least one recipient is required' })} className={inputClass} placeholder="user@example.com, admin@example.com" />
                 {errors.recipients && <span className="text-[10px] text-red-600">{errors.recipients.message}</span>}
               </div>
+
+              <div className="border-t border-slate-200 dark:border-slate-800 pt-3 space-y-3">
+                <h4 className="text-[10px] uppercase tracking-wider text-slate-500">Report Filters</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Date From</label>
+                    <input type="date" {...register('date_from')} className={inputClass} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Date To</label>
+                    <input type="date" {...register('date_to')} className={inputClass} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Product</label>
+                    <select {...register('product_id')} className={inputClass}>
+                      <option value="">All Products</option>
+                      {(products || []).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Category</label>
+                    <select {...register('category_id')} className={inputClass}>
+                      <option value="">All Categories</option>
+                      {(categories || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Customer</label>
+                    <select {...register('customer_id')} className={inputClass}>
+                      <option value="">All Customers</option>
+                      {(customers || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Sales Status</label>
+                    <select {...register('sales_status')} className={inputClass}>
+                      <option value="">All</option>
+                      <option value="COMPLETED">Completed</option>
+                      <option value="DRAFT">Draft</option>
+                      <option value="CANCELLED">Cancelled</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Stock Status</label>
+                    <select {...register('stock_status')} className={inputClass}>
+                      <option value="">All</option>
+                      <option value="IN_STOCK">In Stock</option>
+                      <option value="LOW_STOCK">Low Stock</option>
+                      <option value="OUT_OF_STOCK">Out of Stock</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Brand</label>
+                    <input type="text" {...register('brand')} className={inputClass} placeholder="Any brand" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Payment Method</label>
+                    <select {...register('payment_method')} className={inputClass}>
+                      <option value="">All</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Card">Card</option>
+                      <option value="UPI">UPI</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Payment Status</label>
+                    <select {...register('payment_status')} className={inputClass}>
+                      <option value="">All</option>
+                      <option value="PAID">Paid</option>
+                      <option value="PENDING">Pending</option>
+                      <option value="PARTIAL">Partial</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Sales Channel</label>
+                    <select {...register('sales_channel')} className={inputClass}>
+                      <option value="">All</option>
+                      <option value="Retail Store">Retail Store</option>
+                      <option value="Online Store">Online Store</option>
+                      <option value="Marketplace">Marketplace</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Movement Type</label>
+                    <select {...register('movement_type')} className={inputClass}>
+                      <option value="">All</option>
+                      <option value="SALE">Sale</option>
+                      <option value="MANUAL_ADJUSTMENT">Manual Adjustment</option>
+                      <option value="STOCK_ADDITION">Stock Addition</option>
+                      <option value="STOCK_REMOVAL">Stock Removal</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Search</label>
+                    <input type="text" {...register('search')} className={inputClass} placeholder="Search..." />
+                  </div>
+                  <div />
+                </div>
+              </div>
+
               <div className="flex items-center gap-2">
                 <input type="checkbox" id="is_active" {...register('is_active')} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                 <label htmlFor="is_active" className="text-xs text-slate-700 dark:text-slate-300">Active</label>

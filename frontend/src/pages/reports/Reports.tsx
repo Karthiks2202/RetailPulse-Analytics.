@@ -71,6 +71,10 @@ const Reports: React.FC = () => {
   const [historyPage, setHistoryPage] = useState(1);
   const [dataPage, setDataPage] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [sortBy, setSortBy] = useState<string>('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | ''>('');
+  const [historySortBy, setHistorySortBy] = useState<string>('');
+  const [historySortOrder, setHistorySortOrder] = useState<'asc' | 'desc' | ''>('');
 
   const { register: registerFilter, reset: resetFilters, watch: watchFilters } = useForm<FilterFormValues>({
     defaultValues: {
@@ -91,7 +95,7 @@ const Reports: React.FC = () => {
   });
 
   const { data: reportData, isLoading: reportLoading } = useQuery({
-    queryKey: ['reportData', selectedReportType, dataPage, watchFilters()],
+    queryKey: ['reportData', selectedReportType, dataPage, watchFilters(), sortBy, sortOrder],
     queryFn: async () => {
       const filters: ReportFilter = {};
       const vals = watchFilters();
@@ -109,7 +113,13 @@ const Reports: React.FC = () => {
       if (vals.movement_type) filters.movement_type = vals.movement_type;
       if (vals.search) filters.search = vals.search;
       const activeFilters = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== '' && v != null));
-      return getReportData({ report_type: selectedReportType, filters: activeFilters, page: dataPage, page_size: 20 });
+      return getReportData({ 
+        report_type: selectedReportType, 
+        filters: activeFilters, 
+        page: dataPage, 
+        page_size: 20, 
+        ...(sortBy && sortOrder ? { sort_by: sortBy, sort_order: sortOrder } : {})
+      });
     },
     enabled: isAdmin,
   });
@@ -190,7 +200,22 @@ const Reports: React.FC = () => {
     if (!reportData) return;
     const headers = reportData.columns.join(',');
     const rows = reportData.rows.map((r) => reportData.columns.map((c) => JSON.stringify(r[c] ?? '')).join(','));
-    const csvContent = [headers, ...rows].join('\n');
+    const lines = [];
+    lines.push(`Report: ${REPORT_TYPE_OPTIONS.find((r) => r.value === selectedReportType)?.label || 'Report'}`);
+    lines.push(`Generated At: ${new Date().toISOString()}`);
+    if (reportData.applied_filters && Object.keys(reportData.applied_filters).length > 0) {
+      lines.push('Applied Filters:');
+      for (const [key, value] of Object.entries(reportData.applied_filters)) {
+        if (value !== null && value !== undefined && value !== '') {
+          lines.push(`  ${filterLabels[key] || key}: ${formatFilterValue(key, value)}`);
+        }
+      }
+    }
+    if (reportData.period) {
+      lines.push(`Period: ${reportData.period.from || '...'} to ${reportData.period.to || '...'}`);
+    }
+    lines.push('');
+    const csvContent = [...lines, headers, ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -207,13 +232,122 @@ const Reports: React.FC = () => {
     doc.text(`${REPORT_TYPE_OPTIONS.find((r) => r.value === selectedReportType)?.label || 'Report'}`, 14, 15);
     doc.setFontSize(10);
     doc.text(`Generated At: ${new Date().toISOString()}`, 14, 22);
+    let yPos = 29;
+    if (reportData.applied_filters && Object.keys(reportData.applied_filters).length > 0) {
+      doc.text('Applied Filters:', 14, yPos);
+      yPos += 5;
+      for (const [key, value] of Object.entries(reportData.applied_filters)) {
+        if (value !== null && value !== undefined && value !== '') {
+          doc.text(`  ${filterLabels[key] || key}: ${formatFilterValue(key, value)}`, 14, yPos);
+          yPos += 5;
+        }
+      }
+    }
+    if (reportData.period) {
+      doc.text(`Period: ${reportData.period.from || '...'} to ${reportData.period.to || '...'}`, 14, yPos);
+      yPos += 7;
+    }
     const tableData = reportData.rows.map((r) => reportData.columns.map((c) => String(r[c] ?? '')));
-    _autoTable(doc, { head: [reportData.columns], body: tableData, startY: 30 });
+    _autoTable(doc, { head: [reportData.columns], body: tableData, startY: yPos });
     doc.save(`${selectedReportType}_report.pdf`);
   };
 
   const clearFilters = () => {
     resetFilters();
+  };
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      if (sortOrder === 'asc') setSortOrder('desc');
+      else if (sortOrder === 'desc') { setSortBy(''); setSortOrder(''); }
+      else setSortOrder('asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('asc');
+    }
+    setDataPage(1);
+  };
+
+  const handleHistorySort = (column: string) => {
+    if (historySortBy === column) {
+      if (historySortOrder === 'asc') setHistorySortOrder('desc');
+      else if (historySortOrder === 'desc') { setHistorySortBy(''); setHistorySortOrder(''); }
+      else setHistorySortOrder('asc');
+    } else {
+      setHistorySortBy(column);
+      setHistorySortOrder('asc');
+    }
+  };
+
+  const getSortIndicator = (column: string, currentSortBy: string, currentSortOrder: string) => {
+    if (currentSortBy !== column) return '↕';
+    if (currentSortOrder === 'asc') return '↑';
+    if (currentSortOrder === 'desc') return '↓';
+    return '↕';
+  };
+
+  const sortedRows = useMemo(() => {
+    if (!reportData || !sortBy || !sortOrder) return reportData?.rows || [];
+    return [...reportData.rows].sort((a, b) => {
+      let aVal = a[sortBy];
+      let bVal = b[sortBy];
+      if (aVal === null || aVal === undefined) aVal = '';
+      if (bVal === null || bVal === undefined) bVal = '';
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      const aStr = String(aVal).toLowerCase();
+      const bStr = String(bVal).toLowerCase();
+      if (aStr < bStr) return sortOrder === 'asc' ? -1 : 1;
+      if (aStr > bStr) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [reportData, sortBy, sortOrder]);
+
+  const sortedHistoryItems = useMemo(() => {
+    if (!historyData || !historySortBy || !historySortOrder) return historyData?.items || [];
+    return [...historyData.items].sort((a, b) => {
+      let aVal = (a as any)[historySortBy];
+      let bVal = (b as any)[historySortBy];
+      if (historySortBy === 'generated_at') {
+        aVal = new Date(aVal).getTime();
+        bVal = new Date(bVal).getTime();
+      }
+      if (aVal === null || aVal === undefined) aVal = '';
+      if (bVal === null || bVal === undefined) bVal = '';
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return historySortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      const aStr = String(aVal).toLowerCase();
+      const bStr = String(bVal).toLowerCase();
+      if (aStr < bStr) return historySortOrder === 'asc' ? -1 : 1;
+      if (aStr > bStr) return historySortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [historyData, historySortBy, historySortOrder]);
+
+  const filterLabels: Record<string, string> = {
+    date_from: 'Date From',
+    date_to: 'Date To',
+    product_id: 'Product',
+    category_id: 'Category',
+    brand: 'Brand',
+    customer_id: 'Customer',
+    sales_status: 'Sales Status',
+    stock_status: 'Stock Status',
+    payment_method: 'Payment Method',
+    payment_status: 'Payment Status',
+    sales_channel: 'Sales Channel',
+    movement_type: 'Movement Type',
+    search: 'Search',
+  };
+
+  const formatFilterValue = (key: string, value: any): string => {
+    if (value === null || value === undefined || value === '') return '—';
+    if (key === 'date_from' || key === 'date_to') {
+      try { return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return String(value); }
+    }
+    return String(value);
   };
 
   const activeFilterCount = useMemo(() => {
@@ -336,20 +470,38 @@ const Reports: React.FC = () => {
               <label className="block text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Search</label>
               <input type="text" {...registerFilter('search')} placeholder="Search..." className={inputClass} />
             </div>
-            <div className="md:col-span-4 flex justify-end">
-              <button onClick={clearFilters} className="inline-flex items-center gap-1 px-3 py-2 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
-                <CloseIcon fontSize="small" /> Clear Filters
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+             <div className="md:col-span-4 flex justify-end">
+               <button onClick={clearFilters} className="inline-flex items-center gap-1 px-3 py-2 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
+                 <CloseIcon fontSize="small" /> Clear Filters
+               </button>
+             </div>
+           </div>
+         )}
+       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            {REPORT_TYPE_OPTIONS.find((r) => r.value === selectedReportType)?.label || 'Report'} Data
-          </h2>
+       {reportData && reportData.applied_filters && Object.keys(reportData.applied_filters).length > 0 && (
+         <div className="bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-lg p-3">
+           <h3 className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Applied Filters</h3>
+           <div className="flex flex-wrap gap-x-4 gap-y-1">
+             {Object.entries(reportData.applied_filters).map(([key, value]) => (
+               <span key={key} className="text-[11px] text-slate-700 dark:text-slate-300">
+                 <span className="font-medium">{filterLabels[key] || key}:</span> {formatFilterValue(key, value)}
+               </span>
+             ))}
+           </div>
+           {reportData.period && (reportData.period.from || reportData.period.to) && (
+             <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400">
+               <span className="font-medium">Period:</span> {reportData.period.from ? formatFilterValue('date_from', reportData.period.from) : '...'} → {reportData.period.to ? formatFilterValue('date_to', reportData.period.to) : '...'}
+             </div>
+           )}
+         </div>
+       )}
+
+       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+         <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+             {REPORT_TYPE_OPTIONS.find((r) => r.value === selectedReportType)?.label || 'Report'} Data
+           </h2>
           {reportData && (
             <div className="flex items-center gap-2">
               <button onClick={handleExportCSV} className="inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/30 rounded-lg hover:bg-emerald-100">
@@ -363,18 +515,20 @@ const Reports: React.FC = () => {
         </div>
         {reportLoading ? (
           <div className="p-8 text-center text-xs text-slate-500">Loading report data...</div>
-        ) : reportData && reportData.rows.length > 0 ? (
+        ) : reportData && sortedRows.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 <tr>
                   {reportData.columns.map((col) => (
-                    <th key={col} className="px-4 py-3 font-medium">{col.replace(/_/g, ' ')}</th>
+                    <th key={col} className="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-900 select-none" onClick={() => handleSort(col)}>
+                      {col.replace(/_/g, ' ')} <span className="text-slate-400">{getSortIndicator(col, sortBy, sortOrder)}</span>
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {reportData.rows.map((row, idx) => (
+                {sortedRows.map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/30">
                     {reportData.columns.map((col) => (
                       <td key={col} className="px-4 py-3 text-slate-700 dark:text-slate-300">
@@ -392,7 +546,7 @@ const Reports: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button onClick={() => setDataPage((p) => Math.max(1, p - 1))} disabled={dataPage <= 1} className="px-3 py-1 text-[10px] border border-slate-300 dark:border-slate-700 rounded disabled:opacity-50">Prev</button>
                 <span className="text-[10px] text-slate-500">Page {dataPage}</span>
-                <button onClick={() => setDataPage((p) => p + 1)} disabled={reportData.rows.length < 20} className="px-3 py-1 text-[10px] border border-slate-300 dark:border-slate-700 rounded disabled:opacity-50">Next</button>
+                <button onClick={() => setDataPage((p) => p + 1)} disabled={sortedRows.length < 20} className="px-3 py-1 text-[10px] border border-slate-300 dark:border-slate-700 rounded disabled:opacity-50">Next</button>
               </div>
             </div>
           </div>
@@ -407,21 +561,23 @@ const Reports: React.FC = () => {
         </div>
         {historyLoading ? (
           <div className="p-8 text-center text-xs text-slate-500">Loading history...</div>
-        ) : historyData && historyData.items.length > 0 ? (
+        ) : historyData && sortedHistoryItems.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Report Name</th>
-                  <th className="px-4 py-3 font-medium">Type</th>
-                  <th className="px-4 py-3 font-medium">Format</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Generated At</th>
+                  <th className="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-900 select-none" onClick={() => handleHistorySort('report_name')}>Report Name {getSortIndicator('report_name', historySortBy, historySortOrder)}</th>
+                  <th className="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-900 select-none" onClick={() => handleHistorySort('report_type')}>Type {getSortIndicator('report_type', historySortBy, historySortOrder)}</th>
+                  <th className="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-900 select-none" onClick={() => handleHistorySort('export_format')}>Format {getSortIndicator('export_format', historySortBy, historySortOrder)}</th>
+                  <th className="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-900 select-none" onClick={() => handleHistorySort('status')}>Status {getSortIndicator('status', historySortBy, historySortOrder)}</th>
+                  <th className="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-900 select-none" onClick={() => handleHistorySort('generated_by_name')}>Generated By {getSortIndicator('generated_by_name', historySortBy, historySortOrder)}</th>
+                  <th className="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-900 select-none" onClick={() => handleHistorySort('generated_at')}>Generated At {getSortIndicator('generated_at', historySortBy, historySortOrder)}</th>
+                  <th className="px-4 py-3 font-medium">Applied Filters</th>
                   <th className="px-4 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {historyData.items.map((item: ReportHistory) => (
+                {sortedHistoryItems.map((item: ReportHistory) => (
                   <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/30">
                     <td className="px-4 py-3 text-slate-900 dark:text-slate-100 font-medium">{item.report_name}</td>
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-300 capitalize">{item.report_type.replace('_', ' ')}</td>
@@ -431,7 +587,15 @@ const Reports: React.FC = () => {
                         {formatHistoryStatus(item.status)}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{item.generated_by_name || '—'}</td>
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{new Date(item.generated_at).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+                      {item.filters && Object.keys(item.filters).length > 0 ? (
+                        <span title={Object.entries(item.filters).filter(([,v]) => v).map(([k,v]) => `${filterLabels[k] || k}: ${v}`).join('\n')} className="cursor-help">
+                          {Object.entries(item.filters).filter(([,v]) => v).length} filter(s)
+                        </span>
+                      ) : '—'}
+                    </td>
                     <td className="px-4 py-3">
                       {item.status === 'completed' && (
                         <button
@@ -452,7 +616,7 @@ const Reports: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button onClick={() => setHistoryPage((p) => Math.max(1, p - 1))} disabled={historyPage <= 1} className="px-3 py-1 text-[10px] border border-slate-300 dark:border-slate-700 rounded disabled:opacity-50">Prev</button>
                 <span className="text-[10px] text-slate-500">Page {historyPage}</span>
-                <button onClick={() => setHistoryPage((p) => p + 1)} disabled={historyData.items.length < 10} className="px-3 py-1 text-[10px] border border-slate-300 dark:border-slate-700 rounded disabled:opacity-50">Next</button>
+                <button onClick={() => setHistoryPage((p) => p + 1)} disabled={sortedHistoryItems.length < 10} className="px-3 py-1 text-[10px] border border-slate-300 dark:border-slate-700 rounded disabled:opacity-50">Next</button>
               </div>
             </div>
           </div>

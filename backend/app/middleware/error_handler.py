@@ -1,8 +1,9 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
-from sqlalchemy.exc import SQLAlchemyError
 import logging
+from sqlalchemy.exc import SQLAlchemyError
+from fastapi.exceptions import RequestValidationError, HTTPException as FastAPIHTTPException
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger("retailpulse")
 
@@ -20,7 +21,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"error": "Validation failed", "details": exc.errors()})
 
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
-    logger.error(f"Database error: {exc}")
+    logger.error(f"Database error: {exc}", exc_info=True)
     return JSONResponse(status_code=500, content={"error": "Database error occurred"})
 
 async def value_error_handler(request: Request, exc: ValueError):
@@ -28,5 +29,12 @@ async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(status_code=400, content={"error": "Invalid request"})
 
 async def generic_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, StarletteHTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=getattr(exc, "headers", None)
+        )
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(status_code=500, content={"error": "Internal server error"})
+    import traceback
+    return JSONResponse(status_code=500, content={"error": "Internal server error", "detail": traceback.format_exc()})

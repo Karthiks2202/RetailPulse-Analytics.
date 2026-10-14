@@ -21,9 +21,10 @@ from app.schemas.report import (
     ReportDataResponse,
     ReportFilterBase,
 )
+from app.models.report import ReportType, ReportExecutionStatus
 from app.utils.dependencies import get_current_active_user
-from app.crud import report as report_crud
-from app.services import report as report_service
+from app.crud import report_crud
+from app.services.report import report_service
 from app.services.audit import audit_service
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -67,7 +68,7 @@ async def generate_report(
         filters=filters_dict,
         export_format=payload.export_format.value,
         generated_by=current_user.id,
-        status="processing",
+        status=ReportExecutionStatus.PROCESSING,
     )
 
     try:
@@ -84,7 +85,7 @@ async def generate_report(
             file_content = report_service.generate_pdf(data, report_name)
             file_data = {"content": file_content.hex(), "filename": f"{report_name.replace(' ', '_').lower()}.pdf", "content_type": "application/pdf"}
 
-        await report_crud.update_report_history(db=db, history_id=history.id, status="completed", file_data=file_data)
+        await report_crud.update_report_history(db=db, history_id=history.id, status=ReportExecutionStatus.COMPLETED, file_data=file_data)
         await audit_service.log(
             db, current_user.company_id, current_user.id, "Report Generated", request,
             resource_type="Report", resource_id=history.id, description=f"Generated {report_name} as {payload.export_format.value.upper()}"
@@ -94,12 +95,12 @@ async def generate_report(
             report_name=report_name,
             report_type=payload.report_type,
             export_format=payload.export_format,
-            status="completed",
+            status=ReportExecutionStatus.COMPLETED,
             generated_at=history.generated_at,
             download_url=f"/api/reports/history/{history.id}/download",
         )
     except Exception as e:
-        await report_crud.update_report_history(db=db, history_id=history.id, status="failed", error_message=str(e))
+        await report_crud.update_report_history(db=db, history_id=history.id, status=ReportExecutionStatus.FAILED, error_message=str(e))
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Report generation failed: {str(e)}")
 
 
@@ -119,6 +120,8 @@ async def get_report_data(
     sales_channel: Optional[str] = Query(None),
     movement_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("asc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     current_user=Depends(get_current_active_user),
@@ -130,10 +133,10 @@ async def get_report_data(
     filters = {
         "date_from": date_from,
         "date_to": date_to,
-        "product_id": str(product_id) if product_id else None,
-        "category_id": str(category_id) if category_id else None,
+        "product_id": product_id,
+        "category_id": category_id,
         "brand": brand,
-        "customer_id": str(customer_id) if customer_id else None,
+        "customer_id": customer_id,
         "sales_status": sales_status,
         "stock_status": stock_status,
         "payment_method": payment_method,
@@ -145,13 +148,16 @@ async def get_report_data(
     filters = {k: v for k, v in filters.items() if v is not None}
 
     try:
+        report_type_enum = ReportType(report_type)
         data = await report_service.generate_report_data(
             db=db,
             company_id=current_user.company_id,
-            report_type=report_type,
+            report_type=report_type_enum,
             filters=filters,
             page=page,
             page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
         return data
     except ValueError as e:

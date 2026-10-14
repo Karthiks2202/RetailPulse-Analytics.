@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
@@ -48,6 +49,52 @@ def is_admin_or_analyst(user):
     return user.role in (UserRole.COMPANY_ADMIN, UserRole.ANALYST, UserRole.SUPER_ADMIN)
 
 
+def _build_report_name(report_type: str) -> str:
+    mapping = {
+        "kpis": "KPI Dashboard",
+        "sales": "Sales Report",
+        "inventory": "Inventory Report",
+        "transactions": "Transactions Report",
+        "top-products": "Top Products Report",
+        "top-customers": "Top Customers Report",
+        "payment-methods": "Payment Methods Report",
+    }
+    return mapping.get(report_type, report_type.replace("_", " ").title() + " Report")
+
+
+def _format_date(value) -> str:
+    if hasattr(value, "strftime"):
+        return value.strftime("%d %b %Y")
+    if isinstance(value, str) and value:
+        try:
+            return datetime.fromisoformat(value).strftime("%d %b %Y")
+        except ValueError:
+            return value
+    return str(value)
+
+
+def _format_filters_for_export(filters: Optional[dict]) -> str:
+    if not filters:
+        return ""
+    lines = []
+    label_map = {
+        "date_from": "Date From",
+        "date_to": "Date To",
+        "product_id": "Product",
+        "category_id": "Category",
+        "brand": "Brand",
+        "sales_channel": "Sales Channel",
+        "payment_method": "Payment Method",
+        "customer_id": "Customer",
+    }
+    for key, value in filters.items():
+        if value is None:
+            continue
+        label = label_map.get(key, key.replace("_", " ").title())
+        lines.append(f"{label}: {_format_date(value)}")
+    return "\n".join(lines)
+
+
 def _parse_filters(
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
@@ -58,7 +105,7 @@ def _parse_filters(
     payment_method: Optional[str] = Query(None),
     customer_id: Optional[str] = Query(None),
 ) -> dict:
-    from datetime import datetime, time
+    from datetime import time
 
     filters = {}
     if date_from:
@@ -412,11 +459,21 @@ async def export_analytics(
     )
 
     if payload.export_type == "csv":
+        report_name = _build_report_name(payload.report_type)
         output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=rows[0].keys() if rows else [])
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
+        writer = csv.writer(output)
+        writer.writerow([f"Report: {report_name}"])
+        writer.writerow([f"Generated At: {datetime.utcnow().strftime('%d %b %Y')}"])
+        applied_filters_text = _format_filters_for_export(filters_dict)
+        if applied_filters_text:
+            writer.writerow(["Applied Filters:"])
+            for line in applied_filters_text.split("\n"):
+                writer.writerow([f"  {line}"])
+        writer.writerow([])
+        if rows:
+            writer.writerow(list(rows[0].keys()))
+            for row in rows:
+                writer.writerow([row.get(col, "") for col in rows[0].keys()])
         csv_content = output.getvalue()
         return StreamingResponse(
             io.StringIO(csv_content),
@@ -427,14 +484,39 @@ async def export_analytics(
     if payload.export_type == "pdf":
         company = await db.get(Company, current_user.company_id)
         company_name = company.name if company else "RetailPulse Analytics"
+        report_name = _build_report_name(payload.report_type)
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=letter)
         styles = getSampleStyleSheet()
         story = []
-        story.append(Paragraph(f"{company_name} - Analytics Report", styles["Title"]))
+        story.append(Paragraph(f"Report: {report_name}", styles["Title"]))
+        story.append(Paragraph(f"Generated At: {datetime.utcnow().strftime('%d %b %Y')}", styles["Normal"]))
         story.append(Spacer(1, 12))
-        story.append(Paragraph(f"Report Type: {payload.report_type.upper()}", styles["Normal"]))
-        story.append(Spacer(1, 12))
+
+        period_text = None
+        if filters_dict:
+            date_from = filters_dict.get("date_from")
+            date_to = filters_dict.get("date_to")
+            if date_from or date_to:
+                from_str = _format_date(date_from) if date_from else ""
+                to_str = _format_date(date_to) if date_to else ""
+                if from_str and to_str:
+                    period_text = f"{from_str} to {to_str}"
+                elif from_str:
+                    period_text = f"From {from_str}"
+                elif to_str:
+                    period_text = f"To {to_str}"
+
+        if period_text:
+            story.append(Paragraph(f"Period: {period_text}", styles["Normal"]))
+            story.append(Spacer(1, 12))
+
+        applied_filters_text = _format_filters_for_export(filters_dict)
+        if applied_filters_text:
+            story.append(Paragraph("Applied Filters:", styles["Normal"]))
+            for line in applied_filters_text.split("\n"):
+                story.append(Paragraph(f"  {line}", styles["Normal"]))
+            story.append(Spacer(1, 12))
 
         if rows:
             headers_list = [str(k).replace("_", " ").upper() for k in rows[0].keys()]

@@ -44,6 +44,7 @@ export interface ReportHistory {
   company_id: string;
   scheduled_report_id: string | null;
   generated_by: string | null;
+  generated_by_name: string | null;
   report_name: string;
   report_type: ReportType;
   filters: Record<string, any>;
@@ -119,6 +120,8 @@ export const getReportData = async (params: {
   filters?: ReportFilter;
   page?: number;
   page_size?: number;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
 }): Promise<ReportDataResponse> => {
   const { data } = await axiosInstance.get('/reports/data', { params });
   return data;

@@ -1,9 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, outerjoin
 from datetime import datetime, timedelta
 from uuid import UUID
 from typing import Optional, List, Dict, Any
+from sqlalchemy.orm import selectinload
 from app.models.report import ScheduledReport, ReportHistory, ReportExecutionStatus, ReportFrequency
+from app.models.user import User
 from app.schemas.report import ScheduledReportCreate, ScheduledReportUpdate
 
 
@@ -120,14 +122,16 @@ class CRUDReport:
 
     async def get_report_history(self, db: AsyncSession, history_id: UUID, company_id: UUID) -> Optional[ReportHistory]:
         result = await db.execute(
-            select(ReportHistory).where(ReportHistory.id == history_id, ReportHistory.company_id == company_id)
+            select(ReportHistory)
+            .options(selectinload(ReportHistory.generated_by_user))
+            .where(ReportHistory.id == history_id, ReportHistory.company_id == company_id)
         )
         return result.scalar_one_or_none()
 
     async def list_report_history(
         self, db: AsyncSession, company_id: UUID, page: int = 1, page_size: int = 20, report_type: Optional[str] = None
     ) -> tuple[List[ReportHistory], int]:
-        query = select(ReportHistory).where(ReportHistory.company_id == company_id)
+        query = select(ReportHistory).options(selectinload(ReportHistory.generated_by_user)).where(ReportHistory.company_id == company_id)
         if report_type:
             query = query.where(ReportHistory.report_type == report_type)
         count_query = select(func.count()).select_from(query.subquery())

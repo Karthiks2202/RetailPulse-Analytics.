@@ -315,6 +315,8 @@ class CRUDInventory:
         movement_type: str | None = None,
         skip: int = 0,
         limit: int = 100,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
     ) -> tuple[list[StockMovement], int]:
         query = select(StockMovement).options(selectinload(StockMovement.product), selectinload(StockMovement.user)).where(StockMovement.company_id == company_id)
 
@@ -332,7 +334,18 @@ class CRUDInventory:
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
 
-        query = query.order_by(StockMovement.created_at.desc()).offset(skip).limit(limit)
+        sort_map = {
+            "created_at": StockMovement.created_at,
+            "quantity_changed": StockMovement.quantity_changed,
+            "movement_type": StockMovement.movement_type,
+        }
+        sort_column = sort_map.get(sort_by, StockMovement.created_at)
+        if sort_dir == "desc":
+            query = query.order_by(sort_column.desc())
+        else:
+            query = query.order_by(sort_column.asc())
+
+        query = query.offset(skip).limit(limit)
         result = await db.execute(query)
         movements = list(result.scalars().all())
         return movements, total

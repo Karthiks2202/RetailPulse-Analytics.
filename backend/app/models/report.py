@@ -72,3 +72,7 @@ class ReportHistory(Base):
 
     scheduled_report = relationship("ScheduledReport", foreign_keys=[scheduled_report_id])
     generated_by_user = relationship("User", foreign_keys=[generated_by])
+
+    @property
+    def generated_by_name(self) -> str | None:
+        return self.generated_by_user.name if self.generated_by_user else None

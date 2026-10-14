@@ -65,7 +65,10 @@ class CRUDSale:
         payment_status: str | None = None,
         category_id: UUID | None = None,
     ):
-        query = select(Sale).where(Sale.company_id == company_id).options(selectinload(Sale.items))
+        query = select(Sale).where(Sale.company_id == company_id).options(
+            selectinload(Sale.items).selectinload(SaleItem.product),
+            selectinload(Sale.items).selectinload(SaleItem.category)
+        )
 
         if search:
             query = (
