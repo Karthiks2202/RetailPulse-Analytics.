@@ -11,4 +11,11 @@ class Settings(BaseSettings):
     APP_NAME: str = "RetailPulse Analytics API"
     APP_ENV: str = "development"
 
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_FROM_EMAIL: str = ""
+
 settings = Settings()

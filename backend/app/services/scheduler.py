@@ -2,9 +2,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import SessionLocal
+from app.crud import report as report_crud
 from app.services.forecast import forecast_service
 from app.services.notification import notification_service
 from app.services.report import report_service
+from app.services.email import email_service
 from app.models.company import Company
 from app.models.report import ScheduledReport, ReportFrequency, ReportExecutionStatus
 from datetime import datetime, time as dt_time
@@ -83,7 +85,7 @@ async def execute_scheduled_reports():
                 if not _should_execute(report, now):
                     continue
                 try:
-                    history_entry = await report_service.create_report_history(
+                    history_entry = await report_crud.create_report_history(
                         db=db,
                         company_id=report.company_id,
                         report_name=report.name,
@@ -92,7 +94,7 @@ async def execute_scheduled_reports():
                         export_format=report.export_format.value,
                         generated_by=report.created_by,
                         scheduled_report_id=report.id,
-                        status="processing",
+                        status=ReportExecutionStatus.PROCESSING,
                     )
                     report_data = await report_service.generate_report_data(
                         db=db,
@@ -101,21 +103,34 @@ async def execute_scheduled_reports():
                         filters=report.filters or {},
                     )
                     file_content = None
+                    filename = f"{report.name.replace(' ', '_').lower()}"
                     if report.export_format.value == "csv":
                         file_content = report_service.generate_csv(report_data, report.name)
-                        file_data = {"content": file_content, "filename": f"{report.name.replace(' ', '_').lower()}.csv", "content_type": "text/csv"}
+                        file_data = {"content": file_content, "filename": f"{filename}.csv", "content_type": "text/csv"}
                     else:
                         file_content = report_service.generate_pdf(report_data, report.name)
-                        file_data = {"content": file_content.hex(), "filename": f"{report.name.replace(' ', '_').lower()}.pdf", "content_type": "application/pdf"}
+                        file_data = {"content": file_content.hex(), "filename": f"{filename}.pdf", "content_type": "application/pdf"}
 
-                    await report_service.update_report_history(db=db, history_id=history_entry.id, status="completed", file_data=file_data)
+                    await report_crud.update_report_history(db=db, history_id=history_entry.id, status=ReportExecutionStatus.COMPLETED, file_data=file_data)
+
+                    await email_service.send_scheduled_report(
+                        db=db,
+                        company_id=report.company_id,
+                        recipients=report.recipients,
+                        subject=f"Scheduled Report: {report.name}",
+                        body=f"Please find the attached {report.export_format.value.upper()} report '{report.name}' generated on {now.isoformat()}.",
+                        attachment=file_data,
+                    )
+
                     report.last_run_at = now
                     report.last_run_status = "completed"
+                    report.updated_at = now
+                    await db.commit()
                 except Exception as e:
                     if 'history_entry' in locals():
-                        await report_service.update_report_history(db=db, history_id=history_entry.id, status="failed", error_message=str(e))
+                        await report_crud.update_report_history(db=db, history_id=history_entry.id, status=ReportExecutionStatus.FAILED, error_message=str(e))
                     else:
-                        await report_service.create_report_history(
+                        await report_crud.create_report_history(
                             db=db,
                             company_id=report.company_id,
                             report_name=report.name,
@@ -124,12 +139,12 @@ async def execute_scheduled_reports():
                             export_format=report.export_format.value,
                             generated_by=report.created_by,
                             scheduled_report_id=report.id,
-                            status="failed",
+                            status=ReportExecutionStatus.FAILED,
                             error_message=str(e),
                         )
                     report.last_run_at = now
                     report.last_run_status = "failed"
-            await db.commit()
+                    await db.commit()
         except Exception:
             pass
 

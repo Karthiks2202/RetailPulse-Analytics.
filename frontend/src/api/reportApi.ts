@@ -123,7 +123,10 @@ export const getReportData = async (params: {
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
 }): Promise<ReportDataResponse> => {
-  const { data } = await axiosInstance.get('/reports/data', { params });
+  const { filters, ...rest } = params;
+  const { data } = await axiosInstance.get('/reports/data', {
+    params: { ...rest, ...filters },
+  });
   return data;
 };
 

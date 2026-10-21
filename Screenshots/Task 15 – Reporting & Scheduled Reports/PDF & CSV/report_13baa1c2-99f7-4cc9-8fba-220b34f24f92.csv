@@ -1,0 +1,16 @@
+Report: Sales Report
+Generated At: 2026-10-21T04:00:06.197184
+
+invoice_number,sale_date,customer_name,sales_channel,payment_method,payment_status,status,product_name,category_name,quantity,unit_price,discount,tax,total
+INV-2026-000001,2026-08-19T08:57:00,Bob Smith,Retail Store,Cash,PAID,COMPLETED,Smart Watch Gen2,Electronics,10,199.0,0.0,0.0,1990.0
+INV-2026-000002,2026-08-01T09:01:00,Carol White,Retail Store,UPI,PAID,COMPLETED,Oversize Shirt,Shirts,25,799.0,0.0,0.0,19975.0
+INV-2026-000003,2026-08-05T09:03:00,Carol White,Retail Store,Cash,PAID,COMPLETED,Baggy Pant,Shirts,30,900.0,0.0,0.0,27000.0
+INV-2026-000004,2026-08-09T09:05:00,Alice Johnson,Retail Store,UPI,PAID,COMPLETED,USB-C Charging Cable,Electronics,50,19.99,100.0,50.0,949.5
+INV-2026-000005,2026-08-12T09:07:00,Eve Davis,Retail Store,Card,PAID,COMPLETED,Baggy Pant,Shirts,15,900.0,0.0,0.0,13500.0
+INV-2026-000005,2026-08-12T09:07:00,Eve Davis,Retail Store,Card,PAID,COMPLETED,Oversize Shirt,Shirts,15,799.0,0.0,0.0,11985.0
+INV-2026-000006,2026-10-08T06:33:00,Carol White,Online Store,UPI,PAID,COMPLETED,Wireless Headphones,Electronics,1,79.99,0.0,0.0,79.99
+INV-2026-000007,2026-10-08T06:33:00,Carol White,Online Store,UPI,PAID,COMPLETED,Wireless Mouse,Electronics,7,25.99,50.0,0.0,131.93
+INV-2026-000007,2026-10-08T06:33:00,Carol White,Online Store,UPI,PAID,COMPLETED,Wireless Headphones,Electronics,7,79.99,10.12,0.0,549.81
+INV-2026-000008,2026-10-08T06:41:00,Alice Johnson,Retail Store,Cash,PAID,COMPLETED,Apple airpods,N/A,1,7999.0,500.0,0.0,7499.0
+INV-2026-000008,2026-10-08T06:41:00,Alice Johnson,Retail Store,Cash,PAID,COMPLETED,Bluetooth Speaker,N/A,1,3000.0,0.0,0.0,3000.0
+INV-2026-000008,2026-10-08T06:41:00,Alice Johnson,Retail Store,Cash,PAID,COMPLETED,Smart Watch Gen2,N/A,1,500.0,0.0,0.0,500.0
