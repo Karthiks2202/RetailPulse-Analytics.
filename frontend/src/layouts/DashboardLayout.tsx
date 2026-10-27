@@ -23,6 +23,8 @@ import {
   CloudUpload as CloudUploadIcon,
   History as AuditIcon,
   Notifications as NotificationsIcon,
+  Report as ReportIcon,
+  ErrorOutlined as ErrorIcon,
 } from '@mui/icons-material';
 import { NotificationBell } from './NotificationBell';
 import { useQueryClient } from '@tanstack/react-query';
@@ -43,6 +45,9 @@ const NAV_ITEMS = [
   { to: '/sales',     label: 'Sales',      Icon: ReceiptIcon, adminOnly: true },
   { to: '/data-import', label: 'Data Import', Icon: CloudUploadIcon, adminOnly: true },
   { to: '/audit-logs', label: 'Audit Logs', Icon: AuditIcon, adminOnly: true, strictAdmin: true },
+  { to: '/data-quality', label: 'Data Quality', Icon: ReportIcon, adminOnly: true },
+  { to: '/data-quality/issues', label: 'Quality Issues', Icon: ErrorIcon, adminOnly: true },
+  { to: '/data-quality/reconciliation', label: 'Reconciliation', Icon: TimelineIcon, adminOnly: true },
 ];
 
 export const DashboardLayout: React.FC = () => {

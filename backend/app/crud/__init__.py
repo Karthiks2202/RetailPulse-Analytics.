@@ -9,5 +9,6 @@ from app.crud.notification import notification as notification_crud
 from app.crud.inventory import inventory as inventory_crud
 from app.crud.forecast import demand_forecast as forecast_crud
 from app.crud.report import report as report_crud
+from app.crud.data_quality import data_quality_issue as data_quality_issue_crud, reconciliation_run as reconciliation_run_crud
 
-__all__ = ["company_crud", "user_crud", "refresh_token_crud", "audit_log_crud", "category_crud", "product_crud", "sale_crud", "notification_crud", "inventory_crud", "forecast_crud", "report_crud"]
+__all__ = ["company_crud", "user_crud", "refresh_token_crud", "audit_log_crud", "category_crud", "product_crud", "sale_crud", "notification_crud", "inventory_crud", "forecast_crud", "report_crud", "data_quality_issue_crud", "reconciliation_run_crud"]

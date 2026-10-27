@@ -26,6 +26,10 @@ import AuditLogs from '../pages/audit-logs/AuditLogs';
 import NotificationsPage from '../pages/notifications/Notifications';
 import Reports from '../pages/reports/Reports';
 import ScheduledReports from '../pages/reports/ScheduledReports';
+import DataQualityDashboard from '../pages/data-quality/DataQualityDashboard';
+import DataQualityIssues from '../pages/data-quality/DataQualityIssues';
+import DataQualityIssueDetails from '../pages/data-quality/DataQualityIssueDetails';
+import ReconciliationHistory from '../pages/data-quality/ReconciliationHistory';
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -63,6 +67,10 @@ export const AppRoutes: React.FC = () => {
             <Route path="/sales/:id" element={<SaleDetails />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/reports/scheduled" element={<ScheduledReports />} />
+            <Route path="/data-quality" element={<DataQualityDashboard />} />
+            <Route path="/data-quality/issues" element={<DataQualityIssues />} />
+            <Route path="/data-quality/issues/:id" element={<DataQualityIssueDetails />} />
+            <Route path="/data-quality/reconciliation" element={<ReconciliationHistory />} />
           </Route>
           <Route path="/profile" element={<Profile />} />
           <Route path="/notifications" element={<NotificationsPage />} />

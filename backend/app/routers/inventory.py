@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from app.database import get_db
 from app.models.user import UserRole
+from app.models.inventory import StockMovement
 from app.models.notification import NotificationType, NotificationPriority, NotificationResourceType
 from app.schemas.inventory import (
     InventoryItemResponse,
@@ -23,6 +24,7 @@ from app.schemas.inventory import (
 )
 from app.models.forecast import ForecastPeriodType
 from app.utils.dependencies import get_current_active_user
+from app.services.data_quality import data_quality_service
 from app.crud.inventory import inventory as inventory_crud
 from app.crud.notification import notification as notification_crud
 from app.services.audit import audit_service
@@ -262,6 +264,21 @@ async def add_stock(
         before_values={"stock_quantity": before_stock},
         after_values={"stock_quantity": product.stock_quantity},
     )
+
+    latest_movement_result = await db.execute(
+        select(StockMovement)
+        .where(
+            StockMovement.product_id == payload.product_id,
+            StockMovement.company_id == current_user.company_id,
+        )
+        .order_by(desc(StockMovement.created_at))
+        .limit(1)
+    )
+    latest_movement = latest_movement_result.scalar_one_or_none()
+    if latest_movement:
+        await data_quality_service.check_stock_movement_data_quality(
+            db, current_user.company_id, latest_movement
+        )
 
     available = product.stock_quantity - product.reserved_stock
     stock_status = get_status(available, product.low_stock_threshold)

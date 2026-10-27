@@ -22,6 +22,7 @@ from app.crud.category import category as category_crud
 from app.crud.product import product as product_crud
 from app.crud.notification import notification as notification_crud
 from app.services.audit import audit_service
+from app.services.data_quality import data_quality_service
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
@@ -210,6 +211,10 @@ async def create_sale(
         request,
         payload.customer_id,
         payload.notes,
+    )
+
+    await data_quality_service.check_sale_data_quality(
+        db, current_user.company_id, sale, payload.items
     )
 
     total = sale.total_amount or 0

@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.routers import auth, profile, company, user, dashboard, category, product, sale, notifications, inventory, analytics, customer, forecast, import_, audit_log, report
+from app.routers import auth, profile, company, user, dashboard, category, product, sale, notifications, inventory, analytics, customer, forecast, import_, audit_log, report, data_quality
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(auth.router)
@@ -18,3 +18,4 @@ api_router.include_router(forecast.router)
 api_router.include_router(import_.router)
 api_router.include_router(audit_log.router)
 api_router.include_router(report.router)
+api_router.include_router(data_quality.router)

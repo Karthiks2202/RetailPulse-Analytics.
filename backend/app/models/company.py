@@ -29,3 +29,5 @@ class Company(Base):
     demand_forecasts = relationship("DemandForecast", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")
     invoice_sequences = relationship("InvoiceSequence", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")
     imports = relationship("ImportHistory", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")
+    data_quality_issues = relationship("DataQualityIssue", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")
+    reconciliation_runs = relationship("ReconciliationRun", back_populates="company", cascade="all, delete-orphan", lazy="raise_on_sql")

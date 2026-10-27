@@ -22,6 +22,7 @@ from app.models.inventory import StockMovement, InventoryAdjustment
 from app.models.notification import Notification
 from app.models.forecast import DemandForecast, ForecastHistory
 from app.models.report import ScheduledReport, ReportHistory
+from app.models.data_quality import DataQualityIssue, ReconciliationRun
 from app.config import settings
 
 config = context.config
