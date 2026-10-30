@@ -11,8 +11,9 @@ from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from app.schemas.category import CategoryResponse
 from app.utils.dependencies import get_current_active_user
 from app.services.audit import audit_service
-from app.crud.product import product as product_crud
 from app.crud.category import category as category_crud
+from app.services.data_quality import data_quality_service
+import asyncio
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -163,6 +164,11 @@ async def create_product(
         payload.status.value if hasattr(payload.status, 'value') else payload.status,
     )
     await audit_service.log(db, current_user.company_id, current_user.id, "Product Created", request, resource_type="Product", resource_id=prod.id, description=f"Created product '{prod.name}' with SKU {prod.sku}")
+    try:
+        await data_quality_service.check_product_data_quality(db, current_user.company_id, prod)
+        await db.commit()
+    except Exception:
+        pass
     cat = await category_crud.get(db, prod.category_id) if prod.category_id else None
     return serialize_product(prod, cat)
 
@@ -219,6 +225,11 @@ async def update_product(
         before_values=before,
         after_values={k: getattr(updated, k) for k in changed_fields if hasattr(updated, k)},
     )
+    try:
+        await data_quality_service.check_product_data_quality(db, current_user.company_id, updated)
+        await db.commit()
+    except Exception:
+        pass
     cat = await category_crud.get(db, updated.category_id) if updated.category_id else None
     return serialize_product(updated, cat)
 

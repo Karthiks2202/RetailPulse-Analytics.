@@ -584,6 +584,12 @@ async def create_customer(
     )
     await audit_service.log(db, current_user.company_id, current_user.id, "Customer Created", request, resource_type="Customer", resource_id=cust.id, description=f"Created customer '{cust.first_name} {cust.last_name}'")
     await _notify_company_admins(db, current_user.company_id, title="New Customer Registered", message=f"New customer '{cust.first_name} {cust.last_name}' has been registered.", notif_type=NotificationType.CUSTOMER_REGISTERED, resource_type=NotificationResourceType.CUSTOMER, resource_id=cust.id, request=request, user_id=current_user.id)
+    try:
+        from app.services.data_quality import data_quality_service
+        await data_quality_service.check_customer_data_quality(db, current_user.company_id, cust)
+        await db.commit()
+    except Exception:
+        pass
     return serialize_customer(cust)
 
 
@@ -634,6 +640,12 @@ async def update_customer(
         after_values={k: getattr(updated, k) for k in changed_fields if hasattr(updated, k)},
     )
     await customer_crud.log_timeline(db, current_user.company_id, customer_id, current_user.id, "Profile Updated", f"Updated customer '{updated.first_name} {updated.last_name}'")
+    try:
+        from app.services.data_quality import data_quality_service
+        await data_quality_service.check_customer_data_quality(db, current_user.company_id, updated)
+        await db.commit()
+    except Exception:
+        pass
     return serialize_customer(updated)
 
 

@@ -52,7 +52,6 @@ class DataQualityService:
         )
 
         try:
-            await db.refresh(run)
             await db.execute(
                 update(ReconciliationRun)
                 .where(ReconciliationRun.id == run.id)
@@ -90,6 +89,14 @@ class DataQualityService:
 
             final_status = ReconciliationStatus.COMPLETED_WITH_ISSUES if issues_detected > 0 else ReconciliationStatus.COMPLETED
 
+            resolved_count_result = await db.execute(
+                select(func.count(DataQualityIssue.id)).where(
+                    DataQualityIssue.company_id == company_id,
+                    DataQualityIssue.status == DataQualityIssueStatus.RESOLVED,
+                )
+            )
+            issues_resolved_count = int(resolved_count_result.scalar_one() or 0)
+
             await dq_run_crud.update(
                 db,
                 run.id,
@@ -98,6 +105,7 @@ class DataQualityService:
                 completed_at=datetime.utcnow(),
                 records_checked=total_records,
                 issues_detected=issues_detected,
+                issues_resolved=issues_resolved_count,
                 failed_checks=failed_checks,
                 check_results=check_results,
             )
@@ -121,21 +129,23 @@ class DataQualityService:
                 "status": final_status,
                 "records_checked": total_records,
                 "issues_detected": issues_detected,
-                "issues_resolved": 0,
+                "issues_resolved": issues_resolved_count,
                 "failed_checks": failed_checks,
                 "check_results": check_results,
             }
-
         except Exception as e:
-            await dq_run_crud.update(
-                db,
-                run.id,
-                company_id,
-                status=ReconciliationStatus.FAILED,
-                completed_at=datetime.utcnow(),
-                error_message=str(e),
-            )
-            await db.commit()
+            try:
+                await dq_run_crud.update(
+                    db,
+                    run.id,
+                    company_id,
+                    status=ReconciliationStatus.FAILED,
+                    completed_at=datetime.utcnow(),
+                    error_message=str(e),
+                )
+                await db.commit()
+            except Exception:
+                pass
             raise
 
     async def _create_or_update_issue(
@@ -156,7 +166,21 @@ class DataQualityService:
         ) if affected_record_id else None
 
         if existing:
-            return False  # Already exists as unresolved
+            # Update existing issue details if they changed
+            updated = False
+            if details is not None and existing.details != details:
+                existing.details = details
+                updated = True
+            if description and existing.description != description:
+                existing.description = description
+                updated = True
+            if severity != existing.severity:
+                existing.severity = severity
+                updated = True
+            if updated:
+                await db.commit()
+                await db.refresh(existing)
+            return False
 
         await dq_issue_crud.create(
             db,
@@ -243,9 +267,10 @@ class DataQualityService:
             )
             total_movement = int(movement_result.scalar_one() or 0)
 
-            expected_stock = total_movement  # Movements track changes from zero
+            # For consistency with how movements are tracked in this system, compare appropriately
+            expected_stock = total_movement
             if product.stock_quantity != expected_stock:
-                await self._create_or_update_issue(
+                created = await self._create_or_update_issue(
                     db,
                     company_id,
                     DataQualityIssueType.INVENTORY_INCONSISTENT_WITH_MOVEMENTS,
@@ -262,7 +287,8 @@ class DataQualityService:
                         "difference": product.stock_quantity - expected_stock,
                     },
                 )
-                new_issues += 1
+                if created:
+                    new_issues += 1
 
         return {"records_checked": records_checked, "new_issues": new_issues, "details": {"products_checked": records_checked}}
 
@@ -310,6 +336,7 @@ class DataQualityService:
         self, db: AsyncSession, company_id: UUID
     ) -> Dict[str, Any]:
         """Check if any sale references a non-existent or invalid customer."""
+        # Check non-existent customers
         result = await db.execute(
             select(Sale)
             .where(Sale.company_id == company_id)
@@ -324,7 +351,7 @@ class DataQualityService:
         new_issues = 0
 
         for sale in sales:
-            await self._create_or_update_issue(
+            created = await self._create_or_update_issue(
                 db,
                 company_id,
                 DataQualityIssueType.SALE_REFERENCES_INVALID_CUSTOMER,
@@ -339,7 +366,40 @@ class DataQualityService:
                     "invoice_number": sale.invoice_number,
                 },
             )
-            new_issues += 1
+            if created:
+                new_issues += 1
+
+        # Check inactive customers
+        result_inactive = await db.execute(
+            select(Sale, Customer)
+            .join(Customer, Sale.customer_id == Customer.id)
+            .where(Sale.company_id == company_id)
+            .where(Sale.customer_id.is_not(None))
+            .where(Sale.status == SaleStatus.COMPLETED)
+            .where(Customer.status != CustomerStatus.ACTIVE)
+        )
+        rows_inactive = result_inactive.all()
+        for sale, customer in rows_inactive:
+            created = await self._create_or_update_issue(
+                db,
+                company_id,
+                DataQualityIssueType.SALE_REFERENCES_INVALID_CUSTOMER,
+                DataQualityIssueSeverity.MEDIUM,
+                "sales",
+                sale.id,
+                "sale",
+                f"Sale {sale.invoice_number} references inactive customer '{customer.first_name} {customer.last_name}'",
+                details={
+                    "sale_id": str(sale.id),
+                    "customer_id": str(sale.customer_id),
+                    "customer_name": f"{customer.first_name} {customer.last_name}",
+                    "customer_status": customer.status.value if hasattr(customer.status, 'value') else str(customer.status),
+                    "invoice_number": sale.invoice_number,
+                },
+            )
+            if created:
+                new_issues += 1
+        records_checked += len(rows_inactive)
 
         return {"records_checked": records_checked, "new_issues": new_issues, "details": {"sales_checked": records_checked}}
 
@@ -364,7 +424,7 @@ class DataQualityService:
             )
             products = products_result.scalars().all()
 
-            await self._create_or_update_issue(
+            created = await self._create_or_update_issue(
                 db,
                 company_id,
                 DataQualityIssueType.DUPLICATE_PRODUCT_SKU,
@@ -380,7 +440,8 @@ class DataQualityService:
                     "product_names": [p.name for p in products],
                 },
             )
-            new_issues += 1
+            if created:
+                new_issues += 1
 
         return {"records_checked": records_checked, "new_issues": new_issues, "details": {"duplicate_skus": records_checked}}
 
@@ -408,7 +469,7 @@ class DataQualityService:
                 missing.append("cost_price")
 
             if missing:
-                await self._create_or_update_issue(
+                created = await self._create_or_update_issue(
                     db,
                     company_id,
                     DataQualityIssueType.MISSING_MANDATORY_PRODUCT_INFO,
@@ -424,7 +485,8 @@ class DataQualityService:
                         "missing_fields": missing,
                     },
                 )
-                new_issues += 1
+                if created:
+                    new_issues += 1
 
         return {"records_checked": records_checked, "new_issues": new_issues, "details": {"products_checked": records_checked}}
 
@@ -448,7 +510,8 @@ class DataQualityService:
                 missing.append("last_name")
 
             if missing:
-                await self._create_or_update_issue(
+                cust_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
+                created = await self._create_or_update_issue(
                     db,
                     company_id,
                     DataQualityIssueType.MISSING_MANDATORY_CUSTOMER_INFO,
@@ -456,14 +519,15 @@ class DataQualityService:
                     "customers",
                     customer.id,
                     "customer",
-                    f"Customer '{customer.first_name or ''} {customer.last_name or ''}'.strip() missing mandatory fields: {', '.join(missing)}",
+                    f"Customer '{cust_name}' missing mandatory fields: {', '.join(missing)}",
                     details={
                         "customer_id": str(customer.id),
-                        "customer_name": f"{customer.first_name or ''} {customer.last_name or ''}".strip(),
+                        "customer_name": cust_name,
                         "missing_fields": missing,
                     },
                 )
-                new_issues += 1
+                if created:
+                    new_issues += 1
 
         return {"records_checked": records_checked, "new_issues": new_issues, "details": {"customers_checked": records_checked}}
 
@@ -482,7 +546,7 @@ class DataQualityService:
         for movement in movements:
             expected_change = movement.updated_quantity - movement.previous_quantity
             if movement.quantity_changed != expected_change:
-                await self._create_or_update_issue(
+                created = await self._create_or_update_issue(
                     db,
                     company_id,
                     DataQualityIssueType.STOCK_MOVEMENT_INCONSISTENT_QUANTITIES,
@@ -501,7 +565,8 @@ class DataQualityService:
                         "expected_change": expected_change,
                     },
                 )
-                new_issues += 1
+                if created:
+                    new_issues += 1
 
         return {"records_checked": records_checked, "new_issues": new_issues, "details": {"movements_checked": records_checked}}
 
@@ -537,7 +602,7 @@ class DataQualityService:
 
                 reported_total = float(file_data.get("total_amount", 0) or 0)
                 if abs(actual_total - reported_total) > 0.01:
-                    await self._create_or_update_issue(
+                    created = await self._create_or_update_issue(
                         db,
                         company_id,
                         DataQualityIssueType.REPORT_TOTAL_MISMATCH,
@@ -554,7 +619,8 @@ class DataQualityService:
                             "difference": actual_total - reported_total,
                         },
                     )
-                    new_issues += 1
+                    if created:
+                        new_issues += 1
 
         return {"records_checked": records_checked, "new_issues": new_issues, "details": {"reports_checked": records_checked}}
 
@@ -637,7 +703,86 @@ class DataQualityService:
                 return 1
         return 0
 
-    async def get_dashboard_stats(self, db: AsyncSession, company_id: UUID) -> Dict[str, Any]:
+    async def check_product_data_quality(
+        self,
+        db: AsyncSession,
+        company_id: UUID,
+        product,
+    ) -> int:
+        """Run targeted data quality checks on a product."""
+        new_issues = 0
+        missing = []
+        if not product.name or not product.name.strip():
+            missing.append("name")
+        if not product.sku or not product.sku.strip():
+            missing.append("sku")
+        if product.unit_price is None or product.unit_price <= 0:
+            missing.append("unit_price")
+        if product.cost_price is None or product.cost_price <= 0:
+            missing.append("cost_price")
+        if missing:
+            created = await self._create_or_update_issue(
+                db,
+                company_id,
+                DataQualityIssueType.MISSING_MANDATORY_PRODUCT_INFO,
+                DataQualityIssueSeverity.MEDIUM,
+                "products",
+                product.id,
+                "product",
+                f"Product '{product.name or 'Unknown'}' missing mandatory fields: {', '.join(missing)}",
+                details={
+                    "product_id": str(product.id),
+                    "product_name": product.name or "",
+                    "sku": product.sku or "",
+                    "missing_fields": missing,
+                },
+            )
+            if created:
+                new_issues += 1
+        else:
+            # If fixed, maybe we don't auto-resolve here - but requirement says update existing issue details; also could resolve? The instruction says "prevent duplicate unresolved issues during repeated reconciliation runs. Update existing issue details when the same underlying problem changes." It doesn't explicitly say auto-resolve on fix, but better to be reasonable - but safer to just update/create as per logic
+            pass
+        return new_issues
+
+    async def check_customer_data_quality(
+        self,
+        db: AsyncSession,
+        company_id: UUID,
+        customer,
+    ) -> int:
+        """Run targeted data quality checks on a customer."""
+        new_issues = 0
+        missing = []
+        if not getattr(customer, "first_name", None) or not str(customer.first_name).strip():
+            missing.append("first_name")
+        if not getattr(customer, "last_name", None) or not str(customer.last_name).strip():
+            missing.append("last_name")
+        if missing:
+            customer_name = f"{getattr(customer, 'first_name') or ''} {getattr(customer, 'last_name') or ''}".strip()
+            created = await self._create_or_update_issue(
+                db,
+                company_id,
+                DataQualityIssueType.MISSING_MANDATORY_CUSTOMER_INFO,
+                DataQualityIssueSeverity.MEDIUM,
+                "customers",
+                customer.id,
+                "customer",
+                f"Customer '{customer_name}' missing mandatory fields: {', '.join(missing)}",
+                details={
+                    "customer_id": str(customer.id),
+                    "customer_name": customer_name,
+                    "missing_fields": missing,
+                },
+            )
+            if created:
+                new_issues += 1
+        return new_issues
+
+    async def get_dashboard_stats(
+        self,
+        db: AsyncSession,
+        company_id: UUID,
+    ) -> Dict[str, Any]:
         """Get dashboard statistics for data quality."""
         total_issues_result = await db.execute(
             select(func.count(DataQualityIssue.id)).where(DataQualityIssue.company_id == company_id)
@@ -675,9 +820,13 @@ class DataQualityService:
         )
         last_run = last_run_result.scalars().first()
 
+        total_records_checked = last_run.records_checked if last_run else 0
+        issues_from_last_run = last_run.issues_detected if last_run else total_issues
+        valid_records = max(0, total_records_checked - issues_from_last_run) if total_records_checked > 0 else 0
+
         return {
-            "total_records_checked": last_run.records_checked if last_run else 0,
-            "valid_records": max(0, (last_run.records_checked if last_run else 0) - total_issues),
+            "total_records_checked": total_records_checked,
+            "valid_records": valid_records,
             "records_with_warnings": open_issues,
             "records_with_errors": investigating_issues,
             "unresolved_issues": open_issues + investigating_issues,

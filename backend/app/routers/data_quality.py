@@ -105,6 +105,10 @@ async def update_issue_status(
     if not is_admin_or_analyst(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
+    # Ensure we pass resolved_by when resolving if not provided
+    if payload.status == DataQualityIssueStatus.RESOLVED and payload.resolved_by is None:
+        payload.resolved_by = current_user.id
+
     issue = await dq_issue_crud.update_status(
         db, issue_id, current_user.company_id, payload
     )
@@ -120,7 +124,9 @@ async def update_issue_status(
             request,
             resource_type="DataQualityIssue",
             resource_id=issue_id,
-            description=f"Updated issue status to {payload.status.value if payload.status else 'unchanged'}",
+            description=f"Updated issue status to {payload.status.value if payload.status else 'unchanged'}; note: {payload.resolution_note or ''}",
+            before_values={"previous_status": issue.previous_status},
+            after_values={"status": issue.status.value, "resolution_note": issue.resolution_note},
         )
 
     return DataQualityIssueResponse.model_validate(issue)

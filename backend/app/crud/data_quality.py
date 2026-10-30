@@ -104,16 +104,27 @@ class CRUDDataQualityIssue:
 
         if "status" in update_data:
             db_obj.previous_status = previous_status
-            if update_data["status"] == DataQualityIssueStatus.RESOLVED:
+            new_status = update_data["status"]
+            if new_status == DataQualityIssueStatus.RESOLVED:
                 db_obj.resolved_at = datetime.utcnow()
                 if obj_in.resolved_by:
                     db_obj.resolved_by = obj_in.resolved_by
+            elif db_obj.status == DataQualityIssueStatus.RESOLVED and new_status != DataQualityIssueStatus.RESOLVED:
+                # If reopening/resolving differently
+                pass
+        else:
+            new_status = db_obj.status
 
         if obj_in.resolution_note is not None:
             db_obj.resolution_note = obj_in.resolution_note
 
         for field, value in update_data.items():
-            setattr(db_obj, field, value)
+            if field == "resolved_by" and value is not None:
+                db_obj.resolved_by = value
+            elif field == "status":
+                db_obj.status = value
+            else:
+                setattr(db_obj, field, value)
 
         await db.commit()
         await db.refresh(db_obj)

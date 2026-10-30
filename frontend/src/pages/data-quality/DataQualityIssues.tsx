@@ -42,14 +42,17 @@ export const DataQualityIssues: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<DataQualityIssueStatus | ''>('');
   const [filterSeverity, setFilterSeverity] = useState<DataQualityIssueSeverity | ''>('');
   const [filterModule, setFilterModule] = useState<string>('');
+  const [filterIssueType, setFilterIssueType] = useState<DataQualityIssueType | ''>('');
   const [filterSearch, setFilterSearch] = useState<string>('');
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
+  const [filterDateTo, setFilterDateTo] = useState<string>('');
 
   const [selectedIssue, setSelectedIssue] = useState<DataQualityIssue | null>(null);
   const [newStatus, setNewStatus] = useState<DataQualityIssueStatus>('open');
   const [resolutionNote, setResolutionNote] = useState<string>('');
 
   const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['dataQualityIssues', page, pageSize, filterStatus, filterSeverity, filterModule, filterSearch],
+    queryKey: ['dataQualityIssues', page, pageSize, filterStatus, filterSeverity, filterModule, filterIssueType, filterSearch, filterDateFrom, filterDateTo],
     queryFn: () =>
       getDataQualityIssues({
         page,
@@ -57,7 +60,10 @@ export const DataQualityIssues: React.FC = () => {
         status: filterStatus || undefined,
         severity: filterSeverity || undefined,
         module: filterModule || undefined,
+        issue_type: filterIssueType || undefined,
         search: filterSearch || undefined,
+        date_from: filterDateFrom || undefined,
+        date_to: filterDateTo || undefined,
       }),
     enabled: !!isAdmin,
   });
@@ -88,6 +94,9 @@ export const DataQualityIssues: React.FC = () => {
     setFilterStatus('');
     setFilterSeverity('');
     setFilterModule('');
+    setFilterIssueType('');
+    setFilterDateFrom('');
+    setFilterDateTo('');
     setPage(1);
   };
 
@@ -152,7 +161,7 @@ export const DataQualityIssues: React.FC = () => {
 
       {/* Filter Bar */}
       <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           {/* Search */}
           <div className="relative">
             <input
@@ -163,6 +172,20 @@ export const DataQualityIssues: React.FC = () => {
               className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <SearchIcon className="absolute left-2.5 top-2.5 text-slate-400" fontSize="small" />
+          </div>
+
+          {/* Issue Type Select */}
+          <div>
+            <select
+              value={filterIssueType}
+              onChange={(e) => setFilterIssueType(e.target.value as DataQualityIssueType)}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">All Issue Types</option>
+              {Object.entries(ISSUE_TYPE_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
           </div>
 
           {/* Status Select */}
@@ -211,21 +234,37 @@ export const DataQualityIssues: React.FC = () => {
             </select>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage(1)}
-              className="flex-1 px-3 py-2 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors text-center"
-            >
-              Apply
-            </button>
-            <button
-              onClick={handleClearFilters}
-              className="px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
-            >
-              Clear
-            </button>
+          {/* Date Range */}
+          <div className="flex items-center gap-1">
+            <input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              className="w-full px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-900 dark:text-white"
+            />
+            <span className="text-xs text-slate-400">-</span>
+            <input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
+              className="w-full px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-900 dark:text-white"
+            />
           </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPage(1)}
+            className="px-3 py-2 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors"
+          >
+            Apply Filters
+          </button>
+          <button
+            onClick={handleClearFilters}
+            className="px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
+          >
+            Clear
+          </button>
         </div>
       </div>
 

@@ -276,9 +276,13 @@ async def add_stock(
     )
     latest_movement = latest_movement_result.scalar_one_or_none()
     if latest_movement:
-        await data_quality_service.check_stock_movement_data_quality(
-            db, current_user.company_id, latest_movement
-        )
+        try:
+            await data_quality_service.check_stock_movement_data_quality(
+                db, current_user.company_id, latest_movement
+            )
+            await db.commit()
+        except Exception:
+            pass
 
     available = product.stock_quantity - product.reserved_stock
     stock_status = get_status(available, product.low_stock_threshold)
