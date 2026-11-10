@@ -5,6 +5,7 @@ export type NotificationType =
   | 'LOW_STOCK'
   | 'OUT_OF_STOCK'
   | 'OVERSTOCK'
+  | 'IMPORT_STARTED'
   | 'IMPORT_COMPLETED'
   | 'IMPORT_FAILED'
   | 'IMPORT_COMPLETED_WITH_ERRORS'

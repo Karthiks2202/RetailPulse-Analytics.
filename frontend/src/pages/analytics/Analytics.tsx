@@ -1968,7 +1968,7 @@ const queryOptions: { refetchInterval: number | false } = {
   );
 };
 
-const ChartCard: React.FC<{ title: string; icon: React.ReactNode; loading: boolean; isEmpty: boolean; emptyText: string; children: React.ReactNode }> = ({ title, icon, loading, isEmpty, emptyText, children }) => (
+const ChartCard: React.FC<{ title: string; icon: React.ReactNode; loading: boolean; isEmpty: boolean; emptyText: string; error?: any; errorText?: string; children: React.ReactNode }> = ({ title, icon, loading, isEmpty, emptyText, error, errorText, children }) => (
   <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
     <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/30">
       {icon}
@@ -1977,6 +1977,10 @@ const ChartCard: React.FC<{ title: string; icon: React.ReactNode; loading: boole
     {loading ? (
       <div className="p-4 h-72 flex items-center justify-center">
         <div className="h-full w-full animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800" />
+      </div>
+    ) : error ? (
+      <div className="flex flex-col items-center justify-center h-72 text-rose-500 space-y-2 p-4 text-center">
+        <span className="text-xs font-semibold">{errorText || 'Failed to load chart data.'}</span>
       </div>
     ) : isEmpty ? (
       <div className="flex flex-col items-center justify-center h-72 text-slate-400 space-y-2">

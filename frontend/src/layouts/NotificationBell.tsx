@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Notifications as NotificationsIcon, CheckCircle as CheckIcon, Warning as WarningIcon, Error as ErrorIcon, Close as CloseIcon } from '@mui/icons-material';
-import { getNotifications, getUnreadCount, markAsRead, markAllAsRead, type Notification, type NotificationType } from '../api/notificationsApi';
+import { getNotifications, getUnreadCount, markAsRead, markAllAsRead, type Notification } from '../api/notificationsApi';
 import { useAuth } from '../context/AuthContext';
 
 const TYPE_ICON: Record<string, React.ElementType> = {
@@ -22,12 +22,14 @@ export const NotificationBell: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
-  const { data: unreadCount = 0 } = useQuery({
+  const { data: unreadData } = useQuery({
     queryKey: ['notifications', 'unreadCount'],
     queryFn: getUnreadCount,
     enabled: !!user,
     refetchInterval: 30000,
   });
+
+  const unreadCount = typeof unreadData === 'number' ? unreadData : (unreadData?.unread_count ?? 0);
 
   const { data: notificationsData, isLoading } = useQuery({
     queryKey: ['notifications', 'list'],

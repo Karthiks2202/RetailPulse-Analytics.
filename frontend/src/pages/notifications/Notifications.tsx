@@ -16,6 +16,7 @@ import {
   Launch as LaunchIcon,
 } from '@mui/icons-material';
 import {
+  type NotificationFilters,
   getNotifications,
   getUnreadCount,
   markAsRead,
@@ -25,11 +26,9 @@ import {
   type Notification,
   type NotificationType,
   type NotificationPriority,
-  type NotificationResourceType,
 } from '../../api/notificationsApi';
 import { getProductRecommendation } from '../../api/inventoryApi';
 import { getImportDetail } from '../../api/importApi';
-import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { label: string; color: string; bg: string; Icon: React.ElementType }> = {
@@ -37,6 +36,7 @@ const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { label: string; color:
   LOW_STOCK: { label: 'Low Stock', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/30', Icon: WarningIcon },
   OUT_OF_STOCK: { label: 'Out of Stock', color: 'text-red-700 dark:text-red-300', bg: 'bg-red-50 dark:bg-red-950/30', Icon: ErrorIcon },
   OVERSTOCK: { label: 'Overstock', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/30', Icon: InfoIcon },
+  IMPORT_STARTED: { label: 'Import Started', color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/30', Icon: InfoIcon },
   IMPORT_COMPLETED: { label: 'Import Completed', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/30', Icon: CheckIcon },
   IMPORT_FAILED: { label: 'Import Failed', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/30', Icon: ErrorIcon },
   IMPORT_COMPLETED_WITH_ERRORS: { label: 'Import (with errors)', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/30', Icon: WarningIcon },
@@ -65,7 +65,7 @@ const RESOURCE_ICON: Record<string, React.ElementType> = {
 
 const NOTIFICATION_TYPES: NotificationType[] = [
   'STOCKOUT_RISK', 'LOW_STOCK', 'OUT_OF_STOCK', 'OVERSTOCK',
-  'IMPORT_COMPLETED', 'IMPORT_FAILED', 'IMPORT_COMPLETED_WITH_ERRORS',
+  'IMPORT_STARTED', 'IMPORT_COMPLETED', 'IMPORT_FAILED', 'IMPORT_COMPLETED_WITH_ERRORS',
   'SALES_ALERT', 'SYSTEM_ALERT', 'CUSTOMER_REGISTERED', 'VIP_STATUS',
   'CUSTOMER_INACTIVE', 'FIRST_PURCHASE',
 ];
@@ -86,7 +86,6 @@ const formatDate = (dateString: string) => {
 };
 
 export const NotificationsPage: React.FC = () => {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -127,8 +126,8 @@ export const NotificationsPage: React.FC = () => {
     enabled: !!selectedNotification && selectedNotification.resource_type === 'IMPORT',
   });
 
-  const filters = useMemo(() => {
-    const params: { type?: string; priority?: string; is_read?: boolean; skip: number; limit: number } = {
+  const filters = useMemo<NotificationFilters>(() => {
+    const params: NotificationFilters = {
       skip: page * 20,
       limit: 20,
     };

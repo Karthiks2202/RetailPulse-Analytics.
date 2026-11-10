@@ -97,8 +97,8 @@ axiosInstance.interceptors.response.use(
         localStorage.setItem('refreshToken', newRefreshToken);
 
         if (axiosInstance.defaults.headers.common) {
-          if (typeof axiosInstance.defaults.headers.common.set === 'function') {
-            axiosInstance.defaults.headers.common.set('Authorization', `Bearer ${accessToken}`);
+          if (typeof (axiosInstance.defaults.headers.common as any).set === 'function') {
+            (axiosInstance.defaults.headers.common as any).set('Authorization', `Bearer ${accessToken}`);
           } else {
             axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
           }

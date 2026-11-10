@@ -96,7 +96,7 @@ export const AuditLogs: React.FC = () => {
 
   const users = usersData || [];
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['audit-logs', { search, userFilter, actionFilter, resourceTypeFilter, statusFilter, dateFrom, dateTo, sortBy, sortDir, page, limit }],
     queryFn: () =>
       getAuditLogs({

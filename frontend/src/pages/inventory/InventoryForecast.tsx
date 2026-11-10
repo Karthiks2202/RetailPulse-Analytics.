@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 import {
@@ -26,9 +26,6 @@ import {
   ShoppingCart as CartIcon,
   FilterList as FilterListIcon,
   Close as CloseIcon,
-  ArrowUpward as ArrowUpIcon,
-  ArrowDownward as ArrowDownIcon,
-  Remove as RemoveIcon,
 } from '@mui/icons-material';
 import {
   BarChart,
@@ -39,9 +36,6 @@ import {
   ResponsiveContainer,
   CartesianGrid,
   Cell,
-  LineChart,
-  Line,
-  Legend,
 } from 'recharts';
 
 const FORECAST_PERIODS = [
@@ -73,7 +67,6 @@ const inputClass =
 export const InventoryForecast: React.FC = () => {
   const { user } = useAuth();
   const { showNotification } = useNotification();
-  const queryClient = useQueryClient();
 
   const [forecastPeriod, setForecastPeriod] = useState('NEXT_30_DAYS');
   const [search, setSearch] = useState('');
@@ -120,7 +113,7 @@ export const InventoryForecast: React.FC = () => {
       }),
   });
 
-  const { data: recommendationsData, isLoading: recommendationsLoading } = useQuery<PaginatedInventoryForecastResponse>({
+  const { data: recommendationsData } = useQuery<PaginatedInventoryForecastResponse>({
     queryKey: ['inventory-recommendations', { forecastPeriod, categoryFilter, search, sortBy, sortDir, page }],
     queryFn: () =>
       getRecommendations({
@@ -265,7 +258,7 @@ export const InventoryForecast: React.FC = () => {
                       const formatted = actual >= 9999 ? 'N/A (No Sales)' : actual > 180 ? `${actual.toFixed(1)} days (180+)` : `${actual.toFixed(1)} days`;
                       return [formatted, 'Days Remaining'];
                     }}
-                    labelFormatter={(label: string, payload: any[]) => payload?.[0]?.payload?.fullName || label}
+                    labelFormatter={(label: any, payload: readonly any[]) => (payload as any)?.[0]?.payload?.fullName || String(label || '')}
                   />
                   <Bar dataKey="daysRemaining" radius={[4, 4, 4, 4]} barSize={16}>
                     {chartData.map((_entry, index) => (
