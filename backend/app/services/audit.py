@@ -11,7 +11,7 @@ class AuditService:
         company_id: UUID,
         user_id: UUID | None,
         action: str,
-        request: Request,
+        request: Optional[Request] = None,
         resource_type: str = "",
         resource_id: UUID | None = None,
         description: str | None = None,
@@ -20,8 +20,11 @@ class AuditService:
         status: str = "SUCCESS",
         commit: bool = True,
     ):
-        ip_address = request.headers.get("x-forwarded-for", request.client.host if request.client else "Unknown")
-        user_agent = request.headers.get("user-agent", "Unknown")
+        ip_address = "127.0.0.1"
+        user_agent = "Background Worker"
+        if request is not None:
+            ip_address = request.headers.get("x-forwarded-for", request.client.host if request.client else "Unknown")
+            user_agent = request.headers.get("user-agent", "Unknown")
         await audit_log_crud.create(
             db,
             company_id=company_id,

@@ -6,9 +6,11 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional, Set, Dict, Tuple, List
 from uuid import UUID
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
+from sqlalchemy.orm import selectinload
 
 from app.models.import_history import ImportHistory, ImportError, ImportStatus, ImportType, DuplicateStrategy
 from app.models.product import Product
@@ -19,6 +21,15 @@ from app.models.inventory import StockMovement, InventoryAdjustment, AdjustmentT
 from app.models.notification import NotificationType, NotificationPriority, NotificationResourceType
 from app.crud.import_history import import_history as import_history_crud
 from app.services.notification import notification_service
+from app.services.import_storage import (
+    validate_content_security,
+    get_import_file_path,
+    import_file_exists,
+    inspect_csv_file,
+    stream_csv_rows,
+    save_file_content,
+    detect_csv_dialect_from_line,
+)
 
 logger = logging.getLogger("retailpulse")
 
@@ -158,6 +169,12 @@ class ImportService:
         return None
 
     def parse_csv(self, file_content: bytes) -> tuple[list[str], list[dict[str, str]]]:
+        if not file_content:
+            return [], []
+
+        # Validate content security
+        validate_content_security(file_content[:4096])
+
         try:
             text = file_content.decode("utf-8-sig")
         except UnicodeDecodeError:
@@ -171,30 +188,22 @@ class ImportService:
             return [], []
 
         sample = "\n".join(lines[:10])
-        delimiter = ","
-        try:
-            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
-            delimiter = dialect.delimiter
-        except Exception:
-            header_line = lines[0]
-            if ";" in header_line and "," not in header_line:
-                delimiter = ";"
-            elif "\t" in header_line:
-                delimiter = "\t"
-            elif "|" in header_line:
-                delimiter = "|"
+        delimiter = detect_csv_dialect_from_line(sample)
 
-        reader = csv.DictReader(io.StringIO("\n".join(lines)), delimiter=delimiter)
-        columns = [c.strip().strip('"').strip("'").lstrip("\ufeff") for c in (reader.fieldnames or []) if c]
-        rows = []
-        for r in reader:
-            clean_r = {}
-            for k, v in r.items():
-                if k:
-                    clean_k = k.strip().strip('"').strip("'").lstrip("\ufeff")
-                    clean_r[clean_k] = v.strip() if isinstance(v, str) else ""
-            rows.append(clean_r)
-        return columns, rows
+        try:
+            reader = csv.DictReader(io.StringIO("\n".join(lines)), delimiter=delimiter)
+            columns = [c.strip().strip('"').strip("'").lstrip("\ufeff") for c in (reader.fieldnames or []) if c]
+            rows = []
+            for r in reader:
+                clean_r = {}
+                for k, v in r.items():
+                    if k:
+                        clean_k = k.strip().strip('"').strip("'").lstrip("\ufeff")
+                        clean_r[clean_k] = v.strip() if isinstance(v, str) else ""
+                rows.append(clean_r)
+            return columns, rows
+        except csv.Error as e:
+            raise ValueError(f"Malformed CSV file format: {str(e)}")
 
     def validate_columns(self, import_type: ImportType, columns: list[str]) -> None:
         required = self.IMPORT_CONFIG[import_type]["required_columns"]
@@ -238,6 +247,9 @@ class ImportService:
         seen_phones_in_file: Optional[set[str]] = None,
         seen_invoices_in_file: Optional[set[str]] = None,
         seen_inventory_skus_in_file: Optional[set[str]] = None,
+        existing_inventory_adjustments: Optional[dict[tuple[str, str, str], Any]] = None,
+        existing_customers_by_email: Optional[dict[str, Any]] = None,
+        existing_customers_by_phone: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """
         Validates a single normalized row.
@@ -248,16 +260,16 @@ class ImportService:
         existing_emails = existing_emails if existing_emails is not None else set()
         existing_phones = existing_phones if existing_phones is not None else set()
         existing_invoices = existing_invoices if existing_invoices is not None else set()
-        customer_names = customer_names if customer_names is not None else {}
-        product_names = product_names if product_names is not None else {}
         available_stock = available_stock if available_stock is not None else {}
-        product_sku_to_id = product_sku_to_id if product_sku_to_id is not None else {}
         product_sku_stock = product_sku_stock if product_sku_stock is not None else {}
         seen_skus_in_file = seen_skus_in_file if seen_skus_in_file is not None else set()
         seen_emails_in_file = seen_emails_in_file if seen_emails_in_file is not None else set()
         seen_phones_in_file = seen_phones_in_file if seen_phones_in_file is not None else set()
         seen_invoices_in_file = seen_invoices_in_file if seen_invoices_in_file is not None else set()
         seen_inventory_skus_in_file = seen_inventory_skus_in_file if seen_inventory_skus_in_file is not None else set()
+        existing_inventory_adjustments = existing_inventory_adjustments if existing_inventory_adjustments is not None else {}
+        existing_customers_by_email = existing_customers_by_email if existing_customers_by_email is not None else {}
+        existing_customers_by_phone = existing_customers_by_phone if existing_customers_by_phone is not None else {}
 
         strategy = (duplicate_strategy or "REJECT").upper()
 
@@ -286,7 +298,6 @@ class ImportService:
                     return {"action": "SKIP", "is_duplicate": True, "reason": dup_reason}
                 elif strategy == "UPDATE":
                     seen_skus_in_file.add(sku)
-                    # continue validation for update values
 
             seen_skus_in_file.add(sku)
 
@@ -314,7 +325,7 @@ class ImportService:
 
             if not sku:
                 raise ImportValidationError(row_number, "sku", "Product SKU is required", str(normalized_row), error_type="REQUIRED_FIELD")
-            if sku not in product_sku_to_id:
+            if product_sku_to_id is not None and sku not in product_sku_to_id:
                 raise ImportValidationError(row_number, "sku", f"Product with SKU '{sku}' does not exist in catalog", str(normalized_row), error_type="FOREIGN_KEY_NOT_FOUND")
 
             if not adj_type_raw:
@@ -345,12 +356,18 @@ class ImportService:
             if not reason:
                 raise ImportValidationError(row_number, "reason", "Reason for inventory adjustment is required", str(normalized_row), error_type="REQUIRED_FIELD")
 
-            # Duplicate SKU check within same import file
+            # Strong duplicate identification:
+            # Check 1: In-file duplicate for this SKU
             is_duplicate = False
             dup_reason = ""
+            inv_key = (sku, clean_type, reason.strip().lower())
+            
             if sku in seen_inventory_skus_in_file:
                 is_duplicate = True
                 dup_reason = f"Duplicate inventory adjustment for SKU '{sku}' in uploaded file"
+            elif inv_key in existing_inventory_adjustments:
+                is_duplicate = True
+                dup_reason = f"Inventory adjustment for SKU '{sku}' with type '{adj_type_raw}' and reason '{reason}' already exists in database"
 
             if is_duplicate:
                 if strategy == "REJECT":
@@ -358,6 +375,8 @@ class ImportService:
                 elif strategy == "SKIP":
                     seen_inventory_skus_in_file.add(sku)
                     return {"action": "SKIP", "is_duplicate": True, "reason": dup_reason}
+                elif strategy == "UPDATE":
+                    seen_inventory_skus_in_file.add(sku)
 
             seen_inventory_skus_in_file.add(sku)
 
@@ -384,17 +403,37 @@ class ImportService:
             if not re.match(r"^\+?[\d\s()-]{7,}$", phone):
                 raise ImportValidationError(row_number, "phone", f"Invalid phone number format: '{phone}'", str(normalized_row), error_type="INVALID_DATA_TYPE")
 
+            email_clean = email.lower()
+            cust_by_email = existing_customers_by_email.get(email_clean)
+            cust_by_phone = existing_customers_by_phone.get(phone)
+
+            # Safe matching: Detect conflicting email and phone
+            if cust_by_email and cust_by_phone and cust_by_email.id != cust_by_phone.id:
+                raise ImportValidationError(
+                    row_number,
+                    "email",
+                    f"Customer matching conflict: Email '{email}' belongs to customer '{cust_by_email.first_name} {cust_by_email.last_name}' while Phone '{phone}' belongs to customer '{cust_by_phone.first_name} {cust_by_phone.last_name}'",
+                    str(normalized_row),
+                    error_type="DUPLICATE_RECORD"
+                )
+
             is_duplicate = False
             dup_reason = ""
-            if email in seen_emails_in_file:
+            if email_clean in seen_emails_in_file:
                 is_duplicate = True
                 dup_reason = f"Duplicate email '{email}' in uploaded file"
-            elif email in existing_emails:
-                is_duplicate = True
-                dup_reason = f"Customer with email '{email}' already exists"
             elif phone in seen_phones_in_file:
                 is_duplicate = True
                 dup_reason = f"Duplicate phone '{phone}' in uploaded file"
+            elif cust_by_email:
+                is_duplicate = True
+                dup_reason = f"Customer with email '{email}' already exists"
+            elif cust_by_phone:
+                is_duplicate = True
+                dup_reason = f"Customer with phone '{phone}' already exists"
+            elif email in existing_emails:
+                is_duplicate = True
+                dup_reason = f"Customer with email '{email}' already exists"
             elif phone in existing_phones:
                 is_duplicate = True
                 dup_reason = f"Customer with phone '{phone}' already exists"
@@ -403,14 +442,18 @@ class ImportService:
                 if strategy == "REJECT":
                     raise DuplicateRecordError(row_number, "email" if "email" in dup_reason else "phone", dup_reason, str(normalized_row), error_type="DUPLICATE_RECORD")
                 elif strategy == "SKIP":
-                    seen_emails_in_file.add(email)
+                    seen_emails_in_file.add(email_clean)
                     seen_phones_in_file.add(phone)
                     return {"action": "SKIP", "is_duplicate": True, "reason": dup_reason}
+                elif strategy == "UPDATE":
+                    seen_emails_in_file.add(email_clean)
+                    seen_phones_in_file.add(phone)
+                    return {"action": "UPDATE", "is_duplicate": True}
 
-            seen_emails_in_file.add(email)
+            seen_emails_in_file.add(email_clean)
             seen_phones_in_file.add(phone)
 
-            return {"action": "UPDATE" if (is_duplicate and strategy == "UPDATE") else "VALID", "is_duplicate": is_duplicate}
+            return {"action": "VALID", "is_duplicate": False}
 
         elif import_type == ImportType.SALES:
             customer_name = normalized_row.get("customer", "").strip()
@@ -440,6 +483,8 @@ class ImportService:
                 elif strategy == "SKIP":
                     seen_invoices_in_file.add(invoice_number)
                     return {"action": "SKIP", "is_duplicate": True, "reason": dup_reason}
+                elif strategy == "UPDATE":
+                    seen_invoices_in_file.add(invoice_number)
 
             seen_invoices_in_file.add(invoice_number)
 
@@ -462,20 +507,23 @@ class ImportService:
             except Exception:
                 raise ImportValidationError(row_number, "sale_date", "Invalid Sale Date format. Expected YYYY-MM-DD", str(normalized_row), error_type="INVALID_DATA_TYPE")
 
-            customer_id = customer_names.get(customer_name)
-            if not customer_id:
-                raise ImportValidationError(row_number, "customer", f"Customer not found: '{customer_name}'", str(normalized_row), error_type="FOREIGN_KEY_NOT_FOUND")
+            if customer_names is not None:
+                customer_id = customer_names.get(customer_name)
+                if not customer_id:
+                    raise ImportValidationError(row_number, "customer", f"Customer not found: '{customer_name}'", str(normalized_row), error_type="FOREIGN_KEY_NOT_FOUND")
 
-            product_id = product_names.get(product_name)
-            if not product_id:
-                raise ImportValidationError(row_number, "product", f"Product not found: '{product_name}'", str(normalized_row), error_type="FOREIGN_KEY_NOT_FOUND")
+            if product_names is not None:
+                product_id = product_names.get(product_name)
+                if not product_id:
+                    raise ImportValidationError(row_number, "product", f"Product not found: '{product_name}'", str(normalized_row), error_type="FOREIGN_KEY_NOT_FOUND")
 
-            available = available_stock.get(product_id, 0)
-            if quantity > available:
-                raise ImportValidationError(row_number, "quantity", f"Quantity ({quantity}) exceeds available product stock ({available})", str(normalized_row), error_type="INSUFFICIENT_STOCK")
-            available_stock[product_id] -= quantity
+                if available_stock:
+                    available = available_stock.get(product_id, 0)
+                    if quantity > available:
+                        raise ImportValidationError(row_number, "quantity", f"Quantity ({quantity}) exceeds available product stock ({available})", str(normalized_row), error_type="INSUFFICIENT_STOCK")
+                    available_stock[product_id] -= quantity
 
-            return {"action": "VALID", "is_duplicate": is_duplicate}
+            return {"action": "UPDATE" if (is_duplicate and strategy == "UPDATE") else "VALID", "is_duplicate": is_duplicate}
 
         return {"action": "VALID", "is_duplicate": False}
 
@@ -493,20 +541,48 @@ class ImportService:
                 sku_stock[row.sku] = row.stock_quantity or 0
         return sku_to_id, sku_stock
 
+    async def _get_existing_inventory_adjustments(self) -> dict[tuple[str, str, str], InventoryAdjustment]:
+        result = await self.db.execute(
+            select(InventoryAdjustment, Product.sku)
+            .join(Product, InventoryAdjustment.product_id == Product.id)
+            .where(InventoryAdjustment.company_id == self.company_id)
+        )
+        adjustments_map = {}
+        for adj, sku in result.all():
+            if sku:
+                adj_type_clean = adj.adjustment_type.value if hasattr(adj.adjustment_type, 'value') else str(adj.adjustment_type)
+                key = (sku, adj_type_clean.upper(), (adj.reason or "").strip().lower())
+                adjustments_map[key] = adj
+        return adjustments_map
+
+    async def _get_existing_customer_maps(self) -> tuple[dict[str, Customer], dict[str, Customer]]:
+        result = await self.db.execute(
+            select(Customer).where(Customer.company_id == self.company_id, Customer.is_deleted == False)
+        )
+        by_email: dict[str, Customer] = {}
+        by_phone: dict[str, Customer] = {}
+        for c in result.scalars().all():
+            if c.email:
+                by_email[c.email.strip().lower()] = c
+            if c.phone:
+                by_phone[c.phone.strip()] = c
+        return by_email, by_phone
+
     async def _get_existing_customer_unique_values(self) -> tuple[set[str], set[str]]:
-        result = await self.db.execute(select(Customer.email, Customer.phone).where(Customer.company_id == self.company_id, Customer.is_deleted == False))
-        emails: set[str] = set()
-        phones: set[str] = set()
-        for row in result.all():
-            if row.email:
-                emails.add(row.email)
-            if row.phone:
-                phones.add(row.phone)
-        return emails, phones
+        by_email, by_phone = await self._get_existing_customer_maps()
+        return set(by_email.keys()), set(by_phone.keys())
 
     async def _get_existing_invoices(self) -> set[str]:
         result = await self.db.execute(select(Sale.invoice_number).where(Sale.company_id == self.company_id))
         return {row.invoice_number for row in result.all() if row.invoice_number}
+
+    async def _get_existing_sales_map(self) -> dict[str, Sale]:
+        result = await self.db.execute(
+            select(Sale)
+            .options(selectinload(Sale.items))
+            .where(Sale.company_id == self.company_id)
+        )
+        return {s.invoice_number: s for s in result.scalars().all() if s.invoice_number}
 
     async def _get_customer_names(self) -> dict[str, UUID]:
         result = await self.db.execute(select(Customer.first_name, Customer.last_name, Customer.id).where(Customer.company_id == self.company_id, Customer.is_deleted == False))
@@ -553,8 +629,40 @@ class ImportService:
             for e in errors
         ]
 
-    async def validate_import(self, import_type: ImportType, file_content: bytes, filename: str, import_id: UUID | None = None, duplicate_strategy: str = "REJECT") -> dict:
-        columns, rows = self.parse_csv(file_content)
+    async def validate_import(
+        self,
+        import_type: ImportType,
+        file_content: Optional[bytes] = None,
+        filename: str = "upload.csv",
+        import_id: UUID | None = None,
+        duplicate_strategy: str = "REJECT",
+    ) -> dict:
+        """
+        Validates the CSV structure and records. Supports both memory bytes and persistent disk storage.
+        """
+        file_path: Optional[Path] = None
+        if import_id and import_file_exists(import_id):
+            file_path = get_import_file_path(import_id)
+        elif file_content:
+            temp_id = import_id or UUID("00000000-0000-0000-0000-000000000000")
+            # If not already on disk, write content
+            if temp_id != UUID("00000000-0000-0000-0000-000000000000"):
+                file_path = save_file_content(temp_id, file_content)
+
+        columns: list[str] = []
+        rows: list[dict[str, str]] = []
+
+        if file_path and file_path.exists():
+            columns, preview_rows_sample, total_file_records = inspect_csv_file(file_path)
+            rows_generator = stream_csv_rows(file_path)
+        else:
+            if not file_content:
+                raise ValueError("No import file content provided for validation")
+            columns, rows = self.parse_csv(file_content)
+            rows_generator = ((idx, columns, r) for idx, r in enumerate(rows, start=2))
+            total_file_records = len(rows)
+            preview_rows_sample = rows[:10]
+
         errors: list[dict[str, Any]] = []
 
         try:
@@ -573,11 +681,11 @@ class ImportService:
                 "import_type": import_type.value,
                 "filename": filename,
                 "duplicate_strategy": duplicate_strategy,
-                "total_records": len(rows),
+                "total_records": total_file_records,
                 "columns": columns,
                 "preview_rows": [],
                 "valid_records": 0,
-                "invalid_records": len(rows) or 1,
+                "invalid_records": total_file_records or 1,
                 "duplicate_records": 0,
                 "errors": errors,
                 "status": ImportStatus.FAILED.value,
@@ -589,7 +697,10 @@ class ImportService:
 
         existing_skus = await self._get_existing_skus() if import_type == ImportType.PRODUCTS else set()
         product_sku_to_id, product_sku_stock = await self._get_product_sku_maps() if import_type == ImportType.INVENTORY else ({}, {})
-        existing_emails, existing_phones = await self._get_existing_customer_unique_values() if import_type == ImportType.CUSTOMERS else (set(), set())
+        existing_inventory_adjustments = await self._get_existing_inventory_adjustments() if import_type == ImportType.INVENTORY else {}
+        existing_cust_by_email, existing_cust_by_phone = await self._get_existing_customer_maps() if import_type == ImportType.CUSTOMERS else ({}, {})
+        existing_emails = set(existing_cust_by_email.keys())
+        existing_phones = set(existing_cust_by_phone.keys())
         customer_names = await self._get_customer_names() if import_type == ImportType.SALES else {}
         product_names = await self._get_product_names() if import_type == ImportType.SALES else {}
         available_stock = await self._get_available_stock() if import_type == ImportType.SALES else {}
@@ -601,13 +712,14 @@ class ImportService:
         seen_invoices = set()
         seen_inventory_skus = set()
 
-        preview_rows = []
-        for idx, row in enumerate(rows, start=2):
+        preview_rows: list[dict[str, Any]] = []
+
+        for row_num, hdrs, row in rows_generator:
             normalized = self.normalize_row(import_type, row)
             try:
                 res = self.validate_row(
                     import_type=import_type,
-                    row_number=idx,
+                    row_number=row_num,
                     normalized_row=normalized,
                     duplicate_strategy=duplicate_strategy,
                     existing_skus=existing_skus,
@@ -624,6 +736,9 @@ class ImportService:
                     seen_phones_in_file=seen_phones,
                     seen_invoices_in_file=seen_invoices,
                     seen_inventory_skus_in_file=seen_inventory_skus,
+                    existing_inventory_adjustments=existing_inventory_adjustments,
+                    existing_customers_by_email=existing_cust_by_email,
+                    existing_customers_by_phone=existing_cust_by_phone,
                 )
                 if res.get("is_duplicate"):
                     duplicate_rows += 1
@@ -661,7 +776,7 @@ class ImportService:
             "import_type": import_type.value,
             "filename": filename,
             "duplicate_strategy": duplicate_strategy,
-            "total_records": len(rows),
+            "total_records": total_file_records,
             "columns": columns,
             "preview_rows": preview_rows,
             "valid_records": valid_rows,
@@ -671,46 +786,46 @@ class ImportService:
             "status": ImportStatus.VALIDATING.value,
         }
 
-    async def process_import(
-        self,
-        import_type: ImportType,
-        file_content: bytes,
-        filename: str,
-        import_id: UUID | None = None,
-        duplicate_strategy: str = "REJECT",
-    ) -> dict:
-        columns, rows = self.parse_csv(file_content)
-        self.validate_columns(import_type, columns)
+    async def process_import_from_storage(self, import_id: UUID) -> dict:
+        """
+        Durable worker execution: Streams CSV from persistent disk storage,
+        validating and committing in batches, updating progress percentage.
+        """
+        history = await self.get_import_history(import_id)
+        if not history:
+            raise ValueError(f"Import history not found: {import_id}")
+
+        file_path = get_import_file_path(import_id)
+        if not file_path.exists():
+            raise ValueError(f"Import file not found on disk for import ID: {import_id}")
 
         started_at = datetime.utcnow()
-        history = None
-        if import_id:
-            history = await self.get_import_history(import_id)
-            if not history:
-                raise ValueError(f"Import history not found: {import_id}")
-            history.started_at = started_at
-            history.duplicate_strategy = duplicate_strategy
-            await import_history_crud.update_status(self.db, history, ImportStatus.PROCESSING, started_at=started_at, commit=True)
-        else:
-            history = await self.create_import_history(import_type, filename, len(rows), duplicate_strategy=duplicate_strategy, commit=True)
-            history.started_at = started_at
-            await import_history_crud.update_status(self.db, history, ImportStatus.PROCESSING, started_at=started_at, commit=True)
+        history.started_at = started_at
+        await import_history_crud.update_status(self.db, history, ImportStatus.PROCESSING, started_at=started_at, commit=True)
+        self.clear_cancellation(import_id)
 
-        self.clear_cancellation(history.id)
-
-        # Notify start
         try:
             await self._create_import_notification(history, ImportStatus.PROCESSING)
         except Exception as e:
             logger.warning(f"Failed to send import started notification: {e}")
 
+        import_type = history.import_type
+        duplicate_strategy = history.duplicate_strategy or "REJECT"
+
+        columns, _, total_records = inspect_csv_file(file_path)
+        self.validate_columns(import_type, columns)
+
         existing_skus = await self._get_existing_skus() if import_type == ImportType.PRODUCTS else set()
         product_sku_to_id, product_sku_stock = await self._get_product_sku_maps() if import_type == ImportType.INVENTORY else ({}, {})
-        existing_emails, existing_phones = await self._get_existing_customer_unique_values() if import_type == ImportType.CUSTOMERS else (set(), set())
+        existing_inventory_adjustments = await self._get_existing_inventory_adjustments() if import_type == ImportType.INVENTORY else {}
+        existing_cust_by_email, existing_cust_by_phone = await self._get_existing_customer_maps() if import_type == ImportType.CUSTOMERS else ({}, {})
+        existing_emails = set(existing_cust_by_email.keys())
+        existing_phones = set(existing_cust_by_phone.keys())
         customer_names = await self._get_customer_names() if import_type == ImportType.SALES else {}
         product_names = await self._get_product_names() if import_type == ImportType.SALES else {}
         available_stock = await self._get_available_stock() if import_type == ImportType.SALES else {}
         existing_invoices = await self._get_existing_invoices() if import_type == ImportType.SALES else set()
+        existing_sales_map = await self._get_existing_sales_map() if import_type == ImportType.SALES else {}
 
         seen_skus = set()
         seen_emails = set()
@@ -718,18 +833,19 @@ class ImportService:
         seen_invoices = set()
         seen_inventory_skus = set()
 
-        valid_rows: list[tuple[int, dict[str, Any], str]] = []  # (row_num, data, action)
+        valid_rows: list[tuple[int, dict[str, Any], str]] = []
         errors: list[dict[str, Any]] = []
         duplicate_count = 0
         skipped_count = 0
         invalid_count = 0
 
-        for idx, row in enumerate(rows, start=2):
+        # Stream row by row
+        for row_num, hdrs, row in stream_csv_rows(file_path):
             normalized = self.normalize_row(import_type, row)
             try:
                 res = self.validate_row(
                     import_type=import_type,
-                    row_number=idx,
+                    row_number=row_num,
                     normalized_row=normalized,
                     duplicate_strategy=duplicate_strategy,
                     existing_skus=existing_skus,
@@ -746,13 +862,16 @@ class ImportService:
                     seen_phones_in_file=seen_phones,
                     seen_invoices_in_file=seen_invoices,
                     seen_inventory_skus_in_file=seen_inventory_skus,
+                    existing_inventory_adjustments=existing_inventory_adjustments,
+                    existing_customers_by_email=existing_cust_by_email,
+                    existing_customers_by_phone=existing_cust_by_phone,
                 )
                 if res.get("is_duplicate"):
                     duplicate_count += 1
                 if res.get("action") == "SKIP":
                     skipped_count += 1
                 else:
-                    valid_rows.append((idx, normalized, res.get("action", "VALID")))
+                    valid_rows.append((row_num, normalized, res.get("action", "VALID")))
             except DuplicateRecordError as e:
                 duplicate_count += 1
                 invalid_count += 1
@@ -781,30 +900,33 @@ class ImportService:
         was_cancelled = False
 
         if import_type == ImportType.SALES:
-            sales_groups: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+            sales_groups: dict[str, list[tuple[int, dict[str, Any], str]]] = {}
             for original_idx, normalized, action in valid_rows:
                 inv_num = normalized.get("invoice_number", f"AUTO_GRP_{original_idx}")
-                sales_groups.setdefault(inv_num, []).append((original_idx, normalized))
+                sales_groups.setdefault(inv_num, []).append((original_idx, normalized, action))
 
             for inv_num, items_group in sales_groups.items():
                 if self.is_cancelled(history.id):
                     was_cancelled = True
                     break
 
+                action = items_group[0][2]
                 try:
-                    await self._insert_sales_group(inv_num, items_group, customer_names, product_names)
+                    await self._insert_or_update_sales_group(
+                        inv_num, items_group, customer_names, product_names, action, existing_sales_map
+                    )
                     await self.db.commit()
                     successful += len(items_group)
                 except Exception as e:
                     await self.db.rollback()
                     failed += len(items_group)
                     logger.exception(f"Failed to import sales group for invoice {inv_num}: {e}")
-                    for original_idx, normalized in items_group:
+                    for original_idx, normalized, _ in items_group:
                         errors.append({
                             "row_number": original_idx,
                             "field": None,
                             "error_type": "PROCESSING_ERROR",
-                            "error_message": "Unable to process sales record. Transaction rolled back.",
+                            "error_message": f"Unable to process sales record ({str(e)}). Transaction rolled back.",
                             "raw_data": str(normalized),
                             "processing_status": "FAILED",
                         })
@@ -825,9 +947,13 @@ class ImportService:
                         if import_type == ImportType.PRODUCTS:
                             await self._insert_or_update_product(normalized, action)
                         elif import_type == ImportType.INVENTORY:
-                            await self._insert_inventory_adjustment(normalized, action, product_sku_to_id)
+                            await self._insert_or_update_inventory_adjustment(
+                                normalized, action, product_sku_to_id, existing_inventory_adjustments
+                            )
                         elif import_type == ImportType.CUSTOMERS:
-                            await self._insert_or_update_customer(normalized, action)
+                            await self._insert_or_update_customer(
+                                normalized, action, existing_cust_by_email, existing_cust_by_phone
+                            )
                     await self.db.commit()
                     successful += len(batch)
                 except Exception as e:
@@ -839,7 +965,7 @@ class ImportService:
                             "row_number": original_idx,
                             "field": None,
                             "error_type": "PROCESSING_ERROR",
-                            "error_message": "Unable to process record into database. Record failed.",
+                            "error_message": f"Unable to process record into database: {str(e)}",
                             "raw_data": str(normalized),
                             "processing_status": "FAILED",
                         })
@@ -849,7 +975,7 @@ class ImportService:
                     successful=successful, failed=failed, duplicates=duplicate_count, skipped=skipped_count, commit=True
                 )
 
-        # Store all captured errors
+        # Record captured errors
         for error in errors:
             await import_history_crud.add_error(
                 self.db,
@@ -891,20 +1017,19 @@ class ImportService:
         await self.db.refresh(history)
         self.clear_cancellation(history.id)
 
-        # Notification for completion
         try:
             await self._create_import_notification(history, final_status)
         except Exception as e:
             logger.warning(f"Failed to send import completion notification: {e}")
 
-        # Data Quality & Reconciliation Integration (Requirement 12)
+        # Data Quality & Reconciliation Integration (runs for PRODUCTS, INVENTORY, SALES, and CUSTOMERS)
         reconciliation_result = None
-        if final_status in (ImportStatus.COMPLETED, ImportStatus.COMPLETED_WITH_ERRORS) and import_type in (ImportType.INVENTORY, ImportType.PRODUCTS, ImportType.SALES):
+        if final_status in (ImportStatus.COMPLETED, ImportStatus.COMPLETED_WITH_ERRORS):
             try:
                 from app.services.data_quality import DataQualityService
                 dq_service = DataQualityService()
-                reconciliation_result = await dq_service.run_reconciliation(self.db, self.company_id, self.uploaded_by)
-                logger.info(f"Ran post-import reconciliation for company {self.company_id}: run_id={reconciliation_result.get('id') if isinstance(reconciliation_result, dict) else 'ok'}")
+                reconciliation_result = await dq_service.run_reconciliation(self.db, self.company_id, self.uploaded_by or UUID("00000000-0000-0000-0000-000000000000"))
+                logger.info(f"Ran post-import reconciliation for company {self.company_id}: run_id={reconciliation_result.get('run_id') if isinstance(reconciliation_result, dict) else 'ok'}")
             except Exception as e:
                 logger.warning(f"Post-import reconciliation check failed: {e}")
 
@@ -922,6 +1047,26 @@ class ImportService:
             "reconciliation_run": reconciliation_result if isinstance(reconciliation_result, dict) else None,
             "errors": errors,
         }
+
+    async def process_import(
+        self,
+        import_type: ImportType,
+        file_content: bytes,
+        filename: str,
+        import_id: UUID | None = None,
+        duplicate_strategy: str = "REJECT",
+    ) -> dict:
+        """
+        Synchronous/direct invocation: saves content to disk storage if needed and runs processing.
+        """
+        target_id = import_id or UUID("00000000-0000-0000-0000-000000000000")
+        if not import_id:
+            columns, rows = self.parse_csv(file_content)
+            hist = await self.create_import_history(import_type, filename, len(rows), duplicate_strategy=duplicate_strategy, commit=True)
+            target_id = hist.id
+
+        save_file_content(target_id, file_content)
+        return await self.process_import_from_storage(target_id)
 
     async def _get_or_create_category_id(self, category_name: str) -> UUID | None:
         if not category_name:
@@ -981,9 +1126,20 @@ class ImportService:
         self.db.add(product)
         await self.db.flush()
 
-    async def _insert_inventory_adjustment(self, normalized: dict[str, Any], action: str, product_sku_to_id: dict[str, UUID]) -> None:
+    async def _insert_or_update_inventory_adjustment(
+        self,
+        normalized: dict[str, Any],
+        action: str,
+        product_sku_to_id: dict[str, UUID],
+        existing_inventory_adjustments: dict[tuple[str, str, str], InventoryAdjustment],
+    ) -> None:
         sku = normalized["sku"].strip()
         product_id = product_sku_to_id.get(sku)
+        if not product_id:
+            # Query if not in initial map
+            prod_res = await self.db.execute(select(Product.id).where(Product.company_id == self.company_id, Product.sku == sku))
+            product_id = prod_res.scalar_one_or_none()
+
         product = await self.db.get(Product, product_id)
         if not product:
             raise ValueError(f"Product SKU {sku} not found")
@@ -1005,8 +1161,52 @@ class ImportService:
             "ADJUSTMENT": AdjustmentType.MANUAL_ADJUSTMENT,
         }
         adj_type = type_map.get(adj_raw, AdjustmentType.MANUAL_ADJUSTMENT)
+        adj_type_str = adj_type.value if hasattr(adj_type, 'value') else str(adj_type)
 
         prev_qty = product.stock_quantity or 0
+
+        # UPDATE Strategy handling for inventory
+        if action == "UPDATE":
+            inv_key = (sku, adj_type_str.upper(), reason.strip().lower())
+            existing_adj = existing_inventory_adjustments.get(inv_key)
+            if existing_adj:
+                old_qty = existing_adj.quantity or 0
+                if adj_type == AdjustmentType.STOCK_IN:
+                    delta = qty - old_qty
+                    new_qty = max(0, prev_qty + delta)
+                    qty_changed = delta
+                elif adj_type == AdjustmentType.STOCK_OUT:
+                    delta = qty - old_qty
+                    new_qty = max(0, prev_qty - delta)
+                    qty_changed = -delta
+                else:
+                    new_qty = qty
+                    qty_changed = new_qty - prev_qty
+
+                product.stock_quantity = new_qty
+                self.db.add(product)
+
+                existing_adj.quantity = qty
+                existing_adj.reason = reason
+                existing_adj.remarks = remarks
+                existing_adj.adjusted_at = datetime.utcnow()
+                self.db.add(existing_adj)
+
+                movement = StockMovement(
+                    company_id=self.company_id,
+                    product_id=product.id,
+                    movement_type=MovementType.MANUAL_ADJUSTMENT,
+                    previous_quantity=prev_qty,
+                    updated_quantity=new_qty,
+                    quantity_changed=qty_changed,
+                    reason=f"Updated duplicate adjustment: {reason}",
+                    user_id=self.uploaded_by,
+                    created_at=datetime.utcnow(),
+                )
+                self.db.add(movement)
+                await self.db.flush()
+                return
+
         if adj_type == AdjustmentType.STOCK_IN:
             new_qty = prev_qty + qty
             qty_changed = qty
@@ -1049,7 +1249,13 @@ class ImportService:
         self.db.add(movement)
         await self.db.flush()
 
-    async def _insert_or_update_customer(self, normalized: dict[str, Any], action: str) -> None:
+    async def _insert_or_update_customer(
+        self,
+        normalized: dict[str, Any],
+        action: str,
+        existing_cust_by_email: dict[str, Customer],
+        existing_cust_by_phone: dict[str, Customer],
+    ) -> None:
         email = normalized.get("email", "").strip() or None
         phone = normalized.get("phone", "").strip() or None
         name = normalized.get("name", "").strip()
@@ -1058,26 +1264,26 @@ class ImportService:
         last_name = parts[1] if len(parts) > 1 else ""
         cust_type = normalized.get("customer_type", "RETAIL").strip().upper() or "RETAIL"
 
+        email_clean = email.lower() if email else ""
+
         if action == "UPDATE":
-            filters = []
-            if email:
-                filters.append(Customer.email == email)
-            if phone:
-                filters.append(Customer.phone == phone)
-            if filters:
-                result = await self.db.execute(select(Customer).where(Customer.company_id == self.company_id, or_(*filters)))
-                existing_cust = result.scalar_one_or_none()
-                if existing_cust:
-                    existing_cust.first_name = first_name
-                    existing_cust.last_name = last_name
-                    if email:
-                        existing_cust.email = email
-                    if phone:
-                        existing_cust.phone = phone
-                    existing_cust.customer_type = cust_type
-                    self.db.add(existing_cust)
-                    await self.db.flush()
-                    return
+            existing_cust = None
+            if email_clean and email_clean in existing_cust_by_email:
+                existing_cust = existing_cust_by_email[email_clean]
+            elif phone and phone in existing_cust_by_phone:
+                existing_cust = existing_cust_by_phone[phone]
+
+            if existing_cust:
+                existing_cust.first_name = first_name
+                existing_cust.last_name = last_name
+                if email:
+                    existing_cust.email = email
+                if phone:
+                    existing_cust.phone = phone
+                existing_cust.customer_type = cust_type
+                self.db.add(existing_cust)
+                await self.db.flush()
+                return
 
         customer = Customer(
             company_id=self.company_id,
@@ -1095,17 +1301,80 @@ class ImportService:
         )
         self.db.add(customer)
         await self.db.flush()
+        if email_clean:
+            existing_cust_by_email[email_clean] = customer
+        if phone:
+            existing_cust_by_phone[phone] = customer
 
-    async def _insert_sales_group(self, inv_num: str, items_group: list[tuple[int, dict[str, Any]]], customer_names: dict[str, UUID], product_names: dict[str, UUID]) -> None:
+    async def _insert_or_update_sales_group(
+        self,
+        inv_num: str,
+        items_group: list[tuple[int, dict[str, Any], str]],
+        customer_names: dict[str, UUID],
+        product_names: dict[str, UUID],
+        action: str,
+        existing_sales_map: dict[str, Sale],
+    ) -> None:
         first_norm = items_group[0][1]
         customer_name = first_norm["customer"]
         sale_date_raw = first_norm["sale_date"]
         customer_id = customer_names.get(customer_name)
         sale_date = datetime.strptime(sale_date_raw, "%Y-%m-%d")
 
-        existing_db_invoices = await self._get_existing_invoices()
+        existing_sale = existing_sales_map.get(inv_num)
+
+        # UPDATE Strategy handling for Sales: updates existing transaction!
+        if action == "UPDATE" and existing_sale:
+            # Reverse previous stock deductions
+            for old_item in existing_sale.items:
+                if old_item.product_id:
+                    prod = await self.db.get(Product, old_item.product_id)
+                    if prod:
+                        prod.stock_quantity = (prod.stock_quantity or 0) + old_item.quantity
+                        self.db.add(prod)
+
+            # Clear previous items
+            existing_sale.items = []
+            total_amount = Decimal("0")
+            new_items = []
+
+            for original_idx, normalized, _ in items_group:
+                product_name = normalized["product"]
+                product_id = product_names.get(product_name)
+                quantity = int(normalized["quantity"])
+                unit_price = Decimal(str(normalized["unit_price"]))
+                discount = Decimal(str(normalized.get("discount", "0"))) if normalized.get("discount") else Decimal("0")
+                tax = Decimal(str(normalized.get("tax", "0"))) if normalized.get("tax") else Decimal("0")
+
+                item_total = (unit_price * quantity) - discount + tax
+                total_amount += item_total
+
+                new_items.append(SaleItem(
+                    product_id=product_id,
+                    quantity=quantity,
+                    unit_price=float(unit_price),
+                    discount=float(discount),
+                    tax=float(tax),
+                    total=float(item_total),
+                ))
+
+                if product_id:
+                    product = await self.db.get(Product, product_id)
+                    if product:
+                        product.stock_quantity = max(0, (product.stock_quantity or 0) - quantity)
+                        self.db.add(product)
+
+            existing_sale.customer_id = customer_id
+            existing_sale.customer_name = customer_name
+            existing_sale.sale_date = sale_date
+            existing_sale.total_amount = float(total_amount)
+            existing_sale.items = new_items
+            self.db.add(existing_sale)
+            await self.db.flush()
+            return
+
         invoice_number = inv_num
-        if not invoice_number or invoice_number in existing_db_invoices or invoice_number.startswith("AUTO_GRP_"):
+        if not invoice_number or invoice_number in existing_sales_map or invoice_number.startswith("AUTO_GRP_"):
             year = datetime.utcnow().year
             prefix = f"IMP-{year}-"
             result = await self.db.execute(
@@ -1124,7 +1393,7 @@ class ImportService:
         sale_items = []
         total_amount = Decimal("0")
 
-        for original_idx, normalized in items_group:
+        for original_idx, normalized, _ in items_group:
             product_name = normalized["product"]
             product_id = product_names.get(product_name)
             quantity = int(normalized["quantity"])
@@ -1166,6 +1435,7 @@ class ImportService:
         )
         self.db.add(sale)
         await self.db.flush()
+        existing_sales_map[invoice_number] = sale
 
     async def _create_import_notification(self, history: ImportHistory, status: ImportStatus) -> None:
         if status == ImportStatus.PROCESSING:

@@ -29,6 +29,8 @@ from app.models.inventory import StockMovement, InventoryAdjustment, MovementTyp
 from app.models.notification import Notification, NotificationType
 from app.models.forecast import DemandForecast, ForecastHistory, ForecastPeriodType
 from app.models.report import ScheduledReport, ReportHistory, ReportType, ReportFrequency, ReportFormat, ReportExecutionStatus
+from app.models.import_history import ImportHistory, ImportError
+from app.models.data_quality import DataQualityIssue, ReconciliationRun
 
 engine = create_async_engine(
     "sqlite+aiosqlite:///:memory:",
@@ -41,6 +43,10 @@ TestingSessionLocal = async_sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )
 
+import app.database
+app.database.engine = engine
+app.database.SessionLocal = TestingSessionLocal
+
 
 # @pytest_asyncio.fixture(scope="session")
 # def event_loop():
@@ -51,18 +57,18 @@ TestingSessionLocal = async_sessionmaker(
 
 @pytest_asyncio.fixture(scope="function")
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    async with engine.begin() as conn:
+    async with engine.connect() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.commit()
 
-    session = TestingSessionLocal()
-    try:
-        yield session
-        await session.commit()
-    except Exception:
-        await session.rollback()
-        raise
-    finally:
-        await session.close()
+    async with TestingSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
-    async with engine.begin() as conn:
+    async with engine.connect() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+        await conn.commit()

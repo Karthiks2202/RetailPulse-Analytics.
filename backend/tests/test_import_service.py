@@ -252,3 +252,175 @@ def test_cancellation_flag():
     assert ImportService.is_cancelled(import_id) is False
 
 
+def test_inventory_duplicate_identification_and_update():
+    service = ImportService(AsyncMock(), uuid4(), uuid4())
+    prod_id = uuid4()
+    sku_to_id = {"SKU-INV-01": prod_id}
+    sku_stock = {"SKU-INV-01": 50}
+
+    # Simulate existing adjustment in DB
+    existing_adjs = {("SKU-INV-01", "STOCK_IN", "initial restock"): MagicMock()}
+
+    row = {
+        "sku": "SKU-INV-01",
+        "adjustment_type": "STOCK_IN",
+        "quantity": "10",
+        "reason": "Initial Restock",
+    }
+
+    # REJECT strategy with existing adjustment -> raises DuplicateRecordError
+    with pytest.raises(DuplicateRecordError) as exc:
+        service.validate_row(
+            import_type=ImportType.INVENTORY,
+            row_number=2,
+            normalized_row=row,
+            duplicate_strategy="REJECT",
+            product_sku_to_id=sku_to_id,
+            product_sku_stock=sku_stock,
+            existing_inventory_adjustments=existing_adjs,
+        )
+    assert "already exists in database" in str(exc.value)
+
+    # UPDATE strategy with existing adjustment -> returns action="UPDATE"
+    res_update = service.validate_row(
+        import_type=ImportType.INVENTORY,
+        row_number=2,
+        normalized_row=row,
+        duplicate_strategy="UPDATE",
+        product_sku_to_id=sku_to_id,
+        product_sku_stock=sku_stock,
+        existing_inventory_adjustments=existing_adjs,
+    )
+    assert res_update["action"] == "UPDATE"
+    assert res_update["is_duplicate"] is True
+
+    # In-file duplicate detection
+    seen_inv_skus = set()
+    service.validate_row(
+        import_type=ImportType.INVENTORY,
+        row_number=2,
+        normalized_row=row,
+        duplicate_strategy="UPDATE",
+        product_sku_to_id=sku_to_id,
+        product_sku_stock=sku_stock,
+        seen_inventory_skus_in_file=seen_inv_skus,
+    )
+    # Second row with same SKU within file
+    res_in_file = service.validate_row(
+        import_type=ImportType.INVENTORY,
+        row_number=3,
+        normalized_row=row,
+        duplicate_strategy="UPDATE",
+        product_sku_to_id=sku_to_id,
+        product_sku_stock=sku_stock,
+        seen_inventory_skus_in_file=seen_inv_skus,
+    )
+    assert res_in_file["action"] == "UPDATE"
+    assert res_in_file["is_duplicate"] is True
+
+
+def test_sales_duplicate_update_handling():
+    service = ImportService(AsyncMock(), uuid4(), uuid4())
+    cust_id = uuid4()
+    prod_id = uuid4()
+    customer_names = {"Jane Doe": cust_id}
+    product_names = {"Widget Z": prod_id}
+    available_stock = {prod_id: 20}
+    existing_invoices = {"INV-2026-9999"}
+
+    row = {
+        "customer": "Jane Doe",
+        "product": "Widget Z",
+        "quantity": "2",
+        "unit_price": "45.00",
+        "sale_date": "2026-11-05",
+        "invoice_number": "INV-2026-9999",
+    }
+
+    # REJECT strategy
+    with pytest.raises(DuplicateRecordError) as exc:
+        service.validate_row(
+            import_type=ImportType.SALES,
+            row_number=2,
+            normalized_row=row,
+            duplicate_strategy="REJECT",
+            existing_invoices=existing_invoices,
+            customer_names=customer_names,
+            product_names=product_names,
+            available_stock=available_stock,
+        )
+    assert "already exists in database" in str(exc.value)
+
+    # UPDATE strategy -> MUST return action="UPDATE" to update existing transaction
+    res = service.validate_row(
+        import_type=ImportType.SALES,
+        row_number=2,
+        normalized_row=row,
+        duplicate_strategy="UPDATE",
+        existing_invoices=existing_invoices,
+        customer_names=customer_names,
+        product_names=product_names,
+        available_stock=available_stock,
+    )
+    assert res["action"] == "UPDATE"
+    assert res["is_duplicate"] is True
+
+
+def test_customer_matching_conflict_safety():
+    service = ImportService(AsyncMock(), uuid4(), uuid4())
+    cust1 = MagicMock(id=uuid4(), first_name="Alice", last_name="Smith")
+    cust2 = MagicMock(id=uuid4(), first_name="Bob", last_name="Jones")
+
+    existing_by_email = {"alice@example.com": cust1}
+    existing_by_phone = {"+15551112233": cust2}
+
+    # Row has Alice's email but Bob's phone -> conflict!
+    row = {
+        "name": "Alice Smith",
+        "email": "alice@example.com",
+        "phone": "+15551112233",
+        "customer_type": "RETAIL",
+    }
+
+    with pytest.raises(ImportValidationError) as exc:
+        service.validate_row(
+            import_type=ImportType.CUSTOMERS,
+            row_number=2,
+            normalized_row=row,
+            duplicate_strategy="UPDATE",
+            existing_customers_by_email=existing_by_email,
+            existing_customers_by_phone=existing_by_phone,
+        )
+    assert "Customer matching conflict" in str(exc.value)
+    assert "belongs to customer 'Alice Smith'" in str(exc.value)
+    assert "belongs to customer 'Bob Jones'" in str(exc.value)
+
+
+def test_file_validation_security():
+    from app.services.import_storage import validate_content_security
+
+    # Safe text CSV
+    validate_content_security(b"Name,Email,Phone\nAlice,a@b.com,1234567")
+
+    # Binary with NULL byte
+    with pytest.raises(ValueError) as exc1:
+        validate_content_security(b"Name,Email\x00,Phone")
+    assert "Binary data or NULL bytes detected" in str(exc1.value)
+
+    # Executable MZ header
+    with pytest.raises(ValueError) as exc2:
+        validate_content_security(b"MZ\x90\x00\x03\x00\x00\x00")
+    assert "Windows Executable" in str(exc2.value)
+
+    # ZIP / XLSX magic bytes
+    with pytest.raises(ValueError) as exc3:
+        validate_content_security(b"PK\x03\x04\x14\x00")
+    assert "ZIP / Office Spreadsheet" in str(exc3.value)
+
+    # Empty content
+    with pytest.raises(ValueError) as exc4:
+        validate_content_security(b"")
+    assert "empty" in str(exc4.value)
+
+
+

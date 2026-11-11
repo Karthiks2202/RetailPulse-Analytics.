@@ -18,6 +18,7 @@ import subprocess
 from contextlib import asynccontextmanager
 
 from app.services.scheduler import scheduler
+from app.services.import_worker import import_worker
 
 def run_migrations():
     alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
@@ -31,9 +32,11 @@ async def lifespan(app: FastAPI):
     await asyncio.to_thread(run_migrations)
     if not scheduler.running:
         scheduler.start()
+    import_worker.start()
     try:
         yield
     finally:
+        await import_worker.stop()
         if scheduler.running:
             try:
                 scheduler.shutdown(wait=False)

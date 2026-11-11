@@ -219,24 +219,30 @@ export const DataImport: React.FC = () => {
     },
   });
 
-  // Start processing mutation
+  // Start processing mutation (Background processing)
   const processMutation = useMutation<ImportResultResponse, Error, void>({
     mutationFn: async () => {
       if (!selectedFile && !activeImportId) {
         throw new Error('No import selected');
       }
-      return processImport(importType, selectedFile || undefined, activeImportId || undefined, duplicateStrategy, false);
+      return processImport(importType, selectedFile || undefined, activeImportId || undefined, duplicateStrategy, true);
     },
     onSuccess: (data) => {
-      setResult(data);
-      setPhase('result');
-      queryClient.invalidateQueries({ queryKey: ['importHistory'] });
-      if (data.status === 'COMPLETED') {
-        showNotification('Import completed successfully', 'success');
-      } else if (data.status === 'COMPLETED_WITH_ERRORS') {
-        showNotification(`Import completed with ${data.failed_records} errors and ${data.skipped_records || 0} skipped records`, 'info');
+      if (data.status === 'PROCESSING') {
+        setActiveImportId(data.import_id);
+        setPhase('processing');
+        showNotification('Import job started in background. Monitoring progress...', 'info');
       } else {
-        showNotification(`Import finished with status: ${data.status}`, 'error');
+        setResult(data);
+        setPhase('result');
+        queryClient.invalidateQueries({ queryKey: ['importHistory'] });
+        if (data.status === 'COMPLETED') {
+          showNotification('Import completed successfully', 'success');
+        } else if (data.status === 'COMPLETED_WITH_ERRORS') {
+          showNotification(`Import completed with ${data.failed_records} errors and ${data.skipped_records || 0} skipped records`, 'info');
+        } else {
+          showNotification(`Import finished with status: ${data.status}`, 'error');
+        }
       }
     },
     onError: (err: any) => {
@@ -769,23 +775,55 @@ export const DataImport: React.FC = () => {
           </div>
 
           {/* Data Quality & Reconciliation Integration Banner */}
-          <div className="p-4 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/40 flex items-start gap-3">
-            <ShieldIcon className="text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" style={{ fontSize: 20 }} />
-            <div className="text-xs space-y-1">
-              <p className="font-bold text-indigo-950 dark:text-indigo-200">
-                Data Quality & Reconciliation Engine Synced
-              </p>
-              <p className="text-indigo-800 dark:text-indigo-300 font-medium">
-                Automatic reconciliation was triggered following this {result.import_type} ingestion. All affected stock levels, movements, and reference constraints have been evaluated for consistency.
-              </p>
-              <Link
-                to="/data-quality"
-                className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline pt-0.5"
-              >
-                Inspect Data Quality Dashboard & Reconciliation Runs →
+          {result.reconciliation_run ? (
+            result.reconciliation_run.issues_detected > 0 ? (
+              <div className="p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/50 flex items-start gap-3">
+                <ShieldIcon className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" style={{ fontSize: 20 }} />
+                <div className="text-xs space-y-1">
+                  <p className="font-bold text-amber-950 dark:text-amber-200">
+                    Reconciliation Alert: {result.reconciliation_run.issues_detected} Data Quality Discrepancies Detected
+                  </p>
+                  <p className="text-amber-800 dark:text-amber-300 font-medium">
+                    Post-import reconciliation evaluated {result.reconciliation_run.records_checked} records and found {result.reconciliation_run.issues_detected} potential data anomalies. Review the reconciliation log to resolve conflicts.
+                  </p>
+                  <Link
+                    to="/data-quality"
+                    className="inline-flex items-center gap-1 font-bold text-amber-700 dark:text-amber-400 hover:underline pt-0.5"
+                  >
+                    Resolve Discrepancies in Data Quality Dashboard →
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800/50 flex items-start gap-3">
+                <ShieldIcon className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" style={{ fontSize: 20 }} />
+                <div className="text-xs space-y-1">
+                  <p className="font-bold text-emerald-950 dark:text-emerald-200">
+                    Reconciliation Clean: 0 Data Quality Issues
+                  </p>
+                  <p className="text-emerald-800 dark:text-emerald-300 font-medium">
+                    Automatic reconciliation completed across {result.reconciliation_run.records_checked} records with zero discrepancies. All stock movements, balances, and relational constraints are consistent.
+                  </p>
+                  <Link
+                    to="/data-quality"
+                    className="inline-flex items-center gap-1 font-bold text-emerald-700 dark:text-emerald-400 hover:underline pt-0.5"
+                  >
+                    View Reconciliation Runs & Metrics →
+                  </Link>
+                </div>
+              </div>
+            )
+          ) : (
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+              <span className="flex items-center gap-2">
+                <ShieldIcon className="text-slate-400" style={{ fontSize: 18 }} />
+                Post-import reconciliation was not triggered for this job.
+              </span>
+              <Link to="/data-quality" className="font-semibold text-primary hover:underline">
+                Open Data Quality →
               </Link>
             </div>
-          </div>
+          )}
 
           {/* Failed Records list and Download Error CSV */}
           {result.errors.length > 0 ? (

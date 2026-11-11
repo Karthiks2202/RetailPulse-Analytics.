@@ -148,3 +148,13 @@ async def execute_scheduled_reports():
         except Exception:
             pass
 
+
+@scheduler.scheduled_job("interval", seconds=10)
+async def check_pending_import_jobs():
+    try:
+        from app.services.import_worker import import_worker
+        await import_worker.check_pending_jobs()
+    except Exception:
+        pass
+
+
