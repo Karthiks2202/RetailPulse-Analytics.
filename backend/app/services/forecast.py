@@ -8,7 +8,7 @@ from app.models.forecast import DemandForecast, ForecastHistory, ForecastPeriodT
 from app.models.product import Product, ProductStatus
 from app.models.sale import Sale, SaleItem, SaleStatus
 from app.models.category import Category
-from app.models.notification import NotificationType
+from app.models.notification import NotificationType, NotificationPriority, NotificationResourceType
 from app.crud.forecast import demand_forecast as forecast_crud
 from app.services.audit import audit_service
 from app.crud.notification import notification as notification_crud

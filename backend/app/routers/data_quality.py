@@ -6,6 +6,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models.user import UserRole
+from app.models.data_quality import DataQualityIssueStatus
 from app.schemas.data_quality import (
     DataQualityIssueResponse,
     DataQualityIssueListResponse,

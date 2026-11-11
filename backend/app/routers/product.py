@@ -11,6 +11,7 @@ from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from app.schemas.category import CategoryResponse
 from app.utils.dependencies import get_current_active_user
 from app.services.audit import audit_service
+from app.crud.product import product as product_crud
 from app.crud.category import category as category_crud
 from app.services.data_quality import data_quality_service
 import asyncio

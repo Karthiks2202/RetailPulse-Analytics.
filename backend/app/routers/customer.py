@@ -38,7 +38,7 @@ from app.utils.dependencies import get_current_active_user
 from app.services.audit import audit_service
 from app.crud.customer import customer as customer_crud
 from app.crud.notification import notification as notification_crud
-from app.models.notification import NotificationType, NotificationResourceType
+from app.models.notification import NotificationType, NotificationPriority, NotificationResourceType
 from app.models.user import UserRole
 
 router = APIRouter(prefix="/customers", tags=["customers"])
@@ -522,6 +522,7 @@ async def get_customer(
 @router.get("/{customer_id}/profile", response_model=CustomerDetailedProfileResponse)
 async def get_customer_profile(
     customer_id: UUID,
+    request: Request,
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
